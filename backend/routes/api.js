@@ -62,8 +62,13 @@ router.get('/state', authenticateToken, async (req, res) => {
         c.name as class_name,
         COALESCE(a.to_room_id, 1) as room_id,
         COALESCE(a.arrived_status, 'pending') as arrived_status,
+        COALESCE(a.comment, '') as comment,
         a.timer_minutes,
-        a.timer_started_at
+        a.timer_started_at,
+        CASE
+          WHEN a.timer_started_at IS NULL THEN NULL
+          ELSE FLOOR(EXTRACT(EPOCH FROM a.timer_started_at) * 1000)::BIGINT
+        END as timer_started_at_ms
       FROM pupils p
       JOIN users u ON p.user_id = u.id
       LEFT JOIN classes c ON p.class_id = c.id

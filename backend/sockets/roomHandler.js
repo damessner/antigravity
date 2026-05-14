@@ -63,7 +63,11 @@ module.exports = (io, socket, pool) => {
         const insertRes = await client.query(`
           INSERT INTO allocation_logs (pupil_id, teacher_id, from_room_id, to_room_id, lesson_number, comment, arrived_status, is_active)
           VALUES ($1, $2, $3, $4, $5, $6, 'pending', true)
-          RETURNING *
+          RETURNING *,
+            CASE
+              WHEN timer_started_at IS NULL THEN NULL
+              ELSE FLOOR(EXTRACT(EPOCH FROM timer_started_at) * 1000)::BIGINT
+            END as timer_started_at_ms
         `, [pupilId, teacherId, fromRoomId, toRoomId, lessonNumber, comment || null]);
 
         newLog = insertRes.rows[0];
@@ -150,18 +154,47 @@ module.exports = (io, socket, pool) => {
           UPDATE allocation_logs
           SET timer_minutes = $1, timer_started_at = CASE WHEN $1 IS NOT NULL THEN NOW() ELSE NULL END
           WHERE id = $2
-          RETURNING timer_minutes, timer_started_at
+          RETURNING timer_minutes, timer_started_at,
+            CASE
+              WHEN timer_started_at IS NULL THEN NULL
+              ELSE FLOOR(EXTRACT(EPOCH FROM timer_started_at) * 1000)::BIGINT
+            END as timer_started_at_ms
         `, [minutes, logId]);
 
         const updated = updateRes.rows[0];
         io.emit('pupil_timer_set', {
           pupilId,
           timer_minutes: updated.timer_minutes,
-          timer_started_at: updated.timer_started_at
+          timer_started_at: updated.timer_started_at,
+          timer_started_at_ms: updated.timer_started_at_ms
         });
       }
     } catch (err) {
       console.error('Socket set_pupil_timer error:', err);
+    }
+  });
+
+  socket.on('set_pupil_comment', async (payload) => {
+    try {
+      const pupilId = Number(payload?.pupilId);
+      if (!pupilId) return;
+      const comment = payload?.comment ? String(payload.comment).trim() : '';
+
+      const updateRes = await pool.query(`
+        UPDATE allocation_logs
+        SET comment = $1
+        WHERE pupil_id = $2 AND is_active = true
+        RETURNING pupil_id, comment
+      `, [comment || null, pupilId]);
+
+      if (updateRes.rows.length > 0) {
+        io.emit('pupil_comment_set', {
+          pupilId,
+          comment: updateRes.rows[0].comment || ''
+        });
+      }
+    } catch (err) {
+      console.error('Socket set_pupil_comment error:', err);
     }
   });
 

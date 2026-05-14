@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "School Management System | Live Dashboard",
-  description: "Echtzeit-Raumbelegung, Curriculares Notenbuch und Disziplinäre Notizen für österreichische Mittelschulen.",
+  description: "Echtzeit-Raumbelegung, Evaluationsbereich und Disziplinäre Notizen für die MS Weissenbach Telfs.",
 };
 
 export const viewport: Viewport = {
