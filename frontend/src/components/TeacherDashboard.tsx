@@ -417,15 +417,17 @@ export default function TeacherDashboard() {
 
           {/* Navigation Pill tabs */}
           <nav className="flex bg-slate-950 p-1 rounded-xl border border-slate-800/80">
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-              <span className="hidden sm:inline">🏫 Live</span> Raumbelegung
-            </button>
+            {user?.role !== "pupil" && (
+              <button
+                onClick={() => setActiveTab("dashboard")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">🏫 Live</span> Raumbelegung
+              </button>
+            )}
 
             <button
               onClick={() => setActiveTab("gradebook")}
@@ -546,7 +548,7 @@ export default function TeacherDashboard() {
       {/* Primary View Layer Switching */}
       <main className="flex-1 overflow-y-auto flex flex-col relative">
         {/* TAB 1: LIVE RAUMBELEGUNG GRID */}
-        <div className={activeTab === "dashboard" ? "flex-1 p-4 md:p-6 flex flex-col gap-4 max-w-7xl mx-auto w-full" : "hidden"}>
+        <div className={activeTab === "dashboard" && user?.role !== "pupil" ? "flex-1 p-4 md:p-6 flex flex-col gap-4 max-w-7xl mx-auto w-full" : "hidden"}>
           {/* Top Class Filter & Reset Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-900/40 p-3 rounded-xl border border-slate-800/50">
             <div className="flex items-center gap-2 flex-wrap">
@@ -660,7 +662,7 @@ export default function TeacherDashboard() {
 
         {/* TAB 5: SELF-DIRECTED LEARNING PLANNER */}
         <div className={activeTab === "planner" ? "flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full h-full relative" : "hidden"}>
-          <StudentLernplaner />
+          <StudentLernplaner socket={socket} />
         </div>
       </main>
 

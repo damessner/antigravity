@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../server');
+const fs = require('fs');
+const path = require('path');
 
 const requireAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
@@ -392,3 +394,81 @@ router.post('/gradebook', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
+
+// Helper to resolve the backups directory
+const getBackupDir = () => {
+  if (fs.existsSync('/opt/school-management/backups')) return '/opt/school-management/backups';
+  if (fs.existsSync('/backups')) return '/backups';
+  return path.join(__dirname, '../../backups');
+};
+
+// GET /api/backup/list (Admin only)
+router.get('/list', authenticateToken, requireAdmin, (req, res) => {
+  try {
+    const backupDir = getBackupDir();
+    if (!fs.existsSync(backupDir)) {
+      return res.json([]);
+    }
+    const files = fs.readdirSync(backupDir)
+      .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'));
+
+    const result = files.map(f => {
+      const fpath = path.join(backupDir, f);
+      const stat = fs.statSync(fpath);
+      return {
+        filename: f,
+        size: stat.size,
+        created_at: stat.mtime.toISOString()
+      };
+    }).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+    res.json(result);
+  } catch (err) {
+    console.error('Backup list error:', err);
+    res.status(500).json({ error: 'Backup-Verzeichnis konnte nicht gelesen werden' });
+  }
+});
+
+// POST /api/backup/restore-server-file (Admin only)
+router.post('/restore-server-file', authenticateToken, requireAdmin, async (req, res) => {
+  const { filename, confirm } = req.body;
+  if (confirm !== 'RESTORE') {
+    return res.status(400).json({ error: "Bestätigung 'RESTORE' erforderlich" });
+  }
+  if (!filename || typeof filename !== 'string') {
+    return res.status(400).json({ error: 'Dateiname fehlt' });
+  }
+  // Safety: allow only filenames matching expected pattern (no path traversal)
+  if (!/^auto_backup_[\w\-]+\.json$/.test(filename)) {
+    return res.status(400).json({ error: 'Ungültiger Dateiname' });
+  }
+
+  const backupDir = getBackupDir();
+  const fpath = path.join(backupDir, filename);
+
+  if (!fs.existsSync(fpath)) {
+    return res.status(404).json({ error: 'Backup-Datei nicht gefunden' });
+  }
+
+  let data;
+  try {
+    data = JSON.parse(fs.readFileSync(fpath, 'utf8'));
+  } catch (parseErr) {
+    return res.status(400).json({ error: 'Backup-Datei ist ungültig oder beschädigt' });
+  }
+
+  const client = await req.pool.connect();
+  try {
+    await client.query('BEGIN');
+    await restoreAllTables(client, data);
+    await client.query('COMMIT');
+    req.io.emit('lesson_reset', { resetToRoomId: 1 });
+    res.json({ success: true, restored: true, filename });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Server-file restore error:', err);
+    res.status(500).json({ error: 'Wiederherstellung fehlgeschlagen: ' + err.message });
+  } finally {
+    client.release();
+  }
+});

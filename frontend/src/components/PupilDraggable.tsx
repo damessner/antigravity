@@ -14,8 +14,9 @@ function TimerBadge({ startedAt, minutes }: { startedAt: string; minutes: number
 
   useEffect(() => {
     if (!startedAt || !minutes) return;
-    const durationMs = minutes * 60 * 1000;
     const startMs = new Date(startedAt).getTime();
+    if (isNaN(startMs)) return; // guard against invalid date strings
+    const durationMs = minutes * 60 * 1000;
     const endMs = startMs + durationMs;
 
     const tick = () => {

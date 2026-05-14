@@ -12,7 +12,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: process.env.ALLOWED_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
@@ -90,7 +90,9 @@ pool.query(`
   $$ LANGUAGE plpgsql;
 `).catch(err => console.error('[Schema Setup] Dynamic DB columns migration error:', err.message));
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGIN || '*'
+}));
 app.use(express.json({ limit: '50mb' }));
 
 // Middleware to inject pool and io
@@ -147,6 +149,7 @@ app.use('/api/lernwerkstatt', require('./routes/lernwerkstatt'));
 app.use('/api/student', require('./routes/student'));
 app.use('/api/assessments', require('./routes/assessments'));
 app.use('/api/help', require('./routes/help'));
+app.use('/api/setup', require('./routes/setup'));
 const pushModule = require('./routes/push');
 app.use('/api/push', pushModule.router);
 app.use('/api/users/preferences', pushModule.preferencesRouter);
@@ -203,19 +206,23 @@ const triggerLessonBoundaryReset = async (lessonNumber) => {
   }
 };
 
-const triggerDailyBackup = async () => {
+const triggerDailyBackup = async (slot) => {
   const todayStr = new Date().toISOString().split('T')[0];
-  const triggerKey = `${todayStr}-daily-backup`;
+  const triggerKey = `${todayStr}-backup-${slot}`;
   if (executedTriggers.has(triggerKey)) return;
   executedTriggers.add(triggerKey);
 
-  console.log(`[Scheduler] Starting daily full backup...`);
+  console.log(`[Scheduler] Starting backup for slot ${slot}...`);
   try {
-    const tables = ['users', 'classes', 'pupils', 'rooms', 'subjects', 'assessment_categories', 'grades', 'pupil_subject_tags', 'disciplinary_notes', 'allocation_logs'];
+    const tables = ['users', 'classes', 'pupils', 'rooms', 'subjects', 'assessment_categories', 'assessments', 'grades', 'pupil_subject_tags', 'disciplinary_notes', 'allocation_logs', 'student_learning_plan', 'help_requests'];
     const backupData = {};
     for (const t of tables) {
-      const res = await pool.query(`SELECT * FROM ${t}`);
-      backupData[t] = res.rows;
+      try {
+        const res = await pool.query(`SELECT * FROM ${t}`);
+        backupData[t] = res.rows;
+      } catch (tableErr) {
+        console.warn(`[Scheduler] Skipping table ${t}: ${tableErr.message}`);
+      }
     }
 
     // Determine target folder
@@ -228,26 +235,28 @@ const triggerDailyBackup = async () => {
       fs.mkdirSync(backupDir, { recursive: true });
     }
 
-    const filename = `auto_backup_${todayStr}.json`;
+    const filename = `auto_backup_${todayStr}_${slot}.json`;
     const filepath = path.join(backupDir, filename);
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2));
-    console.log(`[Scheduler] Daily backup completed: ${filename}`);
+    console.log(`[Scheduler] Backup completed: ${filename}`);
 
-    // Retention: keep last 30 daily backups
+    // Retention: delete backups older than 14 days
+    const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const files = fs.readdirSync(backupDir)
-      .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'))
-      .sort()
-      .reverse();
+      .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'));
 
-    if (files.length > 30) {
-      const toDelete = files.slice(30);
-      for (const fd of toDelete) {
-        fs.unlinkSync(path.join(backupDir, fd));
-        console.log(`[Scheduler] Deleted old backup: ${fd}`);
-      }
+    for (const fname of files) {
+      const fpath = path.join(backupDir, fname);
+      try {
+        const stat = fs.statSync(fpath);
+        if (stat.mtimeMs < cutoffMs) {
+          fs.unlinkSync(fpath);
+          console.log(`[Scheduler] Deleted old backup: ${fname}`);
+        }
+      } catch (e) { /* ignore */ }
     }
   } catch (err) {
-    console.error('[Scheduler] Error creating daily backup:', err);
+    console.error('[Scheduler] Error creating backup:', err);
   }
 };
 
@@ -277,9 +286,12 @@ setInterval(() => {
     triggerLessonBoundaryReset(boundaries[timeStr]);
   }
 
-  // Daily backup trigger at 17:15
-  if (timeStr === '17:15') {
-    triggerDailyBackup();
+  // Backup triggers: 05:00 and 17:00 (every 12 hours)
+  if (timeStr === '05:00') {
+    triggerDailyBackup('05-00');
+  }
+  if (timeStr === '17:00') {
+    triggerDailyBackup('17-00');
   }
 
   // Clear executedTriggers map at midnight

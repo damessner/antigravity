@@ -42,6 +42,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
   // New Note Form
   const [newNoteText, setNewNoteText] = useState("");
   const [newSentiment, setNewSentiment] = useState<"positive" | "neutral" | "negative">("neutral");
+  const [newNoteVisible, setNewNoteVisible] = useState(false);
 
   // Read current user
   useEffect(() => {
@@ -173,6 +174,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
           pupil_id: targetId,
           note_text: newNoteText.trim(),
           sentiment: newSentiment,
+          is_visible_to_pupil: newNoteVisible,
         }),
       });
 
@@ -181,6 +183,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
       // Local appends are done via WebSocket event broadcast automatically
       setNewNoteText("");
+      setNewNoteVisible(false);
       setAlertMsg("Eintrag erfolgreich veröffentlicht.");
     } catch (err: any) {
       setAlertMsg(err.message || "Fehler beim Veröffentlichen");
@@ -421,37 +424,49 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
             {/* Bottom Row controllers */}
             <div className="flex items-center justify-between gap-3 mt-3 pt-2 border-t border-slate-800/60">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-semibold text-slate-400 uppercase">Einstufung:</span>
-                <div className="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800">
-                  <button
-                    type="button"
-                    onClick={() => setNewSentiment("positive")}
-                    className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
-                      newSentiment === "positive" ? "bg-emerald-500/15 text-emerald-400" : "text-slate-600 hover:text-slate-400"
-                    }`}
-                  >
-                    <Smile className="w-3 h-3" /> Positiv
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewSentiment("neutral")}
-                    className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
-                      newSentiment === "neutral" ? "bg-slate-800 text-slate-200" : "text-slate-600 hover:text-slate-400"
-                    }`}
-                  >
-                    <Meh className="w-3 h-3" /> Neutral
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewSentiment("negative")}
-                    className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
-                      newSentiment === "negative" ? "bg-rose-500/15 text-rose-400" : "text-slate-600 hover:text-slate-400"
-                    }`}
-                  >
-                    <Frown className="w-3 h-3" /> Negativ
-                  </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-slate-400 uppercase">Einstufung:</span>
+                  <div className="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setNewSentiment("positive")}
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
+                        newSentiment === "positive" ? "bg-emerald-500/15 text-emerald-400" : "text-slate-600 hover:text-slate-400"
+                      }`}
+                    >
+                      <Smile className="w-3 h-3" /> Positiv
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewSentiment("neutral")}
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
+                        newSentiment === "neutral" ? "bg-slate-800 text-slate-200" : "text-slate-600 hover:text-slate-400"
+                      }`}
+                    >
+                      <Meh className="w-3 h-3" /> Neutral
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setNewSentiment("negative")}
+                      className={`px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1 transition-all ${
+                        newSentiment === "negative" ? "bg-rose-500/15 text-rose-400" : "text-slate-600 hover:text-slate-400"
+                      }`}
+                    >
+                      <Frown className="w-3 h-3" /> Negativ
+                    </button>
+                  </div>
                 </div>
+
+                <label className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newNoteVisible}
+                    onChange={(e) => setNewNoteVisible(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0"
+                  />
+                  <span>Für Schüler sichtbar</span>
+                </label>
               </div>
 
               <button

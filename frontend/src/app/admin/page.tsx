@@ -4,16 +4,23 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, 
-  Trash2, Key, Download, Upload, AlertTriangle, CheckCircle2 
+  Trash2, Key, Download, Upload, AlertTriangle, CheckCircle2, Building2, Edit2
 } from "lucide-react";
 
 export default function AdminPage() {
   const router = useRouter();
-  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup">("users");
+  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms">("users");
   
   const [users, setUsers] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
   const [pupils, setPupils] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<any[]>([]);
+  const [savedBackups, setSavedBackups] = useState<any[]>([]);
+  const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
+  const [editingRoomName, setEditingRoomName] = useState("");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [serverRestoreFile, setServerRestoreFile] = useState<string | null>(null);
+  const [serverRestoreConfirm, setServerRestoreConfirm] = useState("");
   
   // Forms states
   const [newUser, setNewUser] = useState({ username: "", full_name: "", role: "teacher" });
@@ -49,14 +56,16 @@ export default function AdminPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [{ data: uData }, { data: cData }, { data: pData }] = await Promise.all([
+      const [{ data: uData }, { data: cData }, { data: pData }, { data: rData }] = await Promise.all([
         fetchAuth("/api/users"),
         fetchAuth("/api/classes"),
         fetchAuth("/api/pupils"),
+        fetchAuth("/api/setup/rooms"),
       ]);
       setUsers(uData || []);
       setClasses(cData || []);
       setPupils(pData || []);
+      setRooms(rData || []);
       if (cData?.length > 0 && !newPupil.class_id) {
         setNewPupil((prev) => ({ ...prev, class_id: String(cData[0].id) }));
       }
@@ -64,6 +73,15 @@ export default function AdminPage() {
       setAlertMsg({ type: "error", text: "Fehler beim Laden der Admin-Daten", details: err.message });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadSavedBackups = async () => {
+    try {
+      const { data } = await fetchAuth("/api/backup/list");
+      setSavedBackups(data || []);
+    } catch {
+      setSavedBackups([]);
     }
   };
 
@@ -80,6 +98,13 @@ export default function AdminPage() {
     }
     loadData();
   }, [router]);
+
+  // Load backups when backup section is active
+  useEffect(() => {
+    if (activeSection === "backup") {
+      loadSavedBackups();
+    }
+  }, [activeSection]);
 
   // --- Users Handlers ---
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -193,6 +218,75 @@ export default function AdminPage() {
       setAlertMsg({ type: "info", text: `Schüler "${name}" abgemeldet.` });
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Löschen gescheitert", details: err.message });
+    }
+  };
+
+  // --- Rooms Handlers ---
+  const handleCreateRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data } = await fetchAuth("/api/setup/rooms", {
+        method: "POST",
+        body: JSON.stringify({ name: newRoomName }),
+      });
+      setRooms((prev) => [...prev, data]);
+      setNewRoomName("");
+      setAlertMsg({ type: "success", text: `Raum "${data.name}" erstellt.` });
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: "Raum konnte nicht erstellt werden", details: err.message });
+    }
+  };
+
+  const handleRenameRoom = async (id: number) => {
+    try {
+      const { data } = await fetchAuth(`/api/setup/rooms/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: editingRoomName }),
+      });
+      setRooms((prev) => prev.map((r) => (r.id === id ? data : r)));
+      setEditingRoomId(null);
+      setAlertMsg({ type: "success", text: `Raum umbenannt.` });
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: "Umbenennen fehlgeschlagen", details: err.message });
+    }
+  };
+
+  const handleDeleteRoom = async (id: number, name: string) => {
+    if (!confirm(`Raum "${name}" wirklich löschen? Alle Belegungshistorie wird entfernt.`)) return;
+    try {
+      await fetchAuth(`/api/setup/rooms/${id}`, { method: "DELETE" });
+      setRooms((prev) => prev.filter((r) => r.id !== id));
+      setAlertMsg({ type: "info", text: `Raum "${name}" gelöscht.` });
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: "Löschen fehlgeschlagen", details: err.message });
+    }
+  };
+
+  // --- Server Backup Restore ---
+  const handleRestoreServerFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (serverRestoreConfirm !== "RESTORE") {
+      setAlertMsg({ type: "error", text: "Bitte exakt 'RESTORE' zur Bestätigung eingeben." });
+      return;
+    }
+    if (!serverRestoreFile) {
+      setAlertMsg({ type: "error", text: "Keine Backup-Datei ausgewählt." });
+      return;
+    }
+    try {
+      setIsLoading(true);
+      await fetchAuth("/api/backup/restore-server-file", {
+        method: "POST",
+        body: JSON.stringify({ filename: serverRestoreFile, confirm: serverRestoreConfirm }),
+      });
+      setAlertMsg({ type: "success", text: "System wiederhergestellt!", details: "Bitte Seite neu laden." });
+      setServerRestoreFile(null);
+      setServerRestoreConfirm("");
+      loadData();
+    } catch (err: any) {
+      setAlertMsg({ type: "error", text: "Wiederherstellung fehlgeschlagen", details: err.message });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -351,6 +445,18 @@ export default function AdminPage() {
           >
             <Database className="w-4 h-4" />
             <span>System-Sicherung</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSection("rooms")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+              activeSection === "rooms"
+                ? "bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Raumverwaltung</span>
           </button>
         </aside>
 
@@ -733,6 +839,185 @@ export default function AdminPage() {
                       {isLoading ? "Wiederherstellung läuft..." : "Gefährliche Wiederherstellung starten"}
                     </button>
                   </form>
+                </div>
+              </div>
+
+              {/* Gespeicherte Automatik-Backups */}
+              <div className="glass-panel p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-white">Gespeicherte Automatik-Backups</h3>
+                  <button
+                    onClick={loadSavedBackups}
+                    className="text-slate-500 hover:text-slate-300 transition-colors"
+                    title="Aktualisieren"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {savedBackups.length === 0 ? (
+                  <p className="text-xs text-slate-500 italic text-center py-4">Keine automatischen Backups verfügbar</p>
+                ) : (
+                  <div className="space-y-2">
+                    {savedBackups.map((b) => (
+                      <div
+                        key={b.filename}
+                        className={`flex items-center justify-between bg-slate-950 border rounded-xl px-3 py-2.5 ${
+                          serverRestoreFile === b.filename ? "border-amber-500/50 bg-amber-500/5" : "border-slate-800"
+                        }`}
+                      >
+                        <div>
+                          <p className="text-xs font-mono text-slate-200">{b.filename}</p>
+                          <p className="text-[10px] text-slate-500 mt-0.5">
+                            {new Date(b.created_at).toLocaleDateString("de-DE", {
+                              day: "2-digit", month: "2-digit", year: "numeric",
+                              hour: "2-digit", minute: "2-digit"
+                            })}
+                            {" · "}
+                            {(b.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setServerRestoreFile(b.filename);
+                            setServerRestoreConfirm("");
+                          }}
+                          className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg transition-colors shrink-0 ml-3"
+                        >
+                          Wiederherstellen
+                        </button>
+                      </div>
+                    ))}
+
+                    {serverRestoreFile && (
+                      <form onSubmit={handleRestoreServerFile} className="mt-3 bg-rose-950/20 border border-rose-500/30 p-3 rounded-xl space-y-2">
+                        <p className="text-[11px] text-rose-300 font-semibold">
+                          Wiederherstellen aus: <span className="font-mono">{serverRestoreFile}</span>
+                        </p>
+                        <input
+                          type="text"
+                          value={serverRestoreConfirm}
+                          onChange={(e) => setServerRestoreConfirm(e.target.value)}
+                          placeholder="RESTORE eingeben"
+                          className="w-full bg-slate-950 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-300 focus:border-rose-500 focus:outline-none font-mono text-center"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setServerRestoreFile(null); setServerRestoreConfirm(""); }}
+                            className="flex-1 bg-slate-900 text-slate-400 text-xs py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+                          >
+                            Abbrechen
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={isLoading || serverRestoreConfirm !== "RESTORE"}
+                            className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-1.5 rounded-lg disabled:opacity-40 transition-colors"
+                          >
+                            {isLoading ? "Läuft..." : "Jetzt wiederherstellen"}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION 5: RAUMVERWALTUNG */}
+          {activeSection === "rooms" && (
+            <div className="space-y-6 max-w-2xl">
+              <div className="glass-panel p-5">
+                <h2 className="text-sm font-bold text-white mb-3">Neuen Raum anlegen</h2>
+                <form onSubmit={handleCreateRoom} className="flex gap-3 items-end">
+                  <div className="flex-1">
+                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Raumbezeichnung</label>
+                    <input
+                      type="text"
+                      value={newRoomName}
+                      onChange={(e) => setNewRoomName(e.target.value)}
+                      placeholder="z.B. Bibliothek"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium py-2 px-4 rounded-lg transition-colors h-[34px]"
+                  >
+                    Raum erstellen
+                  </button>
+                </form>
+              </div>
+
+              <div className="glass-panel overflow-hidden">
+                <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/40">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                    Konfigurierte Räume ({rooms.length})
+                  </h3>
+                </div>
+                <div className="divide-y divide-slate-800/50">
+                  {rooms.map((room) => (
+                    <div key={room.id} className="flex items-center justify-between p-3 hover:bg-slate-800/20 transition-colors">
+                      {editingRoomId === room.id ? (
+                        <div className="flex items-center gap-2 flex-1">
+                          <input
+                            type="text"
+                            value={editingRoomName}
+                            onChange={(e) => setEditingRoomName(e.target.value)}
+                            className="flex-1 bg-slate-950 border border-cyan-500/50 rounded-lg p-1.5 text-xs text-white focus:outline-none"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameRoom(room.id);
+                              if (e.key === "Escape") setEditingRoomId(null);
+                            }}
+                          />
+                          <button
+                            onClick={() => handleRenameRoom(room.id)}
+                            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold px-2 py-1 border border-cyan-500/30 rounded-lg transition-colors"
+                          >
+                            Speichern
+                          </button>
+                          <button
+                            onClick={() => setEditingRoomId(null)}
+                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <span className="text-xs font-medium text-white">{room.name}</span>
+                            {room.capacity && (
+                              <span className="text-[10px] text-slate-500 ml-2">Max. {room.capacity}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                setEditingRoomId(room.id);
+                                setEditingRoomName(room.name);
+                              }}
+                              title="Umbenennen"
+                              className="p-1 text-slate-500 hover:text-cyan-400 rounded transition-colors"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRoom(room.id, room.name)}
+                              title="Löschen"
+                              className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

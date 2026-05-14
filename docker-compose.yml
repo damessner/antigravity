@@ -10,7 +10,7 @@ services:
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./school_data/db:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-school_management}"]
@@ -35,7 +35,7 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - backups:/opt/school-management/backups
+      - ./school_data/backups:/opt/school-management/backups
     depends_on:
       db:
         condition: service_healthy
@@ -56,8 +56,4 @@ services:
     depends_on:
       - backend
 
-volumes:
-  pgdata:
-    name: school_management_pgdata
-  backups:
-    name: school_management_backups
+volumes: {}

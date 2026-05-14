@@ -24,13 +24,27 @@ export default function HomePage() {
         router.replace("/change-password");
         return;
       }
-      setIsAuthenticated(true);
+
+      // Check if initial setup is needed (rooms table empty)
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      fetch(`${apiUrl}/api/setup/status`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.needsSetup) {
+            router.replace("/setup");
+          } else {
+            setIsAuthenticated(true);
+          }
+        })
+        .catch(() => {
+          // If check fails, proceed to dashboard anyway
+          setIsAuthenticated(true);
+        })
+        .finally(() => setIsLoading(false));
     } catch (e) {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       router.replace("/login");
-    } finally {
-      setIsLoading(false);
     }
   }, [router]);
 
