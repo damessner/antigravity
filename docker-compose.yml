@@ -47,11 +47,6 @@ services:
       dockerfile: Dockerfile
     container_name: school_frontend
     restart: unless-stopped
-    environment:
-      # IMPORTANT: For iPad/mobile access, replace localhost with your server's LAN IP
-      # e.g. NEXT_PUBLIC_API_URL=http://192.168.1.100:4000
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
-      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-http://localhost:4000}
     ports:
       - "3000:3000"
     depends_on:
