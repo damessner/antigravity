@@ -17,6 +17,7 @@ import RoomDroppable from "./RoomDroppable";
 import PupilDraggable from "./PupilDraggable";
 import TimerPopover from "./TimerPopover";
 import TimeOutModal from "./TimeOutModal";
+import PupilCommentModal from "./PupilCommentModal";
 import Gradebook from "./Gradebook";
 import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
@@ -28,8 +29,10 @@ export interface Pupil {
   class_name: string;
   room_id: number;
   arrived_status: boolean; // true='arrived', false='pending'
+  active_comment?: string;
   timer_minutes?: number;
   timer_started_at?: string;
+  timer_started_at_ms?: number;
 }
 
 export interface Room {
@@ -81,6 +84,7 @@ export default function TeacherDashboard() {
 
   // Popup / Intent States
   const [selectedPupilForTimer, setSelectedPupilForTimer] = useState<Pupil | null>(null);
+  const [selectedPupilForComment, setSelectedPupilForComment] = useState<Pupil | null>(null);
   const [pendingDropIntent, setPendingDropIntent] = useState<{ pupilId: number; toRoomId: number; fromRoomId: number } | null>(null);
 
   // Sensors for DndKit
@@ -108,8 +112,10 @@ export default function TeacherDashboard() {
           id: Number(p.id),
           room_id: Number(p.room_id || 1),
           arrived_status: p.arrived_status === "arrived",
+          active_comment: p.comment || "",
           timer_minutes: p.timer_minutes ? Number(p.timer_minutes) : undefined,
           timer_started_at: p.timer_started_at || undefined,
+          timer_started_at_ms: p.timer_started_at_ms !== null && p.timer_started_at_ms !== undefined ? Number(p.timer_started_at_ms) : undefined,
         }));
         setPupils(mappedPupils);
         setSubjects(data.subjects || []);
@@ -169,8 +175,10 @@ export default function TeacherDashboard() {
               ...p,
               room_id: Number(toRoomId),
               arrived_status: log?.arrived_status === "arrived",
+              active_comment: log?.comment || "",
               timer_minutes: log?.timer_minutes ? Number(log?.timer_minutes) : undefined,
               timer_started_at: log?.timer_started_at || undefined,
+              timer_started_at_ms: log?.timer_started_at_ms !== null && log?.timer_started_at_ms !== undefined ? Number(log?.timer_started_at_ms) : undefined,
             }
             : p
         )
@@ -199,8 +207,10 @@ export default function TeacherDashboard() {
           ...p,
           room_id: Number(resetToRoomId || 1),
           arrived_status: false,
+          active_comment: "",
           timer_minutes: undefined,
           timer_started_at: undefined,
+          timer_started_at_ms: undefined,
         }))
       );
       setAlertToast("Unterrichtsstunde zurückgesetzt. Alle Schüler im Klassenzimmer.");
@@ -217,7 +227,7 @@ export default function TeacherDashboard() {
       });
     });
 
-    socketInstance.on("pupil_timer_set", ({ pupilId, timer_minutes, timer_started_at }) => {
+    socketInstance.on("pupil_timer_set", ({ pupilId, timer_minutes, timer_started_at, timer_started_at_ms }) => {
       setPupils((prev) =>
         prev.map((p) =>
           Number(p.id) === Number(pupilId)
@@ -225,6 +235,24 @@ export default function TeacherDashboard() {
               ...p,
               timer_minutes: timer_minutes ? Number(timer_minutes) : undefined,
               timer_started_at: timer_started_at || undefined,
+              timer_started_at_ms: timer_started_at_ms !== null && timer_started_at_ms !== undefined
+                ? Number(timer_started_at_ms)
+                : timer_started_at
+                ? new Date(timer_started_at).getTime()
+                : undefined,
+            }
+            : p
+        )
+      );
+    });
+
+    socketInstance.on("pupil_comment_set", ({ pupilId, comment }) => {
+      setPupils((prev) =>
+        prev.map((p) =>
+          Number(p.id) === Number(pupilId)
+            ? {
+              ...p,
+              active_comment: comment || "",
             }
             : p
         )
@@ -327,7 +355,7 @@ export default function TeacherDashboard() {
     } else {
       // Optimistic update: Move the pupil card immediately in local state
       setPupils((prev) =>
-        prev.map((p) => (Number(p.id) === pupilId ? { ...p, room_id: toRoomId } : p))
+        prev.map((p) => (Number(p.id) === pupilId ? { ...p, room_id: toRoomId, active_comment: "" } : p))
       );
 
       // Immediate emit intent
@@ -348,7 +376,7 @@ export default function TeacherDashboard() {
     // Optimistic update
     setPupils((prev) =>
       prev.map((p) =>
-        Number(p.id) === pendingDropIntent.pupilId ? { ...p, room_id: pendingDropIntent.toRoomId } : p
+        Number(p.id) === pendingDropIntent.pupilId ? { ...p, room_id: pendingDropIntent.toRoomId, active_comment: comment } : p
       )
     );
 
@@ -361,6 +389,27 @@ export default function TeacherDashboard() {
       comment,
     });
     setPendingDropIntent(null);
+  };
+
+  const handleSavePupilComment = (pupilId: number, comment: string) => {
+    const cleanComment = comment.trim();
+    setPupils((prev) =>
+      prev.map((p) =>
+        Number(p.id) === Number(pupilId)
+          ? {
+            ...p,
+            active_comment: cleanComment,
+          }
+          : p
+      )
+    );
+    if (socket) {
+      socket.emit("set_pupil_comment", {
+        pupilId,
+        comment: cleanComment,
+      });
+    }
+    setSelectedPupilForComment(null);
   };
 
   // Trigger manual reset lesson boundary
@@ -408,7 +457,7 @@ export default function TeacherDashboard() {
               S2
             </div>
             <div>
-              <span className="text-xs font-bold text-slate-400 block -mb-1">MS ÖSTERREICH</span>
+              <span className="text-xs font-bold text-slate-400 block -mb-1">MS WEISSENBACH TELFS</span>
               <span className="text-xs text-slate-500 flex items-center gap-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
                 {isConnected ? "Live WS" : "Getrennt"}
@@ -435,7 +484,7 @@ export default function TeacherDashboard() {
                 }`}
             >
               <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">📈</span> Notenbuch
+              <span className="hidden sm:inline">📈</span> Evaluationsbereich
             </button>
 
             <button
@@ -605,8 +654,10 @@ export default function TeacherDashboard() {
                           .map((t) => {
                             const sub = subjects.find((s) => Number(s.id) === Number(t.subject_id));
                             const abbr = sub?.abbreviation || "F";
-                            const sym = t.tier_tag === "Meister" ? "👑" : t.tier_tag === "Geselle" ? "🛠️" : "🌱";
-                            return `${abbr}: ${sym}`;
+                            const tag = t.tier_tag || "none";
+                            const sym = tag === "Meister" ? "👑" : tag === "Geselle" ? "🛠️" : tag === "Lehrling" ? "🌱" : "➖";
+                            const lbl = tag === "Meister" ? "Meister" : tag === "Geselle" ? "Geselle" : tag === "Lehrling" ? "Lehrling" : "Nichts/Null";
+                            return `${abbr}: ${sym} ${lbl}`;
                           });
 
                         return (
@@ -616,6 +667,7 @@ export default function TeacherDashboard() {
                             masteryTags={matchingTags}
                             socket={socket}
                             onOpenTimer={() => setSelectedPupilForTimer(pupil)}
+                            onOpenComment={() => setSelectedPupilForComment(pupil)}
                           />
                         );
                       })}
@@ -667,6 +719,15 @@ export default function TeacherDashboard() {
           pupil={pupils.find((p) => Number(p.id) === Number(selectedPupilForTimer.id)) || selectedPupilForTimer}
           onClose={() => setSelectedPupilForTimer(null)}
           socket={socket}
+        />
+      )}
+
+      {selectedPupilForComment && (
+        <PupilCommentModal
+          pupilName={selectedPupilForComment.name}
+          initialComment={pupils.find((p) => Number(p.id) === Number(selectedPupilForComment.id))?.active_comment || ""}
+          onClose={() => setSelectedPupilForComment(null)}
+          onSave={(comment) => handleSavePupilComment(selectedPupilForComment.id, comment)}
         />
       )}
 

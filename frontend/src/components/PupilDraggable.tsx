@@ -8,14 +8,14 @@ import { Clock, CheckCircle2, Circle } from "lucide-react";
 import { Pupil } from "./TeacherDashboard";
 
 // Stand-Alone High-Performance TimerBadge Sub-Component
-function TimerBadge({ startedAt, minutes }: { startedAt: string; minutes: number }) {
+function TimerBadge({ startedAtMs, minutes }: { startedAtMs: number; minutes: number }) {
   const [timeLeftStr, setTimeLeftStr] = useState<string>("--");
   const [timeLeft, setTimeLeft] = useState<number>(1);
 
   useEffect(() => {
-    if (!startedAt || !minutes) return;
-    const startMs = new Date(startedAt).getTime();
-    if (isNaN(startMs)) return; // guard against invalid date strings
+    if (!startedAtMs || !minutes) return;
+    const startMs = Number(startedAtMs);
+    if (Number.isNaN(startMs)) return;
     const durationMs = minutes * 60 * 1000;
     const endMs = startMs + durationMs;
 
@@ -38,7 +38,7 @@ function TimerBadge({ startedAt, minutes }: { startedAt: string; minutes: number
     tick();
     const timerId = setInterval(tick, 1000);
     return () => clearInterval(timerId);
-  }, [startedAt, minutes]);
+  }, [startedAtMs, minutes]);
 
   // Farb-Logik (Tailwind v4) exakt nach Vorgabe
   let badgeStyle = "bg-green-100 text-green-700 border-green-200";
@@ -61,6 +61,7 @@ interface PupilDraggableProps {
   masteryTags: string[];
   socket: Socket | null;
   onOpenTimer: () => void;
+  onOpenComment: () => void;
 }
 
 export default function PupilDraggable({
@@ -68,6 +69,7 @@ export default function PupilDraggable({
   masteryTags,
   socket,
   onOpenTimer,
+  onOpenComment,
 }: PupilDraggableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: pupil.id,
@@ -95,7 +97,14 @@ export default function PupilDraggable({
     onOpenTimer();
   };
 
-  const hasActiveTimer = !!pupil.timer_started_at && Number(pupil.timer_minutes) > 0;
+  const resolvedStartedAtMs =
+    typeof pupil.timer_started_at_ms === "number"
+      ? pupil.timer_started_at_ms
+      : pupil.timer_started_at
+      ? new Date(pupil.timer_started_at).getTime()
+      : undefined;
+
+  const hasActiveTimer = !!resolvedStartedAtMs && Number(pupil.timer_minutes) > 0;
 
   return (
     <div
@@ -103,6 +112,7 @@ export default function PupilDraggable({
       style={style}
       {...attributes}
       {...listeners}
+      onClick={onOpenComment}
       className={`group relative flex items-center justify-between p-2.5 rounded-xl border transition-all duration-150 select-none cursor-grab active:cursor-grabbing ${
         isDragging
           ? "opacity-60 scale-95 border-indigo-500 bg-indigo-950/30 shadow-md"
@@ -136,9 +146,7 @@ export default function PupilDraggable({
               {pupil.class_name}
             </span>
             {/* Standalone independent animated badge */}
-            {hasActiveTimer && (
-              <TimerBadge startedAt={pupil.timer_started_at!} minutes={Number(pupil.timer_minutes)} />
-            )}
+            {hasActiveTimer && resolvedStartedAtMs && <TimerBadge startedAtMs={resolvedStartedAtMs} minutes={Number(pupil.timer_minutes)} />}
           </div>
 
           {/* Mastery Tags Row Section 8 */}
@@ -157,8 +165,8 @@ export default function PupilDraggable({
         </div>
       </div>
 
-      {/* Right section: Trigger Action Clock Icon */}
-      <div className="shrink-0 pl-1 z-10">
+      {/* Right section: Trigger action icons */}
+      <div className="shrink-0 pl-1 z-10 flex items-center gap-1">
         <button
           type="button"
           onClick={handleTimerTrigger}

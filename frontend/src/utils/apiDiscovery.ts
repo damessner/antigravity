@@ -6,16 +6,20 @@
 
 export const getApiUrl = (): string => {
   if (typeof window !== "undefined") {
-    // Return empty string to route fetch requests through the Next.js frontend proxy (port 3000)
-    return "";
+    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    return `${protocol}//${host}:4000`;
   }
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 };
 
 export const getWsUrl = (): string => {
   if (typeof window !== "undefined") {
-    // Return empty string to route Socket.io real-time traffic through the Next.js frontend proxy (port 3000)
-    return "";
+    if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const host = window.location.hostname;
+    return `${wsProtocol}//${host}:4000`;
   }
   return process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000";
 };

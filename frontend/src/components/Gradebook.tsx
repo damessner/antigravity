@@ -942,7 +942,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setAlertMsg("Notenbuch-Matrix erfolgreich importiert und synchronisiert!");
+      setAlertMsg("Evaluationsbereich-Matrix erfolgreich importiert und synchronisiert!");
       setImportFile(null);
       loadSubjects(selectedClassId);
     } catch (err: any) {
@@ -1596,9 +1596,17 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                     const curTagObj = pupilTags.find((t) => Number(t.pupil_id) === Number(p.id));
                     const curTagVal = curTagObj?.tier_tag || "none";
                     let tagSymbol = "➖";
-                    if (curTagVal === "Meister") tagSymbol = "👑";
-                    else if (curTagVal === "Geselle") tagSymbol = "🛠️";
-                    else if (curTagVal === "Lehrling") tagSymbol = "🌱";
+                    let tagLabel = "Nichts/Null";
+                    if (curTagVal === "Meister") {
+                      tagSymbol = "👑";
+                      tagLabel = "Meister";
+                    } else if (curTagVal === "Geselle") {
+                      tagSymbol = "🛠️";
+                      tagLabel = "Geselle";
+                    } else if (curTagVal === "Lehrling") {
+                      tagSymbol = "🌱";
+                      tagLabel = "Lehrling";
+                    }
 
                     return (
                       <tr key={p.id} className="hover:bg-slate-900/30 transition-colors group/row">
@@ -1620,7 +1628,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                             className="p-1 text-xs shrink-0 hover:scale-110 transition-transform disabled:opacity-50"
                             title={`Meisterschafts-Tag: ${curTagVal} (Klicken zum Umschalten)`}
                           >
-                            {tagSymbol}
+                            <span className="inline-flex items-center gap-1 text-[10px]">
+                              <span>{tagSymbol}</span>
+                              <span className="text-slate-400">{tagLabel}</span>
+                            </span>
                           </button>
                         </td>
 
