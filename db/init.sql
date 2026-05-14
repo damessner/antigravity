@@ -172,34 +172,34 @@ CREATE TABLE help_requests (
 );
 CREATE INDEX idx_help_requests_status ON help_requests(status);
 
--- Seed admin accounts (hash for 'admin')
+-- Seed admin accounts (password: 'admin', must be changed on first login)
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
 VALUES
-('da.messner', 'D. Messner', 'admin', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', true),
-('break_glass', 'Emergency Admin', 'admin', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', true);
+('da.messner', 'D. Messner', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true),
+('break_glass', 'Emergency Admin', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true);
 
 -- Seed classes
 INSERT INTO classes (name) VALUES ('3G'), ('4G');
 
--- Seed a default teacher (hash for 'teacher')
+-- Seed a default teacher (password: 'teacher')
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
 VALUES
-('teacher.one', 'Frau Professor', 'teacher', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false),
-('teacher.two', 'Herr Professor', 'teacher', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false);
+('teacher.one', 'Frau Professor', 'teacher', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
+('teacher.two', 'Herr Professor', 'teacher', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
 
--- Seed pupils for 3G
+-- Seed pupils for 3G (password: 'teacher')
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change) VALUES
-('pupil_3g_1', 'Anna Müller', 'pupil', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false),
-('pupil_3g_2', 'Lukas Schmidt', 'pupil', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false),
-('pupil_3g_3', 'Maximilian Gruber', 'pupil', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false);
+('pupil_3g_1', 'Anna Müller', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
+('pupil_3g_2', 'Lukas Schmidt', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
+('pupil_3g_3', 'Maximilian Gruber', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
 
 INSERT INTO pupils (user_id, class_id) VALUES
 (5, 1), (6, 1), (7, 1);
 
--- Seed pupils for 4G
+-- Seed pupils for 4G (password: 'teacher')
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change) VALUES
-('pupil_4g_1', 'Sarah Wagner', 'pupil', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false),
-('pupil_4g_2', 'David Pichler', 'pupil', '$2b$10$xW7.8z9K/J8w/M1n2b3c.x4z5a6s7d8f9g0h1j2k3l4m5n6b7v8c9', false);
+('pupil_4g_1', 'Sarah Wagner', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
+('pupil_4g_2', 'David Pichler', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
 
 INSERT INTO pupils (user_id, class_id) VALUES
 (8, 2), (9, 2);

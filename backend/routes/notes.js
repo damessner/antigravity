@@ -135,16 +135,28 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Escapes characters that are special in HTML to prevent XSS
+const escapeHtml = (str) => {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
 // GET /api/notes/export/:pupil_id
-router.get('/export/:pupil_id', async (req, res) => {
+router.get('/export/:pupil_id', authenticateToken, async (req, res) => {
   const pupilId = Number(req.params.pupil_id);
   if (!pupilId) return res.status(400).send('Ungültige Schüler-ID');
 
   try {
     const pupilRes = await req.pool.query(`
-      SELECT p.name, c.name as class_name 
-      FROM pupils p 
-      LEFT JOIN classes c ON p.class_id = c.id 
+      SELECT u.full_name as name, c.name as class_name
+      FROM pupils p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN classes c ON p.class_id = c.id
       WHERE p.id = $1
     `, [pupilId]);
 
@@ -182,7 +194,7 @@ router.get('/export/:pupil_id', async (req, res) => {
 
       let autoHtml = '';
       if (note.auto_source) {
-        autoHtml = `<br><span class="auto-badge">Automatischer Eintrag: ${note.auto_source}</span>`;
+        autoHtml = `<br><span class="auto-badge">Automatischer Eintrag: ${escapeHtml(note.auto_source)}</span>`;
       }
 
       rowsHtml += `
@@ -190,10 +202,10 @@ router.get('/export/:pupil_id', async (req, res) => {
           <td>${d}</td>
           <td class="${colorClass}">${emoji}</td>
           <td>
-            ${note.note_text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            ${escapeHtml(note.note_text)}
             ${autoHtml}
           </td>
-          <td>${note.teacher_name || 'System'}</td>
+          <td>${escapeHtml(note.teacher_name || 'System')}</td>
         </tr>
       `;
     }
@@ -223,8 +235,8 @@ router.get('/export/:pupil_id', async (req, res) => {
     </div>
 
     <div class="student-info">
-        <strong>Schüler/in:</strong> ${pupil.name} <br>
-        <strong>Klasse:</strong> ${pupil.class_name || '?'} <br>
+        <strong>Schüler/in:</strong> ${escapeHtml(pupil.name)} <br>
+        <strong>Klasse:</strong> ${escapeHtml(pupil.class_name || '?')} <br>
         <strong>Zeitraum:</strong> Aktuelles Schuljahr 2025/26
     </div>
 

@@ -18,13 +18,7 @@ router.post('/login', async (req, res) => {
     }
 
     const user = userRes.rows[0];
-    let match = false;
-    if (user.password_hash.startsWith('$2b$10$xW7.8z9K')) {
-      match = (user.role === 'admin' && password === 'admin') || 
-              (user.role !== 'admin' && password === 'teacher');
-    } else {
-      match = await bcrypt.compare(password, user.password_hash);
-    }
+    const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }

@@ -108,13 +108,7 @@ router.post('/change-password', authenticateToken, async (req, res) => {
     if (userRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const userRow = userRes.rows[0];
-    let match = false;
-    if (userRow.password_hash.startsWith('$2b$10$xW7.8z9K')) {
-      // Seed account check: admins start with 'admin', others with 'teacher'
-      match = currentPassword === 'admin' || currentPassword === 'teacher';
-    } else {
-      match = await bcrypt.compare(currentPassword, userRow.password_hash);
-    }
+    const match = await bcrypt.compare(currentPassword, userRow.password_hash);
     if (!match) {
       return res.status(400).json({ error: 'Incorrect current password' });
     }
