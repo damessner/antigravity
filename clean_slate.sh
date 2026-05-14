@@ -73,9 +73,13 @@ if [ -n "$BACKUP_FILE" ]; then
   mkdir -p "$SCRIPT_DIR/school_data/backups"
   cp "$BACKUP_FILE" "$SCRIPT_DIR/school_data/backups/$(basename "$BACKUP_FILE")"
 
+  # Write backup payload to a temp file to avoid exposing contents in process listing
+  RESTORE_TMP="$(mktemp /tmp/restore_payload.XXXXXX.json)"
+  printf '{"confirm":"RESTORE","data":%s}' "$(cat "$BACKUP_FILE")" > "$RESTORE_TMP"
   RESPONSE=$(curl -sf -X POST "$API_URL/api/backup/restore" \
     -H "Content-Type: application/json" \
-    -d "{\"confirm\":\"RESTORE\",\"data\":$(cat "$BACKUP_FILE")}" 2>&1) || true
+    --data-binary "@$RESTORE_TMP" 2>&1) || true
+  rm -f "$RESTORE_TMP"
 
   if echo "$RESPONSE" | grep -q '"success":true'; then
     echo "   ✅ Backup restored successfully."

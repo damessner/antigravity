@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // GET /api/setup/status — returns whether initial setup is needed
-router.get('/status', async (req, res) => {
+router.get('/status', setupLimiter, async (req, res) => {
   try {
     const result = await req.pool.query('SELECT COUNT(*) FROM rooms');
     const count = Number(result.rows[0].count);
@@ -15,7 +15,7 @@ router.get('/status', async (req, res) => {
 });
 
 // POST /api/setup/init-rooms — creates initial rooms (public during setup)
-router.post('/init-rooms', async (req, res) => {
+router.post('/init-rooms', setupLimiter, async (req, res) => {
   const { rooms } = req.body;
   if (!Array.isArray(rooms) || rooms.length === 0) {
     return res.status(400).json({ error: 'Raumliste fehlt oder ist leer' });

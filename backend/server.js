@@ -6,6 +6,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
@@ -115,8 +116,25 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Rate limiters
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { error: 'Zu viele Anmeldeversuche. Bitte warten Sie 15 Minuten.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const setupLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: 'Zu viele Anfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Export middleware for route files
-module.exports = { authenticateToken, pool, io };
+module.exports = { authenticateToken, pool, io, loginLimiter, setupLimiter };
 
 // Socket.IO authentication and setup
 io.use((socket, next) => {

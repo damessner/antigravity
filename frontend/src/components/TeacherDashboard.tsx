@@ -59,7 +59,7 @@ export default function TeacherDashboard() {
 
   // Primary States
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
 
   const [rooms, setRooms] = useState<Room[]>([]);

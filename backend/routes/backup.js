@@ -439,20 +439,27 @@ router.post('/restore-server-file', authenticateToken, requireAdmin, async (req,
     return res.status(400).json({ error: 'Dateiname fehlt' });
   }
   // Safety: allow only filenames matching expected pattern (no path traversal)
-  if (!/^auto_backup_[\w\-]+\.json$/.test(filename)) {
+  if (!/^auto_backup_[\w-]+\.json$/.test(filename)) {
     return res.status(400).json({ error: 'Ungültiger Dateiname' });
   }
 
   const backupDir = getBackupDir();
   const fpath = path.join(backupDir, filename);
 
-  if (!fs.existsSync(fpath)) {
+  // Additional path traversal guard: resolved path must stay within backup directory
+  const resolvedPath = path.resolve(fpath);
+  const resolvedBackupDir = path.resolve(backupDir);
+  if (!resolvedPath.startsWith(resolvedBackupDir + path.sep) && resolvedPath !== resolvedBackupDir) {
+    return res.status(400).json({ error: 'Ungültiger Dateipfad' });
+  }
+
+  if (!fs.existsSync(resolvedPath)) {
     return res.status(404).json({ error: 'Backup-Datei nicht gefunden' });
   }
 
   let data;
   try {
-    data = JSON.parse(fs.readFileSync(fpath, 'utf8'));
+    data = JSON.parse(fs.readFileSync(resolvedPath, 'utf8'));
   } catch (parseErr) {
     return res.status(400).json({ error: 'Backup-Datei ist ungültig oder beschädigt' });
   }

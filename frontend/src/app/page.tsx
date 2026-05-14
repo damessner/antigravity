@@ -36,8 +36,9 @@ export default function HomePage() {
             setIsAuthenticated(true);
           }
         })
-        .catch(() => {
+        .catch((err) => {
           // If check fails, proceed to dashboard anyway
+          console.warn('Setup status check failed:', err);
           setIsAuthenticated(true);
         })
         .finally(() => setIsLoading(false));

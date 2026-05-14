@@ -320,7 +320,7 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
         const pupilRes = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
         const pupilId = pupilRes.rows[0]?.id;
         if (!pupilId) {
-          return res.status(403).json({ error: 'Pupil record not found' });
+          return res.status(403).json({ error: 'Schülerdatensatz nicht gefunden' });
         }
         const gRes = await req.pool.query(
           'SELECT * FROM grades WHERE category_id = ANY($1::int[]) AND pupil_id = $2 AND is_visible = true ORDER BY date, id',
