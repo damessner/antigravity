@@ -1,9 +1,42 @@
+# Dependency directories
 node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Next.js / Build outputs
 .next/
 dist/
 build/
+out/
 *.tsbuildinfo
-package-lock.json
 
-# PostgreSQL binary data — not version-controlled
-school_data/db/
+# Sensitive Environments & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Sensitive School Data / Volumes / Backups
+school_data/
+backups/
+*.json.backup
+backup_*.json
+gradebook_*.json
+my_gradebooks_*.json
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
