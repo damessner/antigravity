@@ -1597,9 +1597,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                     const curTagVal = curTagObj?.tier_tag || "none";
                     let tagSymbol = "➖";
                     let tagLabel = "Nichts/Null";
-                    if (curTagVal === "Meister") tagSymbol = "👑";
-                    if (curTagVal === "Meister") tagLabel = "Meister";
-                    else if (curTagVal === "Geselle") {
+                    if (curTagVal === "Meister") {
+                      tagSymbol = "👑";
+                      tagLabel = "Meister";
+                    } else if (curTagVal === "Geselle") {
                       tagSymbol = "🛠️";
                       tagLabel = "Geselle";
                     } else if (curTagVal === "Lehrling") {
