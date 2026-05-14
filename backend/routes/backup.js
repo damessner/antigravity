@@ -82,6 +82,57 @@ router.get('/gradebook/class/:class_id', authenticateToken, requireAdmin, async 
   }
 });
 
+// Allowed column names per table to prevent SQL injection via user-supplied backup data
+const ALLOWED_COLUMNS = {
+  users: ['id', 'username', 'full_name', 'role', 'password_hash', 'requires_password_change', 'created_at'],
+  classes: ['id', 'name'],
+  pupils: ['id', 'user_id', 'class_id'],
+  rooms: ['id', 'name', 'capacity'],
+  subjects: ['id', 'name', 'abbreviation', 'class_id', 'teacher_id', 'second_teacher_id', 'projection_visible'],
+  assessment_categories: ['id', 'subject_id', 'name', 'weight_percentage', 'scale_type', 'is_self_directed'],
+  grades: ['id', 'category_id', 'pupil_id', 'assessment_name', 'grade_value', 'is_visible', 'date', 'student_planned_date'],
+  pupil_subject_tags: ['id', 'pupil_id', 'subject_id', 'tier_tag'],
+  disciplinary_notes: ['id', 'pupil_id', 'teacher_id', 'note_text', 'sentiment', 'is_visible_to_pupil', 'auto_source', 'created_at'],
+  allocation_logs: ['id', 'pupil_id', 'teacher_id', 'from_room_id', 'to_room_id', 'lesson_number', 'comment', 'arrived_status', 'is_active', 'timer_minutes', 'timer_started_at', 'created_at']
+};
+
+// Shared helper: restores all tables from a validated backup data object within an existing transaction
+const restoreAllTables = async (client, data) => {
+  const insertTable = async (tableName, rows) => {
+    if (!rows || rows.length === 0) return;
+    const allowed = ALLOWED_COLUMNS[tableName] || [];
+    // Only keep columns that are in the allowlist to prevent SQL injection
+    const cols = Object.keys(rows[0]).filter(c => allowed.includes(c));
+    if (cols.length === 0) return;
+    for (const row of rows) {
+      const vals = cols.map(c => row[c]);
+      const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+      await client.query(`INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`, vals);
+    }
+    // Reset sequence
+    await client.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), COALESCE(MAX(id), 1)) FROM ${tableName}`);
+  };
+
+  await client.query(`
+    TRUNCATE TABLE allocation_logs, disciplinary_notes, grades, pupil_subject_tags,
+                   assessment_categories, subjects, pupils, classes, users RESTART IDENTITY CASCADE
+  `);
+
+  await insertTable('users', data.users);
+  await insertTable('classes', data.classes);
+  await insertTable('pupils', data.pupils);
+  if (data.rooms && data.rooms.length > 0) {
+    await client.query('TRUNCATE TABLE rooms RESTART IDENTITY CASCADE');
+    await insertTable('rooms', data.rooms);
+  }
+  await insertTable('subjects', data.subjects);
+  await insertTable('assessment_categories', data.assessment_categories);
+  await insertTable('grades', data.grades);
+  await insertTable('pupil_subject_tags', data.pupil_subject_tags);
+  await insertTable('disciplinary_notes', data.disciplinary_notes);
+  await insertTable('allocation_logs', data.allocation_logs);
+};
+
 // POST /api/backup/full (Admin only)
 router.post('/full', authenticateToken, requireAdmin, async (req, res) => {
   const { confirm, data } = req.body;
@@ -95,43 +146,8 @@ router.post('/full', authenticateToken, requireAdmin, async (req, res) => {
   const client = await req.pool.connect();
   try {
     await client.query('BEGIN');
-
-    // Disable integrity check momentarily or clear cleanly with cascades
-    await client.query(`
-      TRUNCATE TABLE allocation_logs, disciplinary_notes, grades, pupil_subject_tags, 
-                     assessment_categories, subjects, pupils, classes, users RESTART IDENTITY CASCADE
-    `);
-
-    // Restore tables in dependency order
-    const insertTable = async (tableName, rows) => {
-      if (!rows || rows.length === 0) return;
-      const cols = Object.keys(rows[0]);
-      for (const row of rows) {
-        const vals = cols.map(c => row[c]);
-        const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-        await client.query(`INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-      // Reset sequence
-      await client.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), COALESCE(MAX(id), 1)) FROM ${tableName}`);
-    };
-
-    await insertTable('users', data.users);
-    await insertTable('classes', data.classes);
-    await insertTable('pupils', data.pupils);
-    // rooms are persistent static list or restore if present
-    if (data.rooms && data.rooms.length > 0) {
-      await client.query('TRUNCATE TABLE rooms RESTART IDENTITY CASCADE');
-      await insertTable('rooms', data.rooms);
-    }
-    await insertTable('subjects', data.subjects);
-    await insertTable('assessment_categories', data.assessment_categories);
-    await insertTable('grades', data.grades);
-    await insertTable('pupil_subject_tags', data.pupil_subject_tags);
-    await insertTable('disciplinary_notes', data.disciplinary_notes);
-    await insertTable('allocation_logs', data.allocation_logs);
-
+    await restoreAllTables(client, data);
     await client.query('COMMIT');
-    // Notify clients to refresh
     req.io.emit('lesson_reset', { resetToRoomId: 1 });
     res.json({ success: true, restored: true });
   } catch (err) {
@@ -143,7 +159,7 @@ router.post('/full', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-// POST /api/backup/restore (Admin only) - Alias mapping for requested semantic signature
+// POST /api/backup/restore (Admin only) - Alias for /full restore
 router.post('/restore', authenticateToken, requireAdmin, async (req, res) => {
   const { confirm, data } = req.body;
   if (confirm !== 'RESTORE') {
@@ -156,37 +172,7 @@ router.post('/restore', authenticateToken, requireAdmin, async (req, res) => {
   const client = await req.pool.connect();
   try {
     await client.query('BEGIN');
-
-    await client.query(`
-      TRUNCATE TABLE allocation_logs, disciplinary_notes, grades, pupil_subject_tags, 
-                     assessment_categories, subjects, pupils, classes, users RESTART IDENTITY CASCADE
-    `);
-
-    const insertTable = async (tableName, rows) => {
-      if (!rows || rows.length === 0) return;
-      const cols = Object.keys(rows[0]);
-      for (const row of rows) {
-        const vals = cols.map(c => row[c]);
-        const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-        await client.query(`INSERT INTO ${tableName} (${cols.join(', ')}) VALUES (${placeholders})`, vals);
-      }
-      await client.query(`SELECT setval(pg_get_serial_sequence('${tableName}', 'id'), COALESCE(MAX(id), 1)) FROM ${tableName}`);
-    };
-
-    await insertTable('users', data.users);
-    await insertTable('classes', data.classes);
-    await insertTable('pupils', data.pupils);
-    if (data.rooms && data.rooms.length > 0) {
-      await client.query('TRUNCATE TABLE rooms RESTART IDENTITY CASCADE');
-      await insertTable('rooms', data.rooms);
-    }
-    await insertTable('subjects', data.subjects);
-    await insertTable('assessment_categories', data.assessment_categories);
-    await insertTable('grades', data.grades);
-    await insertTable('pupil_subject_tags', data.pupil_subject_tags);
-    await insertTable('disciplinary_notes', data.disciplinary_notes);
-    await insertTable('allocation_logs', data.allocation_logs);
-
+    await restoreAllTables(client, data);
     await client.query('COMMIT');
     req.io.emit('lesson_reset', { resetToRoomId: 1 });
     res.json({ success: true, restored: true });
