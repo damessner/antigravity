@@ -183,7 +183,13 @@ module.exports = (io, socket, pool) => {
       const updateRes = await pool.query(`
         UPDATE allocation_logs
         SET comment = $1
-        WHERE pupil_id = $2 AND is_active = true
+        WHERE id = (
+          SELECT id
+          FROM allocation_logs
+          WHERE pupil_id = $2 AND is_active = true
+          ORDER BY id DESC
+          LIMIT 1
+        )
         RETURNING pupil_id, comment
       `, [comment || null, pupilId]);
 
