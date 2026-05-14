@@ -3,6 +3,17 @@ const router = express.Router();
 const { authenticateToken } = require('../server');
 const fs = require('fs');
 const path = require('path');
+const rateLimit = require('express-rate-limit');
+
+const BACKUP_RETENTION_DAYS = 14;
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: 'Zu viele Anfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const requireAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
@@ -403,7 +414,7 @@ const getBackupDir = () => {
 };
 
 // GET /api/backup/list (Admin only)
-router.get('/list', authenticateToken, requireAdmin, (req, res) => {
+router.get('/list', adminLimiter, authenticateToken, requireAdmin, (req, res) => {
   try {
     const backupDir = getBackupDir();
     if (!fs.existsSync(backupDir)) {
@@ -430,7 +441,7 @@ router.get('/list', authenticateToken, requireAdmin, (req, res) => {
 });
 
 // POST /api/backup/restore-server-file (Admin only)
-router.post('/restore-server-file', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/restore-server-file', adminLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const { filename, confirm } = req.body;
   if (confirm !== 'RESTORE') {
     return res.status(400).json({ error: "Bestätigung 'RESTORE' erforderlich" });
@@ -438,23 +449,25 @@ router.post('/restore-server-file', authenticateToken, requireAdmin, async (req,
   if (!filename || typeof filename !== 'string') {
     return res.status(400).json({ error: 'Dateiname fehlt' });
   }
-  // Safety: allow only filenames matching expected pattern (no path traversal)
+  // Safety: validate filename format to prevent path traversal
   if (!/^auto_backup_[\w-]+\.json$/.test(filename)) {
     return res.status(400).json({ error: 'Ungültiger Dateiname' });
   }
 
   const backupDir = getBackupDir();
-  const fpath = path.join(backupDir, filename);
 
-  // Additional path traversal guard: resolved path must stay within backup directory
-  const resolvedPath = path.resolve(fpath);
-  const resolvedBackupDir = path.resolve(backupDir);
-  if (!resolvedPath.startsWith(resolvedBackupDir + path.sep) && resolvedPath !== resolvedBackupDir) {
-    return res.status(400).json({ error: 'Ungültiger Dateipfad' });
-  }
-
-  if (!fs.existsSync(resolvedPath)) {
-    return res.status(404).json({ error: 'Backup-Datei nicht gefunden' });
+  // Resolve target file via filesystem listing (avoids path injection — only trusts
+  // entries that actually exist in the backup directory, not the user-supplied name)
+  let resolvedPath;
+  try {
+    const existingFiles = fs.readdirSync(backupDir);
+    const matchedFile = existingFiles.find(f => f === filename);
+    if (!matchedFile) {
+      return res.status(404).json({ error: 'Backup-Datei nicht gefunden' });
+    }
+    resolvedPath = path.join(backupDir, matchedFile);
+  } catch {
+    return res.status(500).json({ error: 'Backup-Verzeichnis konnte nicht gelesen werden' });
   }
 
   let data;

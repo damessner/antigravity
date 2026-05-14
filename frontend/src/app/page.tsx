@@ -38,7 +38,7 @@ export default function HomePage() {
         })
         .catch((err) => {
           // If check fails, proceed to dashboard anyway
-          console.warn('Setup status check failed:', err);
+          console.warn('Setup status check failed, proceeding to dashboard:', err);
           setIsAuthenticated(true);
         })
         .finally(() => setIsLoading(false));

@@ -174,6 +174,7 @@ app.use('/api/users/preferences', pushModule.preferencesRouter);
 
 // Automated Schedulers
 const executedTriggers = new Set();
+const BACKUP_RETENTION_DAYS = 14;
 
 const triggerLessonBoundaryReset = async (lessonNumber) => {
   const todayStr = new Date().toISOString().split('T')[0];
@@ -258,8 +259,8 @@ const triggerDailyBackup = async (slot) => {
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2));
     console.log(`[Scheduler] Backup completed: ${filename}`);
 
-    // Retention: delete backups older than 14 days
-    const cutoffMs = Date.now() - 14 * 24 * 60 * 60 * 1000;
+    // Retention: delete backups older than BACKUP_RETENTION_DAYS days
+    const cutoffMs = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     const files = fs.readdirSync(backupDir)
       .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'));
 

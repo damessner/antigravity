@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, setupLimiter } = require('../server');
 
+const crudLimiter = setupLimiter;
+
 // GET /api/setup/status — returns whether initial setup is needed
 router.get('/status', setupLimiter, async (req, res) => {
   try {
@@ -58,7 +60,7 @@ router.post('/init-rooms', setupLimiter, async (req, res) => {
 // --- Admin Raumverwaltung endpoints (authenticated) ---
 
 // GET /api/setup/rooms — list all rooms
-router.get('/rooms', authenticateToken, async (req, res) => {
+router.get('/rooms', crudLimiter, authenticateToken, async (req, res) => {
   try {
     const result = await req.pool.query('SELECT id, name, capacity FROM rooms ORDER BY id');
     res.json(result.rows);
@@ -68,7 +70,7 @@ router.get('/rooms', authenticateToken, async (req, res) => {
 });
 
 // POST /api/setup/rooms — create a room (admin only)
-router.post('/rooms', authenticateToken, async (req, res) => {
+router.post('/rooms', crudLimiter, authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Administratoren' });
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Raumname fehlt' });
@@ -85,7 +87,7 @@ router.post('/rooms', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/setup/rooms/:id — rename a room (admin only)
-router.put('/rooms/:id', authenticateToken, async (req, res) => {
+router.put('/rooms/:id', crudLimiter, authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Administratoren' });
   const roomId = Number(req.params.id);
   const { name } = req.body;
@@ -104,7 +106,7 @@ router.put('/rooms/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/setup/rooms/:id — delete a room (admin only)
-router.delete('/rooms/:id', authenticateToken, async (req, res) => {
+router.delete('/rooms/:id', crudLimiter, authenticateToken, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Nur Administratoren' });
   const roomId = Number(req.params.id);
   try {
