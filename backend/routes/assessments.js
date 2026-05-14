@@ -46,7 +46,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
         INSERT INTO assessments (category_id, name, info_text, deadline, is_visible)
         VALUES ($1, $2, $3, $4, true)
         ON CONFLICT (category_id, name) DO UPDATE 
-        SET info_text = $3, deadline = $4
+        SET info_text = EXCLUDED.info_text, deadline = EXCLUDED.deadline
         RETURNING *
       `, [Number(category_id), cleanName, info_text || null, targetDeadline]);
       assessmentRow = insertRes.rows[0];

@@ -132,6 +132,14 @@ router.post('/subject', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const dupRes = await client.query(`
+      SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) AND class_id = $2 LIMIT 1
+    `, [cleanName, Number(class_id)]);
+    if (dupRes.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Dieses Fach existiert in der ausgewählten Klasse bereits' });
+    }
+
     // Insert subject
     const subRes = await client.query(`
       INSERT INTO subjects (name, abbreviation, class_id, teacher_id, second_teacher_id, projection_visible)
@@ -156,6 +164,9 @@ router.post('/subject', authenticateToken, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Create single subject error:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Dieses Fach existiert in der ausgewählten Klasse bereits' });
+    }
     res.status(500).json({ error: 'Failed to create subject gradebook with templates' });
   } finally {
     client.release();
@@ -181,12 +192,21 @@ router.post('/subjects', authenticateToken, async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    const cleanName = name.trim();
+    const dupRes = await client.query(`
+      SELECT id FROM subjects WHERE LOWER(name) = LOWER($1) AND class_id = $2 LIMIT 1
+    `, [cleanName, Number(class_id)]);
+    if (dupRes.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Dieses Fach existiert in der ausgewählten Klasse bereits' });
+    }
+
     // Insert subject
     const subRes = await client.query(`
       INSERT INTO subjects (name, abbreviation, class_id, teacher_id, projection_visible)
       VALUES ($1, $2, $3, $4, true)
       RETURNING id, name, abbreviation, class_id, teacher_id, second_teacher_id, projection_visible
-    `, [name.trim(), abbr, class_id, req.user.id]);
+    `, [cleanName, abbr, class_id, req.user.id]);
     const newSubject = subRes.rows[0];
 
     // Insert categories
@@ -205,6 +225,9 @@ router.post('/subjects', authenticateToken, async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Create subject error:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Dieses Fach existiert in der ausgewählten Klasse bereits' });
+    }
     res.status(500).json({ error: 'Failed to create subject gradebook' });
   } finally {
     client.release();

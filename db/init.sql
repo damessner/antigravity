@@ -75,7 +75,8 @@ CREATE TABLE subjects (
     teacher_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     second_teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     projection_visible BOOLEAN DEFAULT TRUE,
-    abbreviation VARCHAR(10)
+    abbreviation VARCHAR(10),
+    CONSTRAINT uq_subject_class UNIQUE (name, class_id)
 );
 
 CREATE TABLE pupil_subject_tags (
@@ -177,55 +178,6 @@ INSERT INTO users (username, full_name, role, password_hash, requires_password_c
 VALUES
 ('da.messner', 'D. Messner', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true),
 ('break_glass', 'Emergency Admin', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true);
-
--- Seed classes
-INSERT INTO classes (name) VALUES ('3G'), ('4G');
-
--- Seed a default teacher (password: 'teacher')
-INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
-VALUES
-('teacher.one', 'Frau Professor', 'teacher', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
-('teacher.two', 'Herr Professor', 'teacher', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
-
--- Seed pupils for 3G (password: 'teacher')
-INSERT INTO users (username, full_name, role, password_hash, requires_password_change) VALUES
-('pupil_3g_1', 'Anna Müller', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
-('pupil_3g_2', 'Lukas Schmidt', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
-('pupil_3g_3', 'Maximilian Gruber', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
-
-INSERT INTO pupils (user_id, class_id) VALUES
-(5, 1), (6, 1), (7, 1);
-
--- Seed pupils for 4G (password: 'teacher')
-INSERT INTO users (username, full_name, role, password_hash, requires_password_change) VALUES
-('pupil_4g_1', 'Sarah Wagner', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false),
-('pupil_4g_2', 'David Pichler', 'pupil', '$2b$10$bdhkR.mGgE4KLVfLZ53eBOs9Ck8Px4gqfTkGT5DIfyGXBIun6xiji', false);
-
-INSERT INTO pupils (user_id, class_id) VALUES
-(8, 2), (9, 2);
-
--- Initial allocations to Klassenzimmer
-INSERT INTO allocation_logs (pupil_id, to_room_id, lesson_number, is_active) VALUES
-(1, 1, 1, true),
-(2, 1, 1, true),
-(3, 1, 1, true),
-(4, 1, 1, true),
-(5, 1, 1, true);
-
--- Seed a subject for testing
-INSERT INTO subjects (name, class_id, teacher_id, abbreviation) VALUES
-('Mathematik', 1, 3, 'M'),
-('Englisch', 1, 3, 'E');
-
-INSERT INTO assessment_categories (subject_id, name, weight_percentage) VALUES
-(1, 'Schularbeiten', 40),
-(1, 'Mitarbeit', 30),
-(1, 'Hausübung', 15),
-(1, 'LZK', 15);
-
-INSERT INTO pupil_subject_tags (pupil_id, subject_id, tier_tag) VALUES
-(1, 1, 'Meister'),
-(2, 1, 'Geselle');
 
 -- PWA Web Push Notification targeting infrastructure
 CREATE TABLE push_subscriptions (

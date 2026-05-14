@@ -129,11 +129,6 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
   // Submit help trigger (Transitions to State 2)
   const handleSubmitRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) {
-      setError("Bitte beschreibe kurz dein Problem oder deine Frage.");
-      return;
-    }
-
     setError(null);
     setIsSubmitting(true);
     const token = localStorage.getItem("token");
@@ -143,7 +138,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
       const res = await fetch(`${apiUrl}/api/help`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ subject: selectedSubject, message: message.trim() })
+        body: JSON.stringify({ subject: selectedSubject, message: message.trim() || "" })
       });
 
       const data = await res.json();
@@ -238,9 +233,8 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
               rows={2}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="z.B. Ich verstehe Aufgabe 3b auf Seite 42 nicht."
+              placeholder="Optional: z.B. Ich verstehe Aufgabe 3b auf Seite 42 nicht."
               className="w-full bg-slate-900 border border-slate-800 rounded-xl p-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500 transition-colors resize-none"
-              required
             />
           </div>
 
