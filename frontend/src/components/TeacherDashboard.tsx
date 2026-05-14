@@ -3,13 +3,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
-import { 
-  DndContext, DragEndEvent, useSensor, useSensors, 
-  PointerSensor, TouchSensor, closestCenter 
+import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
+import {
+  DndContext, DragEndEvent, useSensor, useSensors,
+  PointerSensor, TouchSensor, closestCenter
 } from "@dnd-kit/core";
-import { 
-  LayoutDashboard, GraduationCap, ClipboardList, LogOut, 
-  Settings, Clock, Calendar, AlertCircle, RefreshCw, Bell 
+import {
+  LayoutDashboard, GraduationCap, ClipboardList, LogOut,
+  Settings, Clock, Calendar, AlertCircle, RefreshCw, Bell
 } from "lucide-react";
 
 import RoomDroppable from "./RoomDroppable";
@@ -92,7 +93,7 @@ export default function TeacherDashboard() {
   // Initial State Hydration
   const hydrateState = async (token: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       const [stateRes, classesRes] = await Promise.all([
         fetch(`${apiUrl}/api/state`, { headers: { Authorization: `Bearer ${token}` } }),
         fetch(`${apiUrl}/api/classes`, { headers: { Authorization: `Bearer ${token}` } }),
@@ -144,7 +145,7 @@ export default function TeacherDashboard() {
     }
     hydrateState(token);
 
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000";
+    const wsUrl = getWsUrl();
     const socketInstance = io(wsUrl, {
       auth: { token },
       transports: ["websocket"],
@@ -165,12 +166,12 @@ export default function TeacherDashboard() {
         prev.map((p) =>
           Number(p.id) === Number(pupilId)
             ? {
-                ...p,
-                room_id: Number(toRoomId),
-                arrived_status: log?.arrived_status === "arrived",
-                timer_minutes: log?.timer_minutes ? Number(log?.timer_minutes) : undefined,
-                timer_started_at: log?.timer_started_at || undefined,
-              }
+              ...p,
+              room_id: Number(toRoomId),
+              arrived_status: log?.arrived_status === "arrived",
+              timer_minutes: log?.timer_minutes ? Number(log?.timer_minutes) : undefined,
+              timer_started_at: log?.timer_started_at || undefined,
+            }
             : p
         )
       );
@@ -221,10 +222,10 @@ export default function TeacherDashboard() {
         prev.map((p) =>
           Number(p.id) === Number(pupilId)
             ? {
-                ...p,
-                timer_minutes: timer_minutes ? Number(timer_minutes) : undefined,
-                timer_started_at: timer_started_at || undefined,
-              }
+              ...p,
+              timer_minutes: timer_minutes ? Number(timer_minutes) : undefined,
+              timer_started_at: timer_started_at || undefined,
+            }
             : p
         )
       );
@@ -367,7 +368,7 @@ export default function TeacherDashboard() {
     if (!confirm("Aktuelle Stunde beenden und alle Schüler ins Klassenzimmer zurücksetzen?")) return;
     try {
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       await fetch(`${apiUrl}/api/reset-lesson`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
@@ -420,9 +421,8 @@ export default function TeacherDashboard() {
             {user?.role !== "pupil" && (
               <button
                 onClick={() => setActiveTab("dashboard")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                  }`}
               >
                 <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
                 <span className="hidden sm:inline">🏫 Live</span> Raumbelegung
@@ -431,9 +431,8 @@ export default function TeacherDashboard() {
 
             <button
               onClick={() => setActiveTab("gradebook")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
               <span className="hidden sm:inline">📈</span> Notenbuch
@@ -441,9 +440,8 @@ export default function TeacherDashboard() {
 
             <button
               onClick={() => setActiveTab("notes")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               <ClipboardList className="w-3.5 h-3.5 text-amber-400" />
               <span className="hidden sm:inline">📋</span> Notizen
@@ -451,9 +449,8 @@ export default function TeacherDashboard() {
 
             <button
               onClick={() => setActiveTab("help")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
             >
               <span className="text-indigo-400">🙋</span> Live-Hilfe
             </button>
@@ -461,9 +458,8 @@ export default function TeacherDashboard() {
             {user?.role === "pupil" && (
               <button
                 onClick={() => setActiveTab("planner")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeTab === "planner" ? "bg-slate-800 text-white shadow-xs font-bold" : "text-amber-500 hover:text-amber-400"
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "planner" ? "bg-slate-800 text-white shadow-xs font-bold" : "text-amber-500 hover:text-amber-400"
+                  }`}
               >
                 <span className="hidden sm:inline">📅</span> Lernplaner
               </button>
@@ -559,11 +555,10 @@ export default function TeacherDashboard() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedClass(c.name)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                    selectedClass === c.name
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${selectedClass === c.name
                       ? "bg-indigo-600 text-white shadow-xs"
                       : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
-                  }`}
+                    }`}
                 >
                   {c.name}
                 </button>
@@ -584,7 +579,7 @@ export default function TeacherDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 flex-1">
               {rooms.map((room) => {
                 const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut"].includes(room.name);
-                
+
                 // Filter mapping logic Section 8
                 const roomPupils = pupils.filter((p) => {
                   if (Number(p.room_id) !== Number(room.id)) return false;
