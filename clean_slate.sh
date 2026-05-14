@@ -46,9 +46,10 @@ else
 fi
 echo ""
 
-# Step 2: Stop containers
-echo "⏹  Stopping Docker containers..."
-docker compose down
+# Step 2: Stop containers and clear network/volume locks
+echo "⏹  Stopping Docker containers and clearing mappings..."
+docker compose down --volumes --remove-orphans
+sleep 3
 echo ""
 
 # Step 3: Wipe school_data directory contents
