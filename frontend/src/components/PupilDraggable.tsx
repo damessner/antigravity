@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Socket } from "socket.io-client";
-import { Clock, CheckCircle2, Circle, MessageSquare } from "lucide-react";
+import { Clock, CheckCircle2, Circle } from "lucide-react";
 import { Pupil } from "./TeacherDashboard";
 
 // Stand-Alone High-Performance TimerBadge Sub-Component
@@ -97,11 +97,6 @@ export default function PupilDraggable({
     onOpenTimer();
   };
 
-  const handleCommentTrigger = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onOpenComment();
-  };
-
   const resolvedStartedAtMs =
     typeof pupil.timer_started_at_ms === "number"
       ? pupil.timer_started_at_ms
@@ -172,16 +167,6 @@ export default function PupilDraggable({
 
       {/* Right section: Trigger action icons */}
       <div className="shrink-0 pl-1 z-10 flex items-center gap-1">
-        <button
-          type="button"
-          onClick={handleCommentTrigger}
-          className={`p-1 rounded transition-colors focus:outline-none ${
-            pupil.active_comment ? "text-cyan-400 hover:text-cyan-300" : "text-slate-700 hover:text-slate-400"
-          }`}
-          title="Schüler-Kommentar lesen/bearbeiten"
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-        </button>
         <button
           type="button"
           onClick={handleTimerTrigger}
