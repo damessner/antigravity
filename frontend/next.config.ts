@@ -15,6 +15,18 @@ const nextConfig: NextConfig = {
       "http://192.168.1.100:3000",
     ],
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://backend:4000/api/:path*",
+      },
+      {
+        source: "/socket.io/:path*",
+        destination: "http://backend:4000/socket.io/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
