@@ -32,6 +32,7 @@ pool.query(`
   ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_self_directed BOOLEAN DEFAULT false;
   ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
   ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
+  ALTER TABLE rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT NULL;
 
   CREATE TABLE IF NOT EXISTS assessments (
     id SERIAL PRIMARY KEY,
