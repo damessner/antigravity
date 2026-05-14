@@ -233,10 +233,13 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   }, []);
 
   useEffect(() => {
-    if (classes.length > 0 && !selectedClassId) {
+    const savedClass = localStorage.getItem("saved_class_id");
+    if (savedClass && classes.some((c) => Number(c.id) === Number(savedClass))) {
+      setSelectedClassId(Number(savedClass));
+    } else if (classes.length > 0 && !selectedClassId) {
       setSelectedClassId(classes[0].id);
     }
-  }, [classes, selectedClassId]);
+  }, [classes]);
 
   // Load curricular modules overview
   const loadSubjects = async (classId: number) => {
@@ -252,7 +255,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         const data = await res.json();
         setSubjects(data || []);
         if (data.length > 0) {
-          loadMatrix(data[0]);
+          const savedSubjId = localStorage.getItem(`saved_subject_${classId}`);
+          const targetSubj = data.find((s: any) => Number(s.id) === Number(savedSubjId)) || data[0];
+          loadMatrix(targetSubj);
         } else {
           setSelectedSubject(null);
           setCategories([]);
@@ -269,6 +274,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
 
   useEffect(() => {
     if (selectedClassId) {
+      localStorage.setItem("saved_class_id", String(selectedClassId));
       loadSubjects(selectedClassId);
     }
   }, [selectedClassId]);
@@ -276,6 +282,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   // Synchronize targeted grade record structures
   const loadMatrix = async (subj: any) => {
     setSelectedSubject(subj);
+    if (subj?.id) {
+      localStorage.setItem(`saved_subject_${subj.class_id}`, String(subj.id));
+    }
     setIsLoading(true);
     const token = localStorage.getItem("token");
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
