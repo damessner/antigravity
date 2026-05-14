@@ -58,4 +58,6 @@ services:
 
 volumes:
   pgdata:
+    name: school_management_pgdata
   backups:
+    name: school_management_backups

@@ -151,9 +151,14 @@ const MemoizedNarrowGradeCell = React.memo(function MemoizedNarrowGradeCell({
 });
 
 export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
-  const [selectedClassId, setSelectedClassId] = useState<number>(classes[0]?.id || 1);
+  // 0 = "not yet initialized" — prevents loadSubjects from firing before classes have been resolved
+  const [selectedClassId, setSelectedClassId] = useState<number>(0);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<any | null>(null);
+
+  // Request-counter refs to discard stale async responses and prevent race conditions
+  const subjectsReqRef = useRef<number>(0);
+  const matrixReqRef = useRef<number>(0);
 
   // Matrix details
   const [categories, setCategories] = useState<any[]>([]);
@@ -232,17 +237,24 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     fetchU();
   }, []);
 
+  // Resolve the correct class to show once the classes list has been loaded from the server.
+  // We must NOT run this before classes are available — doing so would default to a hardcoded
+  // "1" fallback that gets persisted to localStorage and permanently breaks subject loading
+  // for teachers whose classes have a different id.
   useEffect(() => {
+    if (classes.length === 0) return; // Wait until classes are actually available
     const savedClass = localStorage.getItem("saved_class_id");
     if (savedClass && classes.some((c) => Number(c.id) === Number(savedClass))) {
       setSelectedClassId(Number(savedClass));
-    } else if (classes.length > 0 && !selectedClassId) {
+    } else if (classes.length > 0) {
       setSelectedClassId(classes[0].id);
     }
   }, [classes]);
 
   // Load curricular modules overview
   const loadSubjects = async (classId: number) => {
+    // Increment counter so that any older in-flight request can detect it is stale
+    const reqId = ++subjectsReqRef.current;
     setIsLoading(true);
     const token = localStorage.getItem("token");
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
@@ -251,15 +263,15 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       const res = await fetch(`${apiUrl}/api/gradebook/subjects?class_id=${classId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      // Discard response if a newer request has already been dispatched
+      if (reqId !== subjectsReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== subjectsReqRef.current) return;
         setSubjects(data || []);
         if (data.length > 0) {
           const savedSubjId = localStorage.getItem(`saved_subject_${classId}`);
           const targetSubj = data.find((s: any) => Number(s.id) === Number(savedSubjId)) || data[0];
-          if (targetSubj?.class_id && Number(targetSubj.class_id) !== Number(selectedClassId)) {
-            setSelectedClassId(Number(targetSubj.class_id));
-          }
           loadMatrix(targetSubj);
         } else {
           setSelectedSubject(null);
@@ -269,25 +281,27 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         }
       }
     } catch (err) {
-      setAlertMsg("Fehler beim Laden der Fächerübersicht");
+      if (reqId === subjectsReqRef.current) {
+        setAlertMsg("Fehler beim Laden der Fächerübersicht");
+      }
     } finally {
-      setIsLoading(false);
+      if (reqId === subjectsReqRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    if (selectedClassId) {
-      localStorage.setItem("saved_class_id", String(selectedClassId));
-      loadSubjects(selectedClassId);
-    }
+    if (!selectedClassId) return; // 0 = not yet initialized, wait for classes to load
+    localStorage.setItem("saved_class_id", String(selectedClassId));
+    loadSubjects(selectedClassId);
   }, [selectedClassId]);
 
   // Synchronize targeted grade record structures
   const loadMatrix = async (subj: any) => {
+    // Increment counter so stale matrix loads can be discarded
+    const reqId = ++matrixReqRef.current;
     setSelectedSubject(subj);
-    if (subj?.class_id && Number(subj.class_id) !== Number(selectedClassId)) {
-      setSelectedClassId(Number(subj.class_id));
-    }
     if (subj?.id) {
       localStorage.setItem(`saved_subject_${subj.class_id}`, String(subj.id));
     }
@@ -299,22 +313,28 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       const res = await fetch(`${apiUrl}/api/gradebook/matrix/${subj.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (reqId !== matrixReqRef.current) return;
       if (res.ok) {
         const data = await res.json();
+        if (reqId !== matrixReqRef.current) return;
         setCategories(data.categories || []);
         setGrades(data.grades || []);
         setPupilTags(data.pupil_tags || []);
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         setAlertMsg(errData.error || "Zugriff auf diese Beurteilungsmatrix verweigert");
         setCategories([]);
         setGrades([]);
         setPupilTags([]);
       }
     } catch (err) {
-      setAlertMsg("Matrix konnte nicht synchronisiert werden");
+      if (reqId === matrixReqRef.current) {
+        setAlertMsg("Matrix konnte nicht synchronisiert werden");
+      }
     } finally {
-      setIsLoading(false);
+      if (reqId === matrixReqRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

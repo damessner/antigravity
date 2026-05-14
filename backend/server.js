@@ -29,7 +29,7 @@ const pool = new Pool({
 pool.query(`
   ALTER TABLE subjects DROP CONSTRAINT IF EXISTS uq_subject_class;
   ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_self_directed BOOLEAN DEFAULT false;
-  ALTER TABLE assessment_categories DROP COLUMN IF NOT EXISTS default_deadline;
+  ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
   ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
 
   CREATE TABLE IF NOT EXISTS assessments (
