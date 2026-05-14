@@ -1,0 +1,74 @@
+# ==============================================================================
+# Unraid-Specific Docker Compose Configuration
+# ==============================================================================
+# CRITICAL UNRAID INSTRUCTIONS:
+# 1. Unraid's Compose Manager plugin auto-generates a skeleton `services:` line.
+#    When pasting this file into Unraid's web UI, ensure you completely replace/overwrite
+#    the pre-existing content so `services:` does not appear twice.
+# 2. Since Unraid Compose Manager projects live on the USB flash drive (/boot/...),
+#    using relative build paths (like `./backend`) fails because the source code isn't on the USB.
+#    Copy your entire project folder to an Unraid appdata share (e.g., `/mnt/user/appdata/antigravity`)
+#    and use the absolute paths defined below.
+# ==============================================================================
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: antigravity_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-SuperSecretSchoolDbPass2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-school_management}
+    ports:
+      - "5433:5432"
+    volumes:
+      # Map database storage securely to Unraid's appdata cache/array share
+      - /mnt/user/appdata/antigravity/db:/var/lib/postgresql/data
+      # Ensure init.sql is copied to your appdata folder
+      - /mnt/user/appdata/antigravity/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-school_management}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  backend:
+    build:
+      # Point absolute context to the backend source folder on your Unraid share
+      context: /mnt/user/appdata/antigravity/backend
+      dockerfile: Dockerfile
+    container_name: antigravity_backend
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-SuperSecretSchoolDbPass2026!}
+      DB_NAME: ${DB_NAME:-school_management}
+      JWT_SECRET: ${JWT_SECRET:-SuperSecureAustrianSchoolJwtSecretKey998877!}
+    ports:
+      - "4000:4000"
+    volumes:
+      - /mnt/user/appdata/antigravity/backups:/opt/school-management/backups
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      # Point absolute context to the frontend source folder on your Unraid share
+      context: /mnt/user/appdata/antigravity/frontend
+      dockerfile: Dockerfile
+    container_name: antigravity_frontend
+    restart: unless-stopped
+    environment:
+      # IMPORTANT: Change this IP to your Unraid server's actual LAN IP address
+      NEXT_PUBLIC_API_URL: http://192.168.1.100:4000
+      NEXT_PUBLIC_WS_URL: http://192.168.1.100:4000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
