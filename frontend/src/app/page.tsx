@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TeacherDashboard from "@/components/TeacherDashboard";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 export default function HomePage() {
   const router = useRouter();
@@ -26,7 +27,7 @@ export default function HomePage() {
       }
 
       // Check if initial setup is needed (rooms table empty)
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       fetch(`${apiUrl}/api/setup/status`)
         .then((res) => res.json())
         .then((data) => {
