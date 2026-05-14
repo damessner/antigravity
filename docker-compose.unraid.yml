@@ -23,9 +23,9 @@ services:
     ports:
       - "5433:5432"
     volumes:
-      # Map database storage securely to Unraid's appdata cache/array share
-      - /mnt/user/appdata/antigravity/db:/var/lib/postgresql/data
-      # Ensure init.sql is copied to your appdata folder
+      # Map persistent storage securely to a dedicated empty data directory
+      - /mnt/user/appdata/antigravity/school_data/db:/var/lib/postgresql/data
+      # Map the source seed file from the repository's db folder
       - /mnt/user/appdata/antigravity/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-school_management}"]
@@ -36,7 +36,6 @@ services:
 
   backend:
     build:
-      # Point absolute context to the backend source folder on your Unraid share
       context: /mnt/user/appdata/antigravity/backend
       dockerfile: Dockerfile
     container_name: antigravity_backend
@@ -52,14 +51,13 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - /mnt/user/appdata/antigravity/backups:/opt/school-management/backups
+      - /mnt/user/appdata/antigravity/school_data/backups:/opt/school-management/backups
     depends_on:
       db:
         condition: service_healthy
 
   frontend:
     build:
-      # Point absolute context to the frontend source folder on your Unraid share
       context: /mnt/user/appdata/antigravity/frontend
       dockerfile: Dockerfile
     container_name: antigravity_frontend
