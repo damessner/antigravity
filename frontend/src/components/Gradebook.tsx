@@ -257,6 +257,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         if (data.length > 0) {
           const savedSubjId = localStorage.getItem(`saved_subject_${classId}`);
           const targetSubj = data.find((s: any) => Number(s.id) === Number(savedSubjId)) || data[0];
+          if (targetSubj?.class_id && Number(targetSubj.class_id) !== Number(selectedClassId)) {
+            setSelectedClassId(Number(targetSubj.class_id));
+          }
           loadMatrix(targetSubj);
         } else {
           setSelectedSubject(null);
@@ -282,6 +285,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   // Synchronize targeted grade record structures
   const loadMatrix = async (subj: any) => {
     setSelectedSubject(subj);
+    if (subj?.class_id && Number(subj.class_id) !== Number(selectedClassId)) {
+      setSelectedClassId(Number(subj.class_id));
+    }
     if (subj?.id) {
       localStorage.setItem(`saved_subject_${subj.class_id}`, String(subj.id));
     }
@@ -393,18 +399,23 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
 
   // --- Transposed Grid Column Generator (Columns = Assessments across all Categories) ---
   const allColumns = useMemo(() => {
-    const list: { category: any; assessmentName: string; isCatLastCol: boolean; colSubset: any[] }[] = [];
+    const list: { category: any; assessmentName: string; isCatLastCol: boolean; colSubset: any[]; metadata?: any }[] = [];
     balancedCategories.forEach((cat) => {
       const subset = grades.filter((g) => Number(g.category_id) === Number(cat.id));
       const uniqueNames = Array.from(new Set(subset.map((g) => g.assessment_name || "Note")));
+      const metadataRows = Array.isArray(cat.column_metadata) ? cat.column_metadata : [];
+      const metadataNames = metadataRows.map((m: any) => m.name);
       const names = uniqueNames.length > 0 ? uniqueNames : ["Bewertung 1"];
+      const mergedNames = Array.from(new Set([...names, ...metadataNames]));
 
-      names.forEach((assName, idx) => {
+      mergedNames.forEach((assName, idx) => {
+        const metadata = metadataRows.find((m: any) => m.name === assName);
         list.push({
           category: cat,
           assessmentName: assName,
-          isCatLastCol: idx === names.length - 1,
-          colSubset: subset.filter(g => g.assessment_name === assName)
+          isCatLastCol: idx === mergedNames.length - 1,
+          colSubset: subset.filter(g => g.assessment_name === assName),
+          metadata
         });
       });
     });
@@ -511,7 +522,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     } catch (e) {}
   };
 
-  const handleAddAssessmentRow = (e: React.FormEvent) => {
+  const handleAddAssessmentRow = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showAddAssessment || !newAssessmentName.trim()) return;
 
@@ -529,6 +540,42 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     setGrades((prev) => [...prev, ...dummyGrades]);
     setShowAddAssessment(null);
     setNewAssessmentName("");
+
+    const token = localStorage.getItem("token");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    try {
+      const res = await fetch(`${apiUrl}/api/assessments/0`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          category_id: catId,
+          old_name: name,
+          name,
+          info_text: null,
+          deadline: null
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Bewertung konnte nicht initialisiert werden");
+      }
+
+      const savedMeta = await res.json();
+      setCategories((prev) =>
+        prev.map((c) => {
+          if (Number(c.id) !== Number(catId)) return c;
+          const existingMetaList = Array.isArray(c.column_metadata) ? c.column_metadata : [];
+          const filtered = existingMetaList.filter((a: any) => a.name !== name);
+          return {
+            ...c,
+            column_metadata: [...filtered, savedMeta]
+          };
+        })
+      );
+    } catch (err: any) {
+      setAlertMsg(err.message || "Bewertung wurde lokal erstellt, Metadaten konnten nicht gespeichert werden.");
+    }
   };
 
   const handleScaleSwitch = async (catId: number, newScale: ScaleType) => {

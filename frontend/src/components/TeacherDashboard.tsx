@@ -667,7 +667,7 @@ export default function TeacherDashboard() {
       {/* Popovers / Overlays */}
       {selectedPupilForTimer && (
         <TimerPopover
-          pupil={selectedPupilForTimer}
+          pupil={pupils.find((p) => Number(p.id) === Number(selectedPupilForTimer.id)) || selectedPupilForTimer}
           onClose={() => setSelectedPupilForTimer(null)}
           socket={socket}
         />

@@ -47,8 +47,8 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 
   const { subject, message } = req.body;
-  if (!subject || !message) {
-    return res.status(400).json({ error: 'Fach und Nachricht sind zwingend erforderlich' });
+  if (!subject) {
+    return res.status(400).json({ error: 'Fach ist zwingend erforderlich' });
   }
 
   try {
@@ -75,7 +75,7 @@ router.post('/', authenticateToken, async (req, res) => {
       VALUES ($1, $2, $3, 'open')
       RETURNING *
     `;
-    const inserted = await req.pool.query(insertQuery, [Number(targetPupil.id), subject.trim(), message.trim()]);
+    const inserted = await req.pool.query(insertQuery, [Number(targetPupil.id), subject.trim(), (message || '').trim()]);
     const newRequest = inserted.rows[0];
 
     // Fetch full enriched data row to broadcast clean structure to teachers
@@ -101,10 +101,13 @@ router.post('/', authenticateToken, async (req, res) => {
     req.pool.query("SELECT id FROM users WHERE role IN ('teacher', 'admin')").then(staffRes => {
       const pupilNameTarget = broadcastPayload.pupil_name || 'Ein Schüler';
       const subjectTarget = broadcastPayload.subject || 'Fach';
+      const bodyMessage = broadcastPayload.message && String(broadcastPayload.message).trim()
+        ? `Braucht Hilfe in ${subjectTarget}: "${broadcastPayload.message}"`
+        : `Braucht Hilfe in ${subjectTarget}`;
       staffRes.rows.forEach(staff => {
         sendNotification(req.pool, staff.id, 'help_requests', {
           title: `🙋 Live-Hilferuf: ${pupilNameTarget}`,
-          body: `Braucht Hilfe in ${subjectTarget}: "${broadcastPayload.message}"`,
+          body: bodyMessage,
           url: '/'
         }).catch(err => console.error('[Push Notification Trigger] Dispatch error:', err));
       });
@@ -134,7 +137,7 @@ router.put('/:id/claim', authenticateToken, async (req, res) => {
         status = 'claimed',
         claimed_by_teacher_id = $1,
         teacher_comment = COALESCE($2, teacher_comment)
-      WHERE id = $3
+      WHERE id = $3 AND status = 'open'
       RETURNING *
     `;
     const updated = await req.pool.query(updateQuery, [
@@ -144,7 +147,14 @@ router.put('/:id/claim', authenticateToken, async (req, res) => {
     ]);
 
     if (updated.rows.length === 0) {
-      return res.status(404).json({ error: 'Hilfeanfrage nicht gefunden' });
+      const existing = await req.pool.query('SELECT id, status FROM help_requests WHERE id = $1', [requestId]);
+      if (existing.rows.length === 0) {
+        return res.status(404).json({ error: 'Hilfeanfrage nicht gefunden' });
+      }
+      if (existing.rows[0].status !== 'open') {
+        return res.status(409).json({ error: 'Diese Hilfeanfrage wurde bereits übernommen oder abgeschlossen' });
+      }
+      return res.status(409).json({ error: 'Hilfeanfrage konnte nicht übernommen werden' });
     }
 
     // Enrich payload with full teacher name
