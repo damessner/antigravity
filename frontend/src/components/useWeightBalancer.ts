@@ -5,6 +5,9 @@ export interface CategoryWeightItem {
   name: string;
   weight_percentage: number;
   isLocked?: boolean;
+  scale_type?: string;
+  is_self_directed?: boolean;
+  column_metadata?: any[];
 }
 
 export function useWeightBalancer(initialCategories: CategoryWeightItem[], onSaveDebounced: (updated: CategoryWeightItem[]) => void) {

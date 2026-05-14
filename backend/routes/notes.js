@@ -33,6 +33,9 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // GET /api/notes/class/:class_id
 router.get('/class/:class_id', authenticateToken, async (req, res) => {
+  if (req.user.role === 'pupil') {
+    return res.status(403).json({ error: 'Zugriff verweigert' });
+  }
   const classId = Number(req.params.class_id);
 
   try {
@@ -57,19 +60,20 @@ router.get('/class/:class_id', authenticateToken, async (req, res) => {
 
 // POST /api/notes
 router.post('/', authenticateToken, async (req, res) => {
-  const { pupil_id, note_text, sentiment } = req.body;
+  const { pupil_id, note_text, sentiment, is_visible_to_pupil } = req.body;
   if (!pupil_id || !note_text || !note_text.trim()) {
     return res.status(400).json({ error: 'Target pupil and valid description required' });
   }
 
   const cleanSentiment = ['positive', 'neutral', 'negative'].includes(sentiment) ? sentiment : 'neutral';
+  const visibleToPupil = is_visible_to_pupil === true;
 
   try {
     const insertRes = await req.pool.query(`
       INSERT INTO disciplinary_notes (pupil_id, teacher_id, note_text, sentiment, is_visible_to_pupil, auto_source)
-      VALUES ($1, $2, $3, $4, false, null)
+      VALUES ($1, $2, $3, $4, $5, null)
       RETURNING id, pupil_id, teacher_id, note_text, sentiment, is_visible_to_pupil, auto_source, created_at
-    `, [Number(pupil_id), req.user.id, note_text.trim(), cleanSentiment]);
+    `, [Number(pupil_id), req.user.id, note_text.trim(), cleanSentiment, visibleToPupil]);
 
     const created = insertRes.rows[0];
 

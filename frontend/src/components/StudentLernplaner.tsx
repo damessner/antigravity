@@ -8,6 +8,7 @@ import {
 import { 
   Calendar, Clock, AlertTriangle, CheckCircle, Trash2, Check, RefreshCw, Info 
 } from "lucide-react";
+import { Socket } from "socket.io-client";
 import StudentHelpWidget from "./StudentHelpWidget";
 
 interface OpenTask {
@@ -308,7 +309,7 @@ function DroppableBlockSlot({
 }
 
 // 4. Main Integrated Dashboard Layout Component
-export default function StudentLernplaner() {
+export default function StudentLernplaner({ socket }: { socket?: Socket | null }) {
   const [tasksPool, setTasksPool] = useState<OpenTask[]>([]);
   const [learningPlan, setLearningPlan] = useState<PlanItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -375,6 +376,38 @@ export default function StudentLernplaner() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Listen for assessment metadata updates (deadline/name/info_text changes) from teacher
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleAssessmentUpdated = ({ category_id, old_name, name, deadline, info_text }: {
+      category_id: number;
+      old_name: string;
+      name: string;
+      deadline: string | null;
+      info_text: string | null;
+    }) => {
+      const matchName = old_name || name;
+      // Update tasks pool
+      setTasksPool(prev => prev.map(t =>
+        Number(t.category_id) === Number(category_id) && t.assessment_name === matchName
+          ? { ...t, assessment_name: name, deadline: deadline ?? t.deadline, info_text: info_text ?? t.info_text }
+          : t
+      ));
+      // Update learning plan
+      setLearningPlan(prev => prev.map(p =>
+        Number(p.category_id) === Number(category_id) && p.assessment_name === matchName
+          ? { ...p, assessment_name: name, deadline: deadline ?? p.deadline, info_text: info_text ?? p.info_text }
+          : p
+      ));
+    };
+
+    socket.on("assessment_updated", handleAssessmentUpdated);
+    return () => {
+      socket.off("assessment_updated", handleAssessmentUpdated);
+    };
+  }, [socket]);
 
   // Automatic ephemeral toast clear handler
   useEffect(() => {

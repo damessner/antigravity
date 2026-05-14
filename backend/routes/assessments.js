@@ -67,8 +67,19 @@ router.put('/:id', authenticateToken, async (req, res) => {
       `, [cleanName, Number(category_id), cleanOldName]);
     }
 
-    // Broadcast update via socket if applicable to maintain real-time sync across clients
+    // Sync deadline changes to existing student_learning_plan rows is handled via
+    // the assessment_updated socket event on the frontend (student_learning_plan has
+    // no dedicated deadline column; it is fetched from assessments at query time).
+
+    // Broadcast detailed update via socket for real-time Lernplaner sync
     if (req.io) {
+      req.io.emit('assessment_updated', {
+        category_id: Number(category_id),
+        old_name: cleanOldName,
+        name: cleanName,
+        deadline: targetDeadline,
+        info_text: info_text || null
+      });
       req.io.emit('subject_updated', { category_id: Number(category_id) });
     }
 

@@ -4,3 +4,6 @@ dist/
 build/
 *.tsbuildinfo
 package-lock.json
+
+# PostgreSQL binary data — not version-controlled
+school_data/db/

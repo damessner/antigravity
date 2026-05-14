@@ -970,7 +970,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         let validCount = 0;
         let sumPct = 0;
         accessibleSubset.forEach((g) => {
-          const pct = toPercent(String(g.grade_value), cat.scale_type || "numeric_1_5");
+          const pct = toPercent(String(g.grade_value), (cat.scale_type || "numeric_1_5") as ScaleType);
           if (pct !== null) {
             sumPct += pct;
             validCount++;

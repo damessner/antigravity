@@ -315,8 +315,22 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
     let grades = [];
     let column_metadata = [];
     if (catIds.length > 0) {
-      const gRes = await req.pool.query('SELECT * FROM grades WHERE category_id = ANY($1::int[]) ORDER BY date, id', [catIds]);
-      grades = gRes.rows;
+      // Pupils only see their own grades (and only visible ones)
+      if (req.user.role === 'pupil') {
+        const pupilRes = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
+        const pupilId = pupilRes.rows[0]?.id;
+        if (!pupilId) {
+          return res.status(403).json({ error: 'Schülerdatensatz nicht gefunden' });
+        }
+        const gRes = await req.pool.query(
+          'SELECT * FROM grades WHERE category_id = ANY($1::int[]) AND pupil_id = $2 AND is_visible = true ORDER BY date, id',
+          [catIds, pupilId]
+        );
+        grades = gRes.rows;
+      } else {
+        const gRes = await req.pool.query('SELECT * FROM grades WHERE category_id = ANY($1::int[]) ORDER BY date, id', [catIds]);
+        grades = gRes.rows;
+      }
       const assRes = await req.pool.query('SELECT * FROM assessments WHERE category_id = ANY($1::int[])', [catIds]);
       column_metadata = assRes.rows;
     }
