@@ -8,6 +8,7 @@ import { getApiUrl } from "@/utils/apiDiscovery";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { ScaleType } from "./gradeUtils";
 import { useWeightBalancer } from "./useWeightBalancer";
+import EditAssessmentModal from "./EditAssessmentModal";
 
 // Modular Sub-components
 import { WeightingOverlay } from "./gradebook/WeightingOverlay";
@@ -38,6 +39,14 @@ interface EditMetadataState {
   metadata?: ColumnMetadata;
 }
 
+interface EditCategoryState {
+  id: number;
+  name: string;
+  weight_percentage: number;
+  scale_type: string;
+  is_self_directed: boolean;
+}
+
 export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const queryClient = useQueryClient();
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
@@ -66,8 +75,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   });
   const [showAddAssessment, setShowAddAssessment] = useState<{ categoryId: number } | null>(null);
   const [newAssessmentName, setNewAssessmentName] = useState("");
-  const [editingCol, setEditingCol] = useState<{ categoryId: number; oldName: string; newName: string } | null>(null);
   const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState<EditCategoryState | null>(null);
   const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateWeightsMutateRef = useRef(mutations.updateWeights.mutate);
 
@@ -192,13 +201,44 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     setShowAddAssessment({ categoryId: catId });
   }, []);
 
-  const handleOpenRenameColumn = useCallback((catId: number, oldName: string) => {
-    setEditingCol({ categoryId: catId, oldName, newName: oldName });
-  }, []);
+  const handleOpenRenameColumn = async (catId: number, oldName: string) => {
+    if (!isOwner) return;
+    const nextName = prompt("Neuer Name für die Bewertung:", oldName);
+    if (!nextName || !nextName.trim() || nextName.trim() === oldName) return;
+    try {
+      await fetchAuth("/api/assessments/0", {
+        method: "PUT",
+        body: JSON.stringify({
+          category_id: catId,
+          old_name: oldName,
+          name: nextName.trim(),
+          info_text: null,
+          deadline: null
+        })
+      });
+      queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+      toast.success("Bewertung umbenannt");
+    } catch (err: unknown) {
+      toast.error("Umbenennen fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
 
   const handleOpenEditMetadata = useCallback((catId: number, assName: string, metadata?: ColumnMetadata) => {
     setShowEditMetadataModal({ categoryId: catId, oldName: assName, metadata });
   }, []);
+
+  const handleOpenEditCategory = useCallback((category: Category) => {
+    if (!isOwner) return;
+    setShowEditCategoryModal({
+      id: category.id,
+      name: category.name,
+      weight_percentage: Number(category.weight_percentage) || 0,
+      scale_type: category.scale_type || "numeric_1_5",
+      is_self_directed: !!category.is_self_directed
+    });
+  }, [isOwner]);
 
   const refetchMatrix = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
@@ -316,6 +356,44 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
   };
 
+  const handleToggleCellVisibility = async (catId: number, pupilId: number, assName: string, isVisible: boolean) => {
+    if (!isOwner) return;
+    try {
+      await fetchAuth("/api/gradebook/cell-visibility", {
+        method: "PUT",
+        body: JSON.stringify({ category_id: catId, pupil_id: pupilId, assessment_name: assName, is_visible: isVisible })
+      });
+      queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+    } catch (err: unknown) {
+      toast.error("Sichtbarkeit konnte nicht geändert werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
+
+  const handleSaveCategoryEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditCategoryModal) return;
+    try {
+      await fetchAuth(`/api/gradebook/category/${showEditCategoryModal.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: showEditCategoryModal.name,
+          weight_percentage: showEditCategoryModal.weight_percentage,
+          scale_type: showEditCategoryModal.scale_type,
+          is_self_directed: showEditCategoryModal.is_self_directed
+        })
+      });
+      queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+      setShowEditCategoryModal(null);
+      toast.success("Bereich aktualisiert");
+    } catch (err: unknown) {
+      toast.error("Bereich konnte nicht aktualisiert werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
+
   const handleExport = async () => {
     if (!selectedSubject) return;
     try {
@@ -387,6 +465,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onDeleteCategory={handleDeleteCategory}
         onScaleSwitch={handleScaleSwitch}
         onToggleColumnVisibility={handleToggleColumnVisibility}
+        onEditCategory={handleOpenEditCategory}
+        onToggleCellVisibility={handleToggleCellVisibility}
       />
 
       {showAddSubject && (
@@ -430,16 +510,74 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                   value={newCategory.scale_type} onChange={e => setNewCategory({...newCategory, scale_type: e.target.value})}
                 >
                   <option value="numeric_1_5">Noten 1-5</option>
-                  <option value="numeric_0_100">0 - 100 Punkte</option>
-                  <option value="percentage">Prozent (0-100%)</option>
-                  <option value="letters_A_F">A - F (US Style)</option>
-                  <option value="symbols">Symbole (+ / ~ / -)</option>
+                  <option value="gpa_4_0">4.0 Skala (4.0 = Sehr Gut)</option>
+                  <option value="symbolic">Symbole (+ / ~ / -)</option>
                 </select>
               </div>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={newCategory.is_self_directed}
+                  onChange={(e) => setNewCategory({ ...newCategory, is_self_directed: e.target.checked })}
+                />
+                Selbstgesteuertes Lernen
+              </label>
             </div>
             <div className="flex gap-3 mt-6">
               <button type="button" onClick={() => setShowAddCategory(false)} className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300">Abbrechen</button>
               <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-bold text-white shadow-lg shadow-indigo-600/20">Anlegen</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showEditCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <form onSubmit={handleSaveCategoryEdit} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+            <h2 className="text-lg font-bold mb-4 text-white">Bereich bearbeiten</h2>
+            <div className="space-y-4">
+              <input
+                type="text"
+                required
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                value={showEditCategoryModal.name}
+                onChange={(e) => setShowEditCategoryModal({ ...showEditCategoryModal, name: e.target.value })}
+              />
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Gewichtung (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                  value={showEditCategoryModal.weight_percentage}
+                  onChange={(e) => setShowEditCategoryModal({ ...showEditCategoryModal, weight_percentage: Number(e.target.value) })}
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Skala</label>
+                <select
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                  value={showEditCategoryModal.scale_type}
+                  onChange={(e) => setShowEditCategoryModal({ ...showEditCategoryModal, scale_type: e.target.value })}
+                >
+                  <option value="numeric_1_5">Noten 1-5</option>
+                  <option value="gpa_4_0">4.0 Skala (4.0 = Sehr Gut)</option>
+                  <option value="symbolic">Symbole (+ / ~ / -)</option>
+                </select>
+              </div>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={showEditCategoryModal.is_self_directed}
+                  onChange={(e) => setShowEditCategoryModal({ ...showEditCategoryModal, is_self_directed: e.target.checked })}
+                />
+                Selbstgesteuertes Lernen
+              </label>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button type="button" onClick={() => setShowEditCategoryModal(null)} className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300">Abbrechen</button>
+              <button type="submit" className="flex-1 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-bold text-white shadow-lg shadow-indigo-600/20">Speichern</button>
             </div>
           </form>
         </div>
@@ -460,6 +598,21 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
             </div>
           </form>
         </div>
+      )}
+
+      {showEditMetadataModal && (
+        <EditAssessmentModal
+          assessmentId={showEditMetadataModal.metadata?.id}
+          categoryId={showEditMetadataModal.categoryId}
+          oldName={showEditMetadataModal.oldName}
+          initialName={showEditMetadataModal.metadata?.name || showEditMetadataModal.oldName}
+          initialInfoText={showEditMetadataModal.metadata?.info_text || ""}
+          initialDeadline={showEditMetadataModal.metadata?.deadline || null}
+          onClose={() => setShowEditMetadataModal(null)}
+          onSaved={() => {
+            queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+          }}
+        />
       )}
     </div>
   );

@@ -39,7 +39,7 @@ interface PlanItem {
 }
 
 // 1. Sidebar Pool Draggable Card (Cloner Source)
-function SidebarTaskCard({ task }: { task: OpenTask }) {
+function SidebarTaskCard({ task, onSubmit }: { task: OpenTask; onSubmit: (task: OpenTask) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `source_${task.task_id}`,
     data: { type: "source", task }
@@ -144,6 +144,19 @@ function SidebarTaskCard({ task }: { task: OpenTask }) {
           Freie Einteilung
         </div>
       )}
+
+      <div className="mt-2 pt-2 border-t border-slate-800/50">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSubmit(task);
+          }}
+          className="w-full px-2 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 text-[10px] font-bold transition-colors"
+        >
+          Abgeben
+        </button>
+      </div>
     </div>
   );
 }
@@ -576,6 +589,33 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     }
   };
 
+  const handleSubmitTask = async (task: OpenTask) => {
+    const entered = window.prompt(`Bewertung für "${task.assessment_name}" eingeben:`, "");
+    if (entered === null) return;
+    const value = entered.trim();
+    if (!value) return;
+
+    const token = localStorage.getItem("token");
+    const apiUrl = getApiUrl();
+
+    try {
+      const res = await fetch(`${apiUrl}/api/student/submit-task`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          category_id: task.category_id,
+          assessment_name: task.assessment_name,
+          grade_value: value
+        })
+      });
+      if (!res.ok) throw new Error("Abgabe fehlgeschlagen");
+      setTasksPool(prev => prev.filter(t => t.task_id !== task.task_id));
+      setNotification("Aufgabe abgegeben.");
+    } catch (err) {
+      setNotification("Abgabe fehlgeschlagen.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full animate-fadeIn duration-200">
       {/* Title Header Toolbar */}
@@ -626,7 +666,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
 
             <div className="p-3 flex-1 overflow-y-auto space-y-2.5">
               {tasksPool.map(task => (
-                <SidebarTaskCard key={task.task_id} task={task} />
+                <SidebarTaskCard key={task.task_id} task={task} onSubmit={handleSubmitTask} />
               ))}
 
               {tasksPool.length === 0 && !isLoading && (

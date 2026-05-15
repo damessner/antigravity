@@ -64,9 +64,11 @@ export interface SubjectTag {
 }
 
 export interface ColumnMetadata {
+  id?: number;
   name: string;
   info_text?: string | null;
   deadline?: string | null;
+  is_visible?: boolean;
 }
 
 export interface Category {

@@ -31,7 +31,7 @@ Simply spin up the pristine services using standard Docker Compose orchestration
 ```bash
 docker compose up -d
 ```
-The Frontend GUI immediately becomes accessible at `http://<your-server-ip>:3000`.
+The Frontend GUI immediately becomes accessible at `http://<your-server-ip>:3000` (alternative mapping: `http://<your-server-ip>:3001`).
 
 ### Unraid Deployment
 Tailored precisely for Unraid persistent user-share mappings:

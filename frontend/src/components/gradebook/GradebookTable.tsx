@@ -29,6 +29,8 @@ interface GradebookTableProps {
   onDeleteCategory: (catId: number) => void;
   onScaleSwitch: (catId: number, newScale: ScaleType) => void;
   onToggleColumnVisibility: (catId: number, assName: string) => void;
+  onEditCategory: (category: Category) => void;
+  onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
 }
 
 function GradebookTableBase({
@@ -45,7 +47,9 @@ function GradebookTableBase({
   onEditMetadata,
   onDeleteCategory,
   onScaleSwitch,
-  onToggleColumnVisibility
+  onToggleColumnVisibility,
+  onEditCategory,
+  onToggleCellVisibility
 }: GradebookTableProps) {
   const columnsByCategory = React.useMemo(() => {
     const map = new Map<number, GradebookColumn[]>();
@@ -96,9 +100,14 @@ function GradebookTableBase({
                   className="px-2 py-2 border-b border-r-2 border-slate-800 text-left relative group"
                 >
                   <div className="flex items-center justify-between gap-2 overflow-hidden">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8">
-                      {cat.name} ({cat.weight_percentage}%)
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => isOwner && onEditCategory(cat)}
+                      className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8 text-left hover:text-indigo-300 transition-colors"
+                      title={isOwner ? "Bereich bearbeiten" : cat.name}
+                    >
+                      {cat.name} ({cat.weight_percentage}%){cat.is_self_directed ? " • SDL" : ""}
+                    </button>
                     
                     {isOwner && (
                       <div className="absolute right-1 top-1.5 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity bg-slate-900/80 rounded-md p-0.5 backdrop-blur-sm">
@@ -193,6 +202,7 @@ function GradebookTableBase({
                     isCatLastCol={col.isCatLastCol}
                     onChange={onGradeChange}
                     onContextMenu={onCellContextMenu}
+                    onToggleVisibility={onToggleCellVisibility}
                   />
                 );
               })}

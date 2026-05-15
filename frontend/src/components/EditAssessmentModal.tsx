@@ -27,30 +27,12 @@ export default function EditAssessmentModal({
 }: EditAssessmentModalProps) {
   const [name, setName] = useState(initialName || oldName || "");
   const [infoText, setInfoText] = useState(initialInfoText || "");
-  
-  // Format initial deadline for native datetime-local input if present
-  const formatInitialDate = (isoStr?: string | null) => {
-    if (!isoStr) return "";
-    try {
-      const d = new Date(isoResStr(isoStr));
-      // Convert to YYYY-MM-DDTHH:mm format
-      return d.toISOString().slice(0, 16);
-    } catch {
-      return "";
-    }
-  };
-
-  // Safe helper to strip timezone offsets or parse gracefully
-  const isoResStr = (s: string) => s;
-
   const [deadline, setDeadline] = useState<string>(() => {
     if (!initialDeadline) return "";
     try {
       const d = new Date(initialDeadline);
       if (isNaN(d.getTime())) return "";
-      // Formats as YYYY-MM-DDTHH:mm
-      const pad = (n: number) => String(n).padStart(2, "0");
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return d.toISOString().slice(0, 10);
     } catch {
       return "";
     }
@@ -81,7 +63,12 @@ export default function EditAssessmentModal({
         old_name: oldName,
         name: name.trim(),
         info_text: infoText.trim() || null,
-        deadline: deadline ? new Date(deadline).toISOString() : null
+        deadline: deadline
+          ? (() => {
+              const [year, month, day] = deadline.split("-").map(Number);
+              return new Date(Date.UTC(year, month - 1, day, 23, 59, 0)).toISOString();
+            })()
+          : null
       };
 
       const res = await fetch(`${apiUrl}/api/assessments/${targetId}`, {
@@ -106,8 +93,8 @@ export default function EditAssessmentModal({
         deadline: savedData.deadline || null
       });
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Netzwerkfehler beim Aktualisieren.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Netzwerkfehler beim Aktualisieren.");
       setLoading(false);
     }
   };
@@ -177,7 +164,7 @@ export default function EditAssessmentModal({
             />
           </div>
 
-          {/* Deadline DateTime Picker */}
+          {/* Deadline Date Picker */}
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
               <span>Abgabefrist (Deadline)</span>
@@ -193,7 +180,7 @@ export default function EditAssessmentModal({
             </label>
             <div className="relative flex items-center">
               <input
-                type="datetime-local"
+                type="date"
                 value={deadline}
                 onChange={(e) => setDeadline(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-amber-500 transition-colors cursor-pointer style-scheme-dark"
@@ -201,7 +188,7 @@ export default function EditAssessmentModal({
               <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 pointer-events-none" />
             </div>
             <p className="text-[11px] text-slate-500">
-              Ist eine Abgabefrist gesetzt, wird die Aufgabe automatisch im Self-Directed Learning Planer der Schüler freigeschaltet.
+              Fristen werden automatisch auf 23:59 gesetzt und im Lernplaner der Schüler angezeigt.
             </p>
           </div>
 
