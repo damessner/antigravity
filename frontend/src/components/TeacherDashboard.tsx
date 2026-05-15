@@ -26,6 +26,7 @@ import Gradebook from "./Gradebook";
 import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
 import HelpFeed from "./HelpFeed";
+import ParticipationTracker from "./ParticipationTracker";
 import { OnboardingTip } from "./OnboardingTip";
 
 import { Pupil, Room, User } from "@/types";
@@ -53,7 +54,7 @@ export default function TeacherDashboard() {
 
   // Primary States
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help" | "participation">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -531,6 +532,17 @@ export default function TeacherDashboard() {
             <span>Live-Hilfe</span>
           </button>
 
+          {user?.role !== "pupil" && (
+            <button
+              onClick={() => setActiveTab("participation")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "participation" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
+            >
+              <span className="text-emerald-400 shrink-0">💎</span>
+              <span>Mitarbeit</span>
+            </button>
+          )}
+
           {user?.role === "pupil" && (
             <button
               onClick={() => setActiveTab("planner")}
@@ -751,6 +763,21 @@ export default function TeacherDashboard() {
         <div className={activeTab === "planner" ? "flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full h-full relative" : "hidden"}>
           <StudentLernplaner socket={socket} />
         </div>
+
+        {/* TAB 6: PARTICIPATION TRACKER */}
+        {activeTab === "participation" && (
+          <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-white">Mitarbeit</h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">Einmal tippen, um die Beteiligungsstufe eines Schülers zu erfassen. Am Wochenende als Note eintragen.</p>
+            </div>
+            <ParticipationTracker
+              subjects={subjects}
+              pupils={stableGradebookPupils}
+              classId={classes.length > 0 ? classes[0].id : 0}
+            />
+          </div>
+        )}
       </main>
 
       {/* Popovers / Overlays */}

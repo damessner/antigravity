@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { authenticateToken } = require('../server');
+const { authenticateToken, stateLimiter } = require('../server');
 
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
@@ -10,6 +10,30 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// GET /api/pupils/me — pupil's own profile, locked to the JWT identity
+router.get('/me', stateLimiter, authenticateToken, async (req, res) => {
+  if (req.user.role !== 'pupil') {
+    return res.status(403).json({ error: 'Nur für Schülerkonten zugänglich' });
+  }
+  try {
+    const result = await req.pool.query(`
+      SELECT p.id, p.class_id, u.full_name as name, c.name as class_name, u.username
+      FROM pupils p
+      JOIN users u ON p.user_id = u.id
+      LEFT JOIN classes c ON p.class_id = c.id
+      WHERE p.user_id = $1
+    `, [req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Schülerprofil nicht gefunden' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Fetch own pupil profile error:', err);
+    res.status(500).json({ error: 'Fehler beim Laden des eigenen Profils' });
+  }
+});
 
 // GET /api/pupils
 router.get('/', authenticateToken, async (req, res) => {

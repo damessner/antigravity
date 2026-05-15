@@ -46,6 +46,7 @@ const pool = new Pool({
 pool.query(`
   ALTER TABLE subjects DROP CONSTRAINT IF EXISTS uq_subject_class;
   ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_self_directed BOOLEAN DEFAULT false;
+  ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_hidden_from_pupils BOOLEAN DEFAULT false;
   ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
   ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
   ALTER TABLE rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT NULL;
@@ -80,6 +81,25 @@ pool.query(`
     claimed_by_teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     teacher_comment TEXT DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  );
+
+  CREATE TABLE IF NOT EXISTS participation_logs (
+    id SERIAL PRIMARY KEY,
+    pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+    teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
+    lesson_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    rating VARCHAR(20) NOT NULL DEFAULT 'engaged',
+    applied_to_grade BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS seating_positions (
+    id SERIAL PRIMARY KEY,
+    pupil_id INTEGER UNIQUE REFERENCES pupils(id) ON DELETE CASCADE,
+    desk_row INTEGER NOT NULL DEFAULT 1,
+    desk_col INTEGER NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
   CREATE TABLE IF NOT EXISTS push_subscriptions (
@@ -209,6 +229,7 @@ app.use('/api/assessments', require('./routes/assessments'));
 app.use('/api/help', require('./routes/help'));
 app.use('/api/setup', require('./routes/setup'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/participation', require('./routes/participation'));
 const pushModule = require('./routes/push');
 
 app.use('/api/push', pushModule.router);
