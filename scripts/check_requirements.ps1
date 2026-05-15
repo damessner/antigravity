@@ -194,13 +194,6 @@ try {
             }
         }
     } catch {
-        Check-Info "Could not determine disk space"
-                Write-CheckWarn "Low disk space: ${freeGB} GB"
-            } else {
-                Write-CheckFail "Critical disk space: ${freeGB} GB"
-            }
-        }
-    } catch {
         Write-CheckInfo "Could not determine disk space"
     }
 
