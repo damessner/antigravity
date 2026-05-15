@@ -73,7 +73,14 @@ For Unraid users, run this command in your Unraid Terminal to automatically set 
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/unraid_install.sh)"
 ```
 
+### Universal Linux / Raspberry Pi
+For Ubuntu, Debian, or Raspberry Pi OS, use this one-liner to install Docker and the platform automatically:
+```bash
+curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/linux_install.sh | sudo bash
+```
+
 ### Android Pocket Server (Termux)
+
 You can even host the entire platform on an Android phone using **Termux**. Run this command inside the Termux app:
 ```bash
 pkg install curl -y && bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/android_termux_setup.sh)"
