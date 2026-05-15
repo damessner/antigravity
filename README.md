@@ -67,7 +67,14 @@ For Proxmox VE users, you can deploy the entire platform into a dedicated, optim
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/proxmox_install.sh)"
 ```
 
+### Unraid One-Click
+For Unraid users, run this command in your Unraid Terminal to automatically set up the appdata folders and register the project in your Docker tab:
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/unraid_install.sh)"
+```
+
 ### Maintenance
+
 
 - **Update**: Run `./scripts/update_system.sh` to pull the latest changes and rebuild.
 - **Reset**: Run `./scripts/clean_slate.sh` to clear the environment.
