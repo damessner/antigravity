@@ -28,21 +28,21 @@ try {
 
     if ($ProjectRoot) { Set-Location -LiteralPath $ProjectRoot }
 
-    function Print-Header($text) {
+    function Write-Header($text) {
         Write-Host ""
         Write-Host "============================================================" -ForegroundColor Cyan
         Write-Host " $text" -ForegroundColor White
         Write-Host "============================================================" -ForegroundColor Cyan
         Write-Host ""
     }
-    function Step($msg) { Write-Host ">> $msg" -ForegroundColor White }
-    function Ok($msg)   { Write-Host "   [OK] $msg" -ForegroundColor Green }
-    function Warn($msg) { Write-Host "   [WARN] $msg" -ForegroundColor Yellow }
-    function Fail($msg) { Write-Host "   [FAIL] $msg" -ForegroundColor Red }
-    function Info($msg) { Write-Host "   [INFO] $msg" -ForegroundColor Gray }
+    function Step($msg)     { Write-Host ">> $msg" -ForegroundColor White }
+    function Write-Ok($msg) { Write-Host "   [OK] $msg" -ForegroundColor Green }
+    function Write-Warn($msg) { Write-Host "   [WARN] $msg" -ForegroundColor Yellow }
+    function Write-Fail($msg) { Write-Host "   [FAIL] $msg" -ForegroundColor Red }
+    function Write-Info($msg) { Write-Host "   [INFO] $msg" -ForegroundColor Gray }
 
     Clear-Host
-    Print-Header "School Management System - Restart Utility"
+    Write-Header "School Management System - Restart Utility"
     Write-Host "This will stop and restart all containers cleanly." -ForegroundColor Yellow
     Write-Host "Existing data is preserved. No backup is performed." -ForegroundColor Yellow
     Write-Host ""
@@ -56,59 +56,59 @@ try {
 
     # Preflight: Docker check
     Step "Checking Docker daemon..."
-    $dockerInfo = docker info 2>&1
-    if ($LASTEXITCODE -ne 0 -or $dockerInfo -match "error during connect") {
-        Fail "Docker daemon is not running. Please start Docker Desktop."
+    docker info 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "Docker daemon is not running. Please start Docker Desktop."
         exit 1
     }
-    Ok "Docker daemon is running"
+    Write-Ok "Docker daemon is running"
     Write-Host ""
 
     # Step 1: Bring stack down
-    Print-Header "Step 1. Stopping current containers"
+    Write-Header "Step 1. Stopping current containers"
     Step "Running: docker compose down --remove-orphans ..."
     docker compose down --remove-orphans 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
     if ($LASTEXITCODE -ne 0) {
-        Warn "docker compose down returned non-zero"
+        Write-Warn "docker compose down returned non-zero"
     }
     Start-Sleep -Seconds 2
-    Ok "Stack stopped"
+    Write-Ok "Stack stopped"
     Write-Host ""
 
     # Step 2: Bring stack up
-    Print-Header "Step 2. Starting containers"
+    Write-Header "Step 2. Starting containers"
     Step "Running: docker compose up -d ..."
     docker compose up -d 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
     if ($LASTEXITCODE -ne 0) {
-        Fail "Failed to start containers. Run 'docker compose logs' for details."
+        Write-Fail "Failed to start containers. Run 'docker compose logs' for details."
         exit 1
     }
-    Ok "docker compose up completed"
+    Write-Ok "docker compose up completed"
     Write-Host ""
 
     # Step 3: Wait for backend
-    Print-Header "Step 3. Waiting for services"
+    Write-Header "Step 3. Waiting for services"
     Step "Waiting for backend API (up to 60s)..."
     $backendReady = $false
     for ($i = 1; $i -le 60; $i++) {
         try {
             $r = Invoke-WebRequest -Uri "http://localhost:4000/api/setup/status" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
             if ($r.StatusCode -eq 200) { 
-                Ok "Backend API ready ($i s)"
+                Write-Ok "Backend API ready ($i s)"
                 $backendReady = $true
                 break 
             }
         } catch {}
         Start-Sleep -Seconds 1
     }
-    if (-not $backendReady) { Warn "Backend did not respond within 60s" }
+    if (-not $backendReady) { Write-Warn "Backend did not respond within 60s" }
 
     Step "Waiting for frontend (up to 30s)..."
     for ($j = 1; $j -le 30; $j++) {
         try {
             $r = Invoke-WebRequest -Uri "http://localhost:3000/" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
             if ($r.StatusCode -lt 400) { 
-                Ok "Frontend ready ($j s)"
+                Write-Ok "Frontend ready ($j s)"
                 break 
             }
         } catch {}
@@ -117,7 +117,7 @@ try {
     Write-Host ""
 
     # Step 4: Status report
-    Print-Header "Step 4. System Status"
+    Write-Header "Step 4. System Status"
 
     Step "Container health:"
     docker ps --format "   {{.Names}}`t{{.Status}}`t{{.Ports}}" 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Gray }
@@ -143,7 +143,7 @@ try {
     Write-Host "     -> Reset system: .\clean_slate.ps1" -ForegroundColor Gray
     Write-Host ""
 
-    Print-Header "Restart Complete"
+    Write-Header "Restart Complete"
     Write-Host "The system has been restarted. Open a browser." -ForegroundColor Green
     Write-Host ""
 
