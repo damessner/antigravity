@@ -1,10 +1,14 @@
 const { Pool } = require('pg');
+if (!process.env.DB_PASSWORD) {
+  throw new Error('DB_PASSWORD environment variable is required');
+}
+
 const pool = new Pool({
-  host: 'localhost',
-  port: 5433,
-  user: 'postgres',
-  password: 'SuperSecretSchoolDbPass2026!',
-  database: 'school_management'
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT || 5433),
+  user: process.env.DB_USER || 'postgres',
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME || 'school_management'
 });
 
 async function run() {
