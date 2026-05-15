@@ -88,11 +88,19 @@ pkg install curl -y && bash -c "$(curl -fsSL https://raw.githubusercontent.com/d
 
 ### Maintenance
 
+#### 🚀 Quick Updates
+Run the command corresponding to your platform to pull the latest changes and restart.
 
+*   **Windows**: Run `01_update_system.bat` in your installation folder.
+*   **Proxmox / Linux**: `cd /opt/antigravity && sudo ./scripts/update_system.sh`
+*   **Unraid**: `cd /mnt/user/appdata/antigravity && ./scripts/update_system.sh`
+*   **Android (Termux)**: `cd ~/antigravity && ./scripts/update_android.sh`
 
-- **Update**: Run `./scripts/update_system.sh` to pull the latest changes and rebuild.
+---
+
 - **Reset**: Run `./scripts/clean_slate.sh` to clear the environment.
 - **Permissions**: Ensure scripts are executable with `chmod +x scripts/*.sh`.
+
 
 ---
 
