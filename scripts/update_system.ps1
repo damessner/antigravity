@@ -10,6 +10,8 @@ $ScriptDir = $PSScriptRoot
 if (-not $ScriptDir -and $PSCommandPath) { $ScriptDir = Split-Path -Parent $PSCommandPath }
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
 $ProjectRoot = Split-Path -Parent $ScriptDir
+$RepoUrl = "https://github.com/damessner/antigravity.git"
+
 
 try {
     if ($ProjectRoot) { Set-Location -LiteralPath $ProjectRoot }
@@ -30,7 +32,8 @@ try {
     if (-not $gitCmd) {
         Write-Host " [FAIL] Git is not installed. Manual update required." -ForegroundColor Red
         Write-Host " Please download the latest version from: " -ForegroundColor White
-        Write-Host " https://github.com/damessner/antigravity/archive/refs/heads/main.zip" -ForegroundColor Cyan
+        Write-Host " $RepoUrl/archive/refs/heads/main.zip" -ForegroundColor Cyan
+
         exit 1
     }
 
@@ -38,9 +41,23 @@ try {
     if (-not (Test-Path ".git")) {
         Write-Host " [INFO] This folder was not downloaded via Git." -ForegroundColor Yellow
         Write-Host " To enable one-click updates, you should clone the repository using:" -ForegroundColor Gray
-        Write-Host " git clone https://github.com/damessner/antigravity.git" -ForegroundColor Cyan
+        Write-Host " git clone $RepoUrl" -ForegroundColor Cyan
         exit 1
     }
+
+    # 3. Ensure Remote URL is correct
+    $currentRemote = git remote get-url origin 2>$null
+    if ($null -eq $currentRemote) {
+        Write-Host " [INFO] Adding remote 'origin' pointing to $RepoUrl" -ForegroundColor Gray
+        git remote add origin $RepoUrl
+    } elseif ($currentRemote -ne $RepoUrl -and $currentRemote -ne "$RepoUrl.git") {
+        # Check both with and without .git suffix just in case
+        if ($currentRemote -ne ($RepoUrl -replace '\.git$', '')) {
+            Write-Host " [INFO] Updating remote 'origin' to $RepoUrl" -ForegroundColor Gray
+            git remote set-url origin $RepoUrl
+        }
+    }
+
 
     # 3. Check for local changes
     $status = git status --porcelain
