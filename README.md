@@ -86,15 +86,28 @@ You can even host the entire platform on an Android phone using **Termux**. Run 
 pkg install curl -y && bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/android_termux_setup.sh)"
 ```
 
-### Maintenance
+### 🚀 Maintenance & Updates
+To keep your school system up to date, run the command for your platform:
 
-#### 🚀 Quick Updates
-Run the command corresponding to your platform to pull the latest changes and restart.
+**Windows**
+Double-click `01_update_system.bat` in your folder.
 
-*   **Windows**: Run `01_update_system.bat` in your installation folder.
-*   **Proxmox / Linux**: `cd /opt/antigravity && sudo ./scripts/update_system.sh`
-*   **Unraid**: `cd /mnt/user/appdata/antigravity && ./scripts/update_system.sh`
-*   **Android (Termux)**: `cd ~/antigravity && ./scripts/update_android.sh`
+**Proxmox / Universal Linux**
+```bash
+cd /opt/antigravity && sudo ./scripts/update_system.sh
+```
+
+**Unraid**
+```bash
+cd /mnt/user/appdata/antigravity && ./scripts/update_system.sh
+```
+
+**Android (Termux)**
+```bash
+cd ~/antigravity && ./scripts/update_android.sh
+```
+
+---
 
 ---
 
