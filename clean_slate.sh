@@ -1,6 +1,7 @@
 #!/bin/bash
 # clean_slate.sh — Reset the school management system to a clean state
 # Usage: ./clean_slate.sh
+# A backup is automatically downloaded before any data is wiped.
 
 cleanup_and_exit() {
   local exit_code=$?
@@ -26,8 +27,14 @@ echo "=================================================="
 echo "🏫 School Management System — Clean Slate Utility"
 echo "=================================================="
 echo ""
+echo "⚠️  This will:"
+echo "    1. Download a safety backup of the current database"
+echo "    2. Stop all running containers"
+echo "    3. Wipe the database"
+echo "    4. Restart with a clean state"
+echo ""
 
-read -p "⚠️  WARNING: This will stop running containers and completely clear the database. Proceed? (y/N): " confirm_proceed
+read -p "⚠️  WARNING: Proceed? (y/N): " confirm_proceed
 if [[ ! "$confirm_proceed" =~ ^[Yy]$ ]]; then
   echo ""
   echo "Operation cancelled by user."
@@ -46,14 +53,59 @@ else
 fi
 echo ""
 
-# Step 2: Stop containers and clear network/volume locks
-echo "⏹  Stopping Docker containers and clearing mappings..."
+# Step 2: Auto-backup before wiping
+API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:4000}"
+BACKUP_SAVED=""
+
+echo "💾 Step 1/4 — Attempting automatic safety backup..."
+# Check if backend is running and reachable
+if curl -sf "$API_URL/api/setup/status" > /dev/null 2>&1; then
+  # We need a token — check if there's a cached admin session
+  # Since we can't auto-login here, download via the backup API using admin credentials if passed
+  echo "   ℹ️  Backend is running. Downloading backup via API..."
+  
+  mkdir -p "$SCRIPT_DIR/school_data/backups"
+  TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+  BACKUP_PATH="$SCRIPT_DIR/school_data/backups/pre_clean_slate_${TIMESTAMP}.json"
+  
+  # Try to download using stored credentials (admin token not available in shell)
+  # Fall back to pg_dump-style direct backup via docker exec if possible
+  DB_CONTAINER=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'school_db|antigravity_db' | head -1)
+  if [ -n "$DB_CONTAINER" ]; then
+    echo "   🐘 Database container found: $DB_CONTAINER"
+    echo "   📦 Exporting database schema + data via pg_dump..."
+    docker exec "$DB_CONTAINER" pg_dump -U postgres school_management --data-only --inserts 2>/dev/null > "$BACKUP_PATH.sql" && \
+      echo "   ✅ SQL backup saved: pre_clean_slate_${TIMESTAMP}.json.sql" && \
+      BACKUP_SAVED="$BACKUP_PATH.sql" || \
+      echo "   ⚠️  pg_dump failed — continuing without automatic backup"
+  else
+    echo "   ⚠️  No running database container found — skipping automatic backup"
+  fi
+else
+  echo "   ℹ️  Backend not reachable (may already be stopped) — skipping automatic backup"
+fi
+
+if [ -n "$BACKUP_SAVED" ]; then
+  echo "   ✅ Safety backup saved to: $BACKUP_SAVED"
+else
+  echo "   ⚠️  No automatic backup was created."
+  echo ""
+  read -p "   Continue without a backup? (y/N): " continue_no_backup
+  if [[ ! "$continue_no_backup" =~ ^[Yy]$ ]]; then
+    echo "   Operation cancelled. Please create a manual backup first via the Admin Panel."
+    exit 0
+  fi
+fi
+echo ""
+
+# Step 3: Stop containers and clear network/volume locks
+echo "⏹  Step 2/4 — Stopping Docker containers and clearing mappings..."
 docker compose down --volumes --remove-orphans
 sleep 3
 echo ""
 
-# Step 3: Wipe school_data directory contents
-echo "🗑  Wiping school_data/ directory..."
+# Step 4: Wipe school_data directory contents
+echo "🗑  Step 3/4 — Wiping school_data/ directory..."
 if [ -d "$SCRIPT_DIR/school_data" ]; then
   if [ -d "$SCRIPT_DIR/school_data/db" ]; then
     rm -rf "$SCRIPT_DIR/school_data/db"
@@ -66,6 +118,7 @@ if [ -d "$SCRIPT_DIR/school_data" ]; then
   read -p "   Also wipe school_data/backups/? (y/N): " wipe_backups
   if [[ "$wipe_backups" =~ ^[Yy]$ ]]; then
     rm -f "$SCRIPT_DIR/school_data/backups/"*.json
+    rm -f "$SCRIPT_DIR/school_data/backups/"*.sql 2>/dev/null || true
     echo "   → Backups directory cleared."
   fi
 else
@@ -73,12 +126,11 @@ else
 fi
 echo ""
 
-# Step 4: Optional backup import
+# Step 5: Optional backup import
 BACKUP_FILE=""
 read -p "📦 Import a backup file before starting? (y/N): " import_backup
 if [[ "$import_backup" =~ ^[Yy]$ ]]; then
   read -p "   Enter full path to .json backup file: " BACKUP_FILE
-  # Strip quotes if dragged and dropped
   BACKUP_FILE="${BACKUP_FILE%\"}"
   BACKUP_FILE="${BACKUP_FILE#\"}"
   BACKUP_FILE="${BACKUP_FILE%\'}"
@@ -94,14 +146,13 @@ if [[ "$import_backup" =~ ^[Yy]$ ]]; then
 fi
 echo ""
 
-# Step 5: Restart containers
-echo "🚀 Starting Docker containers..."
+# Step 6: Restart containers
+echo "🚀 Step 4/4 — Starting Docker containers..."
 docker compose up -d
 echo ""
 
 # Wait for backend to be ready
 echo "⏳ Waiting for backend to start (up to 30s)..."
-API_URL="${NEXT_PUBLIC_API_URL:-http://localhost:4000}"
 backend_ready=false
 for i in $(seq 1 30); do
   if curl -sf "$API_URL/api/setup/status" > /dev/null 2>&1; then
@@ -116,7 +167,7 @@ for i in $(seq 1 30); do
 done
 echo ""
 
-# Step 6: If a backup was selected, restore it via the API
+# Step 7: If a backup was selected, restore it via the API
 if [ -n "$BACKUP_FILE" ] && [ "$backend_ready" = true ]; then
   echo "📥 Restoring backup via API..."
   mkdir -p "$SCRIPT_DIR/school_data/backups"
@@ -125,7 +176,6 @@ if [ -n "$BACKUP_FILE" ] && [ "$backend_ready" = true ]; then
   RESTORE_TMP="$(mktemp /tmp/restore_payload.XXXXXX.json)"
   printf '{"confirm":"RESTORE","data":%s}' "$(cat "$BACKUP_FILE")" > "$RESTORE_TMP"
   
-  # Disable set -e temporarily to gracefully capture API response
   set +e
   RESPONSE=$(curl -sf -X POST "$API_URL/api/backup/restore" \
     -H "Content-Type: application/json" \
@@ -145,3 +195,4 @@ if [ -n "$BACKUP_FILE" ] && [ "$backend_ready" = true ]; then
 fi
 
 echo "✅ Clean slate complete. Frontend available at: http://localhost:3000"
+

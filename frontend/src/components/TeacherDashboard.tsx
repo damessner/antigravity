@@ -24,6 +24,7 @@ import Gradebook from "./Gradebook";
 import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
 import HelpFeed from "./HelpFeed";
+import { OnboardingTip } from "./OnboardingTip";
 
 import { Pupil, Room, User } from "@/types";
 
@@ -549,6 +550,19 @@ export default function TeacherDashboard() {
           >
             <Bell className="w-4 h-4" />
           </button>
+
+          <OnboardingTip
+            pageKey="dashboard"
+            title="🏫 Willkommen im Live-Dashboard!"
+            tips={[
+              "👋 Ziehe Schüler per Drag & Drop in andere Räume.",
+              "⏱️ Klicke auf einen Schüler, um einen Timer zu setzen.",
+              "🔔 Nutze 'Stunde beenden / Reset' am Ende einer Unterrichtsstunde.",
+              "📋 Unter 'Notizen' kannst du Verhaltensnotizen erfassen.",
+              "🎓 Im 'Evaluationsbereich' pflegst du Noten & Kategorien.",
+              "⚙️ Als Admin erreichst du alle Einstellungen über 'Admin-Panel'.",
+            ]}
+          />
 
           <button
             onClick={() => {

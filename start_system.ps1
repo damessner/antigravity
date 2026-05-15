@@ -68,7 +68,8 @@ Write-Host "  - Network: " -NoNewline; Write-Host "http://$($ip):3000" -Foregrou
 
 Write-Host "`nDefault Credentials:" -ForegroundColor White
 Write-Host "  - Username: " -NoNewline; Write-Host "da.messner" -ForegroundColor Yellow
-Write-Host "  - Password: " -NoNewline; Write-Host "admin!" -ForegroundColor Yellow
+Write-Host "  - Password: " -NoNewline; Write-Host "(set by administrator — change on first login)" -ForegroundColor Yellow
+Write-Host "  ⚠️  This is highly experimental software — please report issues to the dev team." -ForegroundColor DarkYellow
 
 Write-Header "CURRENT CONTAINER STATUS"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
