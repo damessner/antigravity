@@ -1,13 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // GET /api/notes?pupil_id=<id>
-router.get('/', authenticateToken, async (req, res) => {
-  const pupilId = Number(req.query.pupil_id);
-  if (!pupilId) return res.status(400).json({ error: 'pupil_id parameter required' });
-
+router.get('/', setupLimiter, authenticateToken, async (req, res) => {
+  // Security: pupils are always locked to their own record regardless of query param
   try {
+    let pupilId;
+    if (req.user.role === 'pupil') {
+      const ownRes = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
+      if (ownRes.rows.length === 0) return res.status(403).json({ error: 'Schülerprofil nicht gefunden' });
+      pupilId = ownRes.rows[0].id;
+    } else {
+      pupilId = Number(req.query.pupil_id);
+      if (!pupilId) return res.status(400).json({ error: 'pupil_id parameter required' });
+    }
+
     let queryStr = `
       SELECT n.id, n.pupil_id, n.teacher_id, n.note_text, n.sentiment, 
              n.is_visible_to_pupil, n.auto_source, n.created_at,
@@ -152,6 +160,10 @@ const escapeHtml = (str) => {
 
 // GET /api/notes/export/:pupil_id
 router.get('/export/:pupil_id', authenticateToken, async (req, res) => {
+  // Pupils may not export notes (export is a teacher/admin operation)
+  if (req.user.role === 'pupil') {
+    return res.status(403).send('Zugriff verweigert');
+  }
   const pupilId = Number(req.params.pupil_id);
   if (!pupilId) return res.status(400).send('Ungültige Schüler-ID');
 

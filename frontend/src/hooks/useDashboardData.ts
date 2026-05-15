@@ -10,6 +10,7 @@ interface DashboardState {
   pupils: Pupil[];
   subjects: Subject[];
   subject_tags: SubjectTag[];
+  settings?: Record<string, string>;
 }
 
 
@@ -26,7 +27,8 @@ export function useDashboardData(token: string | null) {
       return data as DashboardState;
     },
     enabled: !!token,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30 * 1000,         // 30 s — stale quickly so refreshes show live data
+    refetchOnWindowFocus: true,    // re-sync when teacher switches back to this tab
   });
 
   const classesQuery = useQuery({
@@ -71,6 +73,7 @@ export function useDashboardData(token: string | null) {
 
   return {
     state: stateQuery.data,
+    settings: stateQuery.data?.settings || {},
     classes: classesQuery.data || EMPTY_ARRAY,
     users: usersQuery.data || EMPTY_ARRAY,
     pupils: pupilsQuery.data || EMPTY_ARRAY,

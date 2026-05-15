@@ -30,7 +30,7 @@ import { OnboardingTip } from "./OnboardingTip";
 
 import { Pupil, Room, User } from "@/types";
 
-const LESSON_SCHEDULE = [
+const DEFAULT_LESSON_SCHEDULE = [
   { nr: 1, start: "07:55", end: "08:45" },
   { nr: 2, start: "08:50", end: "09:40" },
   { nr: 3, start: "09:45", end: "10:35" },
@@ -77,7 +77,6 @@ export default function TeacherDashboard() {
   const [selectedPupilForComment, setSelectedPupilForComment] = useState<Pupil | null>(null);
   const [pendingDropIntent, setPendingDropIntent] = useState<{ pupilId: number; toRoomId: number; fromRoomId: number } | null>(null);
 
-  // Sensors for DndKit
   // Sensors for DndKit optimized for Snappy iPad Drag-and-Drop
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
@@ -91,7 +90,20 @@ export default function TeacherDashboard() {
     setToken(localStorage.getItem("token"));
   }, []);
 
-  const { state: dashboardState, classes: classesData, isLoading: isQueryLoading } = useDashboardData(token);
+  const { state: dashboardState, settings: systemSettings, classes: classesData, isLoading: isQueryLoading } = useDashboardData(token);
+
+  // Derive lesson schedule and school name from DB settings (with hardcoded fallback)
+  const lessonSchedule = useMemo(() => {
+    try {
+      if (systemSettings?.lesson_schedule) {
+        const parsed = JSON.parse(systemSettings.lesson_schedule);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) { /* ignore parse error, use default */ }
+    return DEFAULT_LESSON_SCHEDULE;
+  }, [systemSettings?.lesson_schedule]);
+
+  const schoolName = systemSettings?.school_name || "MS Weissenbach Telfs";
 
   // Sync Query Data to Local State for Real-Time Updates
   useEffect(() => {
@@ -271,8 +283,8 @@ export default function TeacherDashboard() {
       let label = "Pause / Vor Unterricht";
       let nextTargetMinutes = -1;
 
-      for (let i = 0; i < LESSON_SCHEDULE.length; i++) {
-        const lesson = LESSON_SCHEDULE[i];
+      for (let i = 0; i < lessonSchedule.length; i++) {
+        const lesson = lessonSchedule[i];
         const startM = parseTime(lesson.start);
         const endM = parseTime(lesson.end);
 
@@ -287,7 +299,7 @@ export default function TeacherDashboard() {
         }
       }
 
-      if (currentMinutes >= parseTime(LESSON_SCHEDULE[LESSON_SCHEDULE.length - 1].end)) {
+      if (lessonSchedule.length > 0 && currentMinutes >= parseTime(lessonSchedule[lessonSchedule.length - 1].end)) {
         label = "Unterrichtsende";
       }
 
@@ -303,7 +315,7 @@ export default function TeacherDashboard() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [lessonSchedule]);
 
   // Auto-dismiss alertToast
   useEffect(() => {
@@ -436,75 +448,103 @@ export default function TeacherDashboard() {
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
       {/* Top Main Navigation Layer */}
-      <header className="bg-slate-900 border-b border-slate-800/80 px-4 md:px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-3 shrink-0 z-20">
-        {/* Left branding & Tabs */}
-        <div className="flex items-center justify-between w-full md:w-auto gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-sm">
+      <header className="bg-slate-900 border-b border-slate-800/80 px-3 md:px-6 py-2 md:py-3 flex flex-col md:flex-row items-center justify-between gap-2 md:gap-3 shrink-0 z-20">
+        {/* Row 1 (mobile): branding left, actions right */}
+        <div className="flex items-center justify-between w-full md:w-auto gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-9 h-9 min-w-[2.25rem] rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-sm text-sm">
               S2
             </div>
-            <div>
-              <span className="text-xs font-bold text-slate-400 block -mb-1">MS WEISSENBACH TELFS</span>
+            <div className="min-w-0">
+              <span className="text-xs font-bold text-slate-400 block -mb-1 truncate max-w-[160px]">{schoolName.toUpperCase()}</span>
               <span className="text-xs text-slate-500 flex items-center gap-1">
-                <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isConnected ? "bg-emerald-500" : "bg-rose-500"}`} />
                 {isConnected ? "Live WS" : "Getrennt"}
               </span>
             </div>
           </div>
 
-          {/* Navigation Pill tabs */}
-          <nav className="flex bg-slate-950 p-1 rounded-xl border border-slate-800/80">
-            {user?.role !== "pupil" && (
-              <button
-                onClick={() => setActiveTab("dashboard")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-                  }`}
+          {/* Right side actions — visible on all sizes */}
+          <div className="flex items-center gap-2 md:hidden">
+            {user?.role === "admin" && (
+              <Link
+                href="/admin"
+                className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs font-semibold px-2.5 py-2 rounded-lg transition-colors flex items-center gap-1"
               >
-                <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">🏫 Live</span> Raumbelegung
-              </button>
+                <Settings className="w-4 h-4" />
+              </Link>
             )}
-
-            <button
-              onClick={() => setActiveTab("gradebook")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-                }`}
+            <Link
+              href="/profile"
+              title="Benachrichtigungseinstellungen"
+              className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <GraduationCap className="w-3.5 h-3.5 text-cyan-400" />
-              <span className="hidden sm:inline">📈</span> Evaluationsbereich
-            </button>
-
+              <Bell className="w-4 h-4" />
+            </Link>
             <button
-              onClick={() => setActiveTab("notes")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-                }`}
+              onClick={() => { localStorage.clear(); router.replace("/login"); }}
+              title="Abmelden"
+              className="p-2 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
             >
-              <ClipboardList className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">📋</span> Notizen
+              <LogOut className="w-4 h-4" />
             </button>
-
-            <button
-              onClick={() => setActiveTab("help")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-                }`}
-            >
-              <span className="text-indigo-400">🙋</span> Live-Hilfe
-            </button>
-
-            {user?.role === "pupil" && (
-              <button
-                onClick={() => setActiveTab("planner")}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${activeTab === "planner" ? "bg-slate-800 text-white shadow-xs font-bold" : "text-amber-500 hover:text-amber-400"
-                  }`}
-              >
-                <span className="hidden sm:inline">📅</span> Lernplaner
-              </button>
-            )}
-          </nav>
+          </div>
         </div>
 
+        {/* Navigation Pill tabs — horizontally scrollable on mobile */}
+        <nav className="flex bg-slate-950 p-1 rounded-xl border border-slate-800/80 w-full md:w-auto overflow-x-auto scrollbar-none">
+          {user?.role !== "pupil" && (
+            <button
+              onClick={() => setActiveTab("dashboard")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "dashboard" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
+            >
+              <LayoutDashboard className="w-4 h-4 md:w-3.5 md:h-3.5 text-indigo-400 shrink-0" />
+              <span>Raumbelegung</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setActiveTab("gradebook")}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+              }`}
+          >
+            <GraduationCap className="w-4 h-4 md:w-3.5 md:h-3.5 text-cyan-400 shrink-0" />
+            <span>Evaluationsbereich</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("notes")}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+              }`}
+          >
+            <ClipboardList className="w-4 h-4 md:w-3.5 md:h-3.5 text-amber-400 shrink-0" />
+            <span>Notizen</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("help")}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+              }`}
+          >
+            <span className="text-indigo-400 shrink-0">🙋</span>
+            <span>Live-Hilfe</span>
+          </button>
+
+          {user?.role === "pupil" && (
+            <button
+              onClick={() => setActiveTab("planner")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "planner" ? "bg-slate-800 text-white shadow-xs font-bold" : "text-amber-500 hover:text-amber-400"
+                }`}
+            >
+              <span className="shrink-0">📅</span>
+              <span>Lernplaner</span>
+            </button>
+          )}
+        </nav>
+
         {/* Center Live Tickers */}
-        <div className="flex items-center gap-4 bg-slate-950/50 px-4 py-1.5 rounded-xl border border-slate-800/50">
+        <div className="hidden md:flex items-center gap-4 bg-slate-950/50 px-4 py-1.5 rounded-xl border border-slate-800/50">
           <div className="text-center sm:text-left">
             <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1 justify-center sm:justify-start">
               <Calendar className="w-3 h-3" />
@@ -528,8 +568,8 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* Right Admin Access / Account Actions */}
-        <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
+        {/* Right Admin Access / Account Actions — desktop only (mobile shown in row 1) */}
+        <div className="hidden md:flex items-center gap-2.5 w-full md:w-auto justify-end">
           {user?.role === "admin" && (
             <Link
               href="/admin"
@@ -539,7 +579,6 @@ export default function TeacherDashboard() {
               <span>Admin-Panel</span>
             </Link>
           )}
-
 
           <div className="text-right hidden xl:block">
             <span className="text-xs font-bold text-white block">{user?.full_name || "Lehrer"}</span>
@@ -553,7 +592,6 @@ export default function TeacherDashboard() {
           >
             <Bell className="w-4 h-4" />
           </Link>
-
 
           <OnboardingTip
             pageKey="dashboard"
@@ -606,7 +644,7 @@ export default function TeacherDashboard() {
                 <button
                   key={c.id}
                   onClick={() => setSelectedClass(c.name)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${selectedClass === c.name
+                  className={`px-3 py-2 min-h-[2.5rem] rounded-lg text-xs font-bold transition-all ${selectedClass === c.name
                       ? "bg-indigo-600 text-white shadow-xs"
                       : "bg-slate-950 text-slate-400 hover:text-slate-200 border border-slate-800"
                     }`}
@@ -618,7 +656,7 @@ export default function TeacherDashboard() {
 
             <button
               onClick={handleManualResetLesson}
-              className="flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+              className="flex items-center gap-1.5 bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 px-3 py-2 min-h-[2.5rem] rounded-lg text-xs font-medium transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
               <span>Stunde beenden / Reset</span>
@@ -627,7 +665,7 @@ export default function TeacherDashboard() {
 
           {/* DndKit Orchestration Grid */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 flex-1">
               {rooms.map((room) => {
                 const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut"].includes(room.name);
 

@@ -98,6 +98,18 @@ pool.query(`
     notify_system BOOLEAN DEFAULT TRUE
   );
 
+  CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  INSERT INTO system_settings (key, value) VALUES
+    ('school_name', 'MS Weissenbach Telfs'),
+    ('lesson_boundaries', '{"07:55":1,"08:50":2,"09:45":3,"10:50":4,"11:45":5,"12:40":6,"13:35":7,"14:30":8,"15:25":9,"16:20":10,"18:00":10}'),
+    ('lesson_schedule', '[{"nr":1,"start":"07:55","end":"08:45"},{"nr":2,"start":"08:50","end":"09:40"},{"nr":3,"start":"09:45","end":"10:35"},{"nr":4,"start":"10:50","end":"11:40"},{"nr":5,"start":"11:45","end":"12:35"},{"nr":6,"start":"12:40","end":"13:30"},{"nr":7,"start":"13:35","end":"14:25"},{"nr":8,"start":"14:30","end":"15:20"},{"nr":9,"start":"15:25","end":"16:15"},{"nr":10,"start":"16:20","end":"17:10"}]')
+  ON CONFLICT (key) DO NOTHING;
+
   -- Seed base trigger function dynamically if not present
   CREATE OR REPLACE FUNCTION create_default_preferences()
   RETURNS TRIGGER AS $$
@@ -150,8 +162,19 @@ const setupLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// High-throughput limiter for endpoints polled by many users simultaneously
+// (e.g. /api/state fetched by all 370 users on page load / tab-focus).
+// 500 requests per 15 minutes per IP is generous enough for a school NAT.
+const stateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 500,
+  message: { error: 'Zu viele Anfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // Export middleware for route files
-module.exports = { authenticateToken, pool, io, loginLimiter, setupLimiter };
+module.exports = { authenticateToken, pool, io, loginLimiter, setupLimiter, stateLimiter };
 
 // Socket.IO authentication and setup
 io.use((socket, next) => {
@@ -299,29 +322,51 @@ const triggerDailyBackup = async (slot) => {
 };
 
 // Scheduler Loop runs every 10 seconds
+// Lesson boundaries are loaded from system_settings DB table (with hardcoded fallback)
+const DEFAULT_LESSON_BOUNDARIES = {
+  '07:55': 1,
+  '08:50': 2,
+  '09:45': 3,
+  '10:50': 4,
+  '11:45': 5,
+  '12:40': 6,
+  '13:35': 7,
+  '14:30': 8,
+  '15:25': 9,
+  '16:20': 10,
+  '18:00': 10
+};
+
+let cachedLessonBoundaries = DEFAULT_LESSON_BOUNDARIES;
+
+// Refresh boundaries cache every 5 minutes from system_settings
+const refreshLessonBoundaries = async () => {
+  try {
+    const res = await pool.query("SELECT value FROM system_settings WHERE key = 'lesson_boundaries'");
+    if (res.rows.length > 0) {
+      const parsed = JSON.parse(res.rows[0].value);
+      if (parsed && typeof parsed === 'object') {
+        cachedLessonBoundaries = parsed;
+      }
+    }
+  } catch (err) {
+    logger.warn('[Scheduler]', 'Could not refresh lesson boundaries from DB, using last known config', err.message);
+  }
+};
+
+// Initial load and periodic refresh
+refreshLessonBoundaries();
+setInterval(refreshLessonBoundaries, 5 * 60 * 1000);
+
 setInterval(() => {
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const timeStr = `${hours}:${minutes}`;
 
-  // Lesson boundary triggers
-  const boundaries = {
-    '07:55': 1,
-    '08:50': 2,
-    '09:45': 3,
-    '10:50': 4,
-    '11:45': 5,
-    '12:40': 6,
-    '13:35': 7,
-    '14:30': 8,
-    '15:25': 9,
-    '16:20': 10,
-    '18:00': 10 // EOD cleanup boundary
-  };
-
-  if (boundaries[timeStr] !== undefined) {
-    triggerLessonBoundaryReset(boundaries[timeStr]);
+  // Lesson boundary triggers (driven by DB-backed config)
+  if (cachedLessonBoundaries[timeStr] !== undefined) {
+    triggerLessonBoundaryReset(cachedLessonBoundaries[timeStr]);
   }
 
   // Backup triggers: 05:00 and 17:00 (every 12 hours)
