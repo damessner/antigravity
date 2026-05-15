@@ -91,8 +91,16 @@ try {
             Write-Host "`n>> Rebuilding Docker containers to apply updates..." -ForegroundColor White
             docker compose build 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
             
-            Write-Host "`n [SUCCESS] Update complete! Run '02_launch_system.bat' to start." -ForegroundColor Green
+            Write-Host "`n [SUCCESS] Update complete!" -ForegroundColor Green
+            $doLaunch = Read-Host " Would you like to launch the system now? (y/N)"
+            if ($doLaunch -match "^[Yy]$") {
+                Write-Host ">> Starting system..." -ForegroundColor White
+                Start-Process "02_launch_system.bat"
+            } else {
+                Write-Host ">> Update finished. Run '02_launch_system.bat' manually when ready." -ForegroundColor Gray
+            }
         }
+
     } elseif ($remote -eq $base) {
         Write-Host "`n [INFO] You are ahead of the official version (Local Commits)." -ForegroundColor Cyan
     } else {
