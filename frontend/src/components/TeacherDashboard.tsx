@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+
 import { io, Socket } from "socket.io-client";
 import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -529,27 +531,29 @@ export default function TeacherDashboard() {
         {/* Right Admin Access / Account Actions */}
         <div className="flex items-center gap-2.5 w-full md:w-auto justify-end">
           {user?.role === "admin" && (
-            <button
-              onClick={() => router.push("/admin")}
+            <Link
+              href="/admin"
               className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
             >
               <Settings className="w-3.5 h-3.5" />
               <span>Admin-Panel</span>
-            </button>
+            </Link>
           )}
+
 
           <div className="text-right hidden xl:block">
             <span className="text-xs font-bold text-white block">{user?.full_name || "Lehrer"}</span>
             <span className="text-[10px] text-slate-400 uppercase block">{user?.role}</span>
           </div>
 
-          <button
-            onClick={() => router.push("/profile")}
+          <Link
+            href="/profile"
             title="Benachrichtigungseinstellungen & Push"
             className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 rounded-lg transition-colors"
           >
             <Bell className="w-4 h-4" />
-          </button>
+          </Link>
+
 
           <OnboardingTip
             pageKey="dashboard"
