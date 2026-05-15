@@ -80,10 +80,10 @@ export function useWeightBalancer(initialCategories: Category[], onSaveDebounced
       if (discrepancy !== 0) {
         const candidateOthers = updated.filter(c => !c.isLocked && c.id !== targetId);
         if (candidateOthers.length > 0) {
-          // Sort descending to give delta to largest category
-          candidateOthers.sort((a, b) => b.weight_percentage - a.weight_percentage);
-          const absorbTargetId = candidateOthers[0].id;
-          updated = updated.map(c => c.id === absorbTargetId ? { ...c, weight_percentage: Math.max(0, c.weight_percentage + discrepancy) } : c);
+          const absorbTarget = candidateOthers.reduce((best, current) => (
+            current.weight_percentage > best.weight_percentage ? current : best
+          ), candidateOthers[0]);
+          updated = updated.map(c => c.id === absorbTarget.id ? { ...c, weight_percentage: Math.max(0, c.weight_percentage + discrepancy) } : c);
         } else {
           // Fallback to target slider itself
           updated = updated.map(c => c.id === targetId ? { ...c, weight_percentage: Math.max(0, c.weight_percentage + discrepancy) } : c);
