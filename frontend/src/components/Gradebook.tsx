@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Pupil, SchoolClass, Subject, Category, Grade, User } from "@/types";
+import { Pupil, SchoolClass, Subject, Category, Grade, User, ColumnMetadata } from "@/types";
 import { getApiUrl } from "@/utils/apiDiscovery";
 import { fetchAuth } from "@/utils/fetchAuth";
-import { ScaleType, getPlaceholderForScale } from "./gradeUtils";
+import { ScaleType } from "./gradeUtils";
 import { useWeightBalancer } from "./useWeightBalancer";
 
 // Modular Sub-components
@@ -21,7 +21,21 @@ import { useGradebookMutations } from "@/hooks/useGradebookMutations";
 interface GradebookProps {
   classes: SchoolClass[];
   pupils: Pupil[];
-  socket?: any;
+  socket?: unknown;
+}
+
+interface GradebookColumn {
+  category: Category;
+  assessmentName: string;
+  isCatLastCol: boolean;
+  colSubset: Grade[];
+  metadata?: ColumnMetadata;
+}
+
+interface EditMetadataState {
+  categoryId: number;
+  oldName: string;
+  metadata?: ColumnMetadata;
 }
 
 export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
@@ -53,7 +67,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [showAddAssessment, setShowAddAssessment] = useState<{ categoryId: number } | null>(null);
   const [newAssessmentName, setNewAssessmentName] = useState("");
   const [editingCol, setEditingCol] = useState<{ categoryId: number; oldName: string; newName: string } | null>(null);
-  const [showEditMetadataModal, setShowEditMetadataModal] = useState<any>(null);
+  const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
+  const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const classPupils = useMemo(() => {
     const targetClass = classes.find((c) => Number(c.id) === Number(selectedClassId));
@@ -77,12 +92,21 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   }, [classes]);
 
   useEffect(() => {
-    if (subjects.length > 0 && !selectedSubject) {
-      const savedSubjId = localStorage.getItem(`saved_subject_${selectedClassId}`);
-      const targetSubj = subjects.find((s: any) => Number(s.id) === Number(savedSubjId)) || subjects[0];
-      setSelectedSubject(targetSubj);
+    if (subjects.length === 0) {
+      setSelectedSubject(null);
+      return;
     }
+    const currentIsStillValid = selectedSubject && subjects.some((s) => Number(s.id) === Number(selectedSubject.id));
+    if (currentIsStillValid) return;
+    const savedSubjId = localStorage.getItem(`saved_subject_${selectedClassId}`);
+    const targetSubj = subjects.find((s) => Number(s.id) === Number(savedSubjId)) || subjects[0];
+    setSelectedSubject(targetSubj);
   }, [subjects, selectedClassId, selectedSubject]);
+
+  useEffect(() => {
+    if (!selectedSubject) return;
+    localStorage.setItem(`saved_subject_${selectedClassId}`, String(selectedSubject.id));
+  }, [selectedClassId, selectedSubject]);
 
   const isOwner = useMemo(() => {
     if (!currentUser || !selectedSubject) return false;
@@ -92,27 +116,34 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   }, [currentUser, selectedSubject]);
 
   // Debounced weight saving
-  const saveWeightsDebounced = useCallback((updatedCats: any[]) => {
-    mutations.updateWeights.mutate(updatedCats.map(c => ({ 
+  const saveWeightsDebounced = useCallback((updatedCats: Category[]) => {
+    if (weightsDebounceRef.current) clearTimeout(weightsDebounceRef.current);
+    weightsDebounceRef.current = setTimeout(() => {
+      mutations.updateWeights.mutate(updatedCats.map(c => ({ 
       id: c.id, 
       weight_percentage: c.weight_percentage 
     })));
+    }, 250);
   }, [mutations.updateWeights]);
 
-  const { categories: balancedCategories, handleWeightChange, toggleLock } = useWeightBalancer(categories as any, saveWeightsDebounced);
+  useEffect(() => () => {
+    if (weightsDebounceRef.current) clearTimeout(weightsDebounceRef.current);
+  }, []);
 
-  const allColumns = useMemo(() => {
-    const list: any[] = [];
+  const { categories: balancedCategories, handleWeightChange, toggleLock } = useWeightBalancer(categories, saveWeightsDebounced);
+
+  const allColumns = useMemo<GradebookColumn[]>(() => {
+    const list: GradebookColumn[] = [];
     balancedCategories.forEach((cat) => {
       const subset = grades.filter((g) => Number(g.category_id) === Number(cat.id));
       const uniqueNames = Array.from(new Set(subset.map((g) => g.assessment_name || "Note")));
       const metadataRows = Array.isArray(cat.column_metadata) ? cat.column_metadata : [];
-      const metadataNames = metadataRows.map((m: any) => m.name);
+      const metadataNames = metadataRows.map((m) => m.name);
       const names = uniqueNames.length > 0 ? uniqueNames : ["Bewertung 1"];
       const mergedNames = Array.from(new Set([...names, ...metadataNames]));
 
       mergedNames.forEach((assName, idx) => {
-        const metadata = metadataRows.find((m: any) => m.name === assName);
+        const metadata = metadataRows.find((m) => m.name === assName);
         list.push({
           category: cat,
           assessmentName: assName,
@@ -167,8 +198,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       setShowAddSubject(false);
       setSelectedSubject(data);
       toast.success("Fach registriert");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error("Fach konnte nicht erstellt werden", {
+        description: err instanceof Error ? err.message : "Bitte Eingaben prüfen und erneut versuchen."
+      });
     }
   };
 
@@ -176,9 +209,13 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     if (!selectedSubject || !isOwner) return;
     try {
       const { data } = await fetchAuth(`/api/gradebook/subject/${selectedSubject.id}/toggle-projection`, { method: "PUT" });
-      setSelectedSubject((prev: any) => ({ ...prev, projection_visible: data.projection_visible }));
+      setSelectedSubject((prev) => prev ? ({ ...prev, projection_visible: Boolean(data.projection_visible) }) : prev);
       toast.success(`Projektion ${data.projection_visible ? "aktiviert" : "deaktiviert"}`);
-    } catch (e) {}
+    } catch (err: unknown) {
+      toast.error("Projektion konnte nicht umgeschaltet werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
   };
 
   const handleCreateCategory = (e: React.FormEvent) => {
@@ -194,7 +231,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       await fetchAuth(`/api/gradebook/category/${catId}`, { method: "DELETE" });
       queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
       toast.info("Kategorie gelöscht");
-    } catch (e) {}
+    } catch (err: unknown) {
+      toast.error("Kategorie konnte nicht gelöscht werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
   };
 
   const handleAddAssessment = async (e: React.FormEvent) => {
@@ -211,8 +252,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
       setShowAddAssessment(null);
       setNewAssessmentName("");
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error("Bewertung konnte nicht hinzugefügt werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     }
   };
 
@@ -225,7 +268,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       });
       queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
       toast.success("Skala geändert");
-    } catch (e) {}
+    } catch (err: unknown) {
+      toast.error("Skala konnte nicht geändert werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
   };
 
   const handleToggleColumnVisibility = async (catId: number, assName: string) => {
@@ -241,7 +288,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       });
       queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
       toast.success(`Spalte ${targetVis ? "sichtbar" : "ausgeblendet"}`);
-    } catch (e) {}
+    } catch (err: unknown) {
+      toast.error("Spaltensichtbarkeit konnte nicht geändert werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
   };
 
   const handleExport = async () => {
@@ -260,8 +311,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       link.download = `Notenliste_${selectedSubject.abbreviation}_${new Date().toISOString().split("T")[0]}.xlsx`;
       link.click();
       URL.revokeObjectURL(url);
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error("Export fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     }
   };
 

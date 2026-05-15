@@ -56,6 +56,19 @@ export interface Subject {
   projection_visible?: boolean;
 }
 
+export interface SubjectTag {
+  id: number;
+  subject_id: number;
+  name: string;
+  color?: string;
+}
+
+export interface ColumnMetadata {
+  name: string;
+  info_text?: string | null;
+  deadline?: string | null;
+}
+
 export interface Category {
   id: number;
   subject_id: number;
@@ -64,7 +77,7 @@ export interface Category {
   scale_type: string;
   is_self_directed: boolean;
   isLocked?: boolean;
-  column_metadata?: any[];
+  column_metadata?: ColumnMetadata[];
 }
 
 export interface Grade {
@@ -75,4 +88,17 @@ export interface Grade {
   grade_value: string | number | null;
   is_visible: boolean;
   created_at?: string;
+}
+
+export interface PupilTag {
+  id: number;
+  pupil_id: number;
+  tag: string;
+  color?: string;
+}
+
+export interface GradebookMatrix {
+  categories: Category[];
+  grades: Grade[];
+  pupil_tags: PupilTag[];
 }

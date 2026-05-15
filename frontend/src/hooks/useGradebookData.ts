@@ -1,10 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { fetchAuth } from "@/utils/fetchAuth";
-import { Subject, Category, Grade } from "@/types";
+import { Subject, GradebookMatrix } from "@/types";
 
 export function useGradebookData(classId: number | null) {
-  const queryClient = useQueryClient();
-
   const subjectsQuery = useQuery({
     queryKey: ["subjects", classId],
     queryFn: async () => {
@@ -22,11 +20,11 @@ export function useGradebookData(classId: number | null) {
 }
 
 export function useGradebookMatrix(subjectId: number | null) {
-  return useQuery({
+  return useQuery<GradebookMatrix>({
     queryKey: ["matrix", subjectId],
     queryFn: async () => {
       const { data } = await fetchAuth(`/api/gradebook/matrix/${subjectId}`);
-      return data as { categories: Category[]; grades: Grade[]; pupil_tags: any[] };
+      return data as GradebookMatrix;
     },
     enabled: !!subjectId,
   });

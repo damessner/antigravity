@@ -60,7 +60,7 @@ export function GradebookHeader({
               <button
                 key={s.id}
                 onClick={() => onSubjectSelect(s)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                className={`px-3 py-2 rounded-lg text-[11px] font-bold transition-all touch-manipulation ${
                   selectedSubject?.id === s.id
                     ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
                     : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
@@ -71,7 +71,7 @@ export function GradebookHeader({
             ))}
             <button
               onClick={onAddSubject}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-slate-800 transition-all"
+              className="p-2 rounded-lg text-slate-500 hover:text-indigo-400 hover:bg-slate-800 transition-all touch-manipulation"
               title="Neues Fach registrieren"
             >
               <Plus className="w-4 h-4" />

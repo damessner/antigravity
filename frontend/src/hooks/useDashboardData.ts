@@ -1,14 +1,14 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getApiUrl } from "@/utils/apiDiscovery";
-import { Pupil, Room, SchoolClass } from "@/types";
+import { Pupil, Room, SchoolClass, Subject, SubjectTag, User } from "@/types";
 
 interface DashboardState {
   rooms: Room[];
   pupils: Pupil[];
-  subjects: any[];
-  subject_tags: any[];
+  subjects: Subject[];
+  subject_tags: SubjectTag[];
 }
 
 const fetchDashboardState = async (token: string): Promise<DashboardState> => {
@@ -52,7 +52,7 @@ export function useDashboardData(token: string | null) {
     queryFn: async () => {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
-      return res.json();
+      return res.json() as Promise<User[]>;
     },
     enabled: !!token,
   });
@@ -62,7 +62,7 @@ export function useDashboardData(token: string | null) {
     queryFn: async () => {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/pupils`, { headers: { Authorization: `Bearer ${token}` } });
-      return res.json();
+      return res.json() as Promise<Pupil[]>;
     },
     enabled: !!token,
   });
@@ -72,7 +72,7 @@ export function useDashboardData(token: string | null) {
     queryFn: async () => {
       const apiUrl = getApiUrl();
       const res = await fetch(`${apiUrl}/api/setup/rooms`, { headers: { Authorization: `Bearer ${token}` } });
-      return res.json();
+      return res.json() as Promise<Room[]>;
     },
     enabled: !!token,
   });

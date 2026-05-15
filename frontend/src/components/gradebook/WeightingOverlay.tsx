@@ -2,9 +2,10 @@
 
 import React from "react";
 import { Lock } from "lucide-react";
+import { Category } from "@/types";
 
 interface WeightingOverlayProps {
-  categories: any[];
+  categories: Category[];
   onWeightChange: (id: number, val: number) => void;
   onToggleLock: (id: number) => void;
   onClose: () => void;
@@ -46,10 +47,10 @@ export function WeightingOverlay({
               <button
                 type="button"
                 onClick={() => onToggleLock(c.id)}
-                className={`p-0.5 rounded transition-colors ${c.isLocked ? "text-amber-400 bg-amber-500/10" : "text-slate-600 hover:text-slate-400"}`}
+                className={`p-2 rounded transition-colors ${c.isLocked ? "text-amber-400 bg-amber-500/10" : "text-slate-600 hover:text-slate-400"}`}
                 title={c.isLocked ? "Gesperrt (Ausgeschlossen vom Auto-Balancing)" : "Klick zum Sperren der Gewichtung"}
               >
-                <Lock className="w-2.5 h-2.5" />
+                <Lock className="w-4 h-4" />
               </button>
             </div>
 

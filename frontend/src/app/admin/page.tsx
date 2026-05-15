@@ -18,6 +18,12 @@ import { User, SchoolClass, Pupil, Room } from "@/types";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { useAdminMutations } from "@/hooks/useAdminMutations";
 
+interface SavedBackupFile {
+  filename: string;
+  created_at?: string;
+  size?: number;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms">("users");
@@ -25,7 +31,7 @@ export default function AdminPage() {
   const { users, classes, pupils, rooms, isLoading: dataLoading, refetch } = useDashboardData(typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const mutations = useAdminMutations();
 
-  const [savedBackups, setSavedBackups] = useState<any[]>([]);
+  const [savedBackups, setSavedBackups] = useState<SavedBackupFile[]>([]);
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [editingRoomName, setEditingRoomName] = useState("");
   const [newRoomName, setNewRoomName] = useState("");
@@ -44,7 +50,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (classes.length > 0 && !newPupil.class_id) {
-      setNewPupil((prev: any) => ({ ...prev, class_id: String(classes[0].id) }));
+      setNewPupil((prev) => ({ ...prev, class_id: String(classes[0].id) }));
     }
   }, [classes]);
 
@@ -133,7 +139,7 @@ export default function AdminPage() {
       full_name: newPupil.full_name,
       class_id: Number(newPupil.class_id),
     }, {
-      onSuccess: () => setNewPupil((prev: any) => ({ ...prev, full_name: "" }))
+      onSuccess: () => setNewPupil((prev) => ({ ...prev, full_name: "" }))
     });
   };
 

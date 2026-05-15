@@ -3,12 +3,27 @@ import { toast } from "sonner";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { User, SchoolClass, Pupil, Room } from "@/types";
 
+interface CreateUserInput {
+  username: string;
+  full_name: string;
+  role: string;
+}
+
+interface CreatePupilInput {
+  full_name: string;
+  class_id: number;
+}
+
+interface RollbackContext<T> {
+  previousData?: T[];
+}
+
 export function useAdminMutations() {
   const queryClient = useQueryClient();
 
   // --- User Mutations ---
   const createUser = useMutation({
-    mutationFn: async (user: any) => {
+    mutationFn: async (user: CreateUserInput) => {
       const { data } = await fetchAuth("/api/users", { method: "POST", body: JSON.stringify(user) });
       return data;
     },
@@ -19,7 +34,9 @@ export function useAdminMutations() {
       });
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
-    onError: (err: any) => toast.error("Fehler", { description: err.message }),
+    onError: (err) => toast.error("Benutzer konnte nicht erstellt werden", {
+      description: err instanceof Error ? err.message : "Bitte Eingaben prüfen und erneut versuchen."
+    }),
   });
 
   const deleteUser = useMutation({
@@ -30,11 +47,15 @@ export function useAdminMutations() {
       await queryClient.cancelQueries({ queryKey: ["admin", "users"] });
       const previousUsers = queryClient.getQueryData<User[]>(["admin", "users"]);
       queryClient.setQueryData(["admin", "users"], (old: User[] = []) => old.filter(u => u.id !== id));
-      return { previousUsers };
+      return { previousData: previousUsers } as RollbackContext<User>;
     },
-    onError: (err, id, context: any) => {
-      queryClient.setQueryData(["admin", "users"], context.previousUsers);
-      toast.error("Löschen fehlgeschlagen", { description: err.message });
+    onError: (err, id, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["admin", "users"], context.previousData);
+      }
+      toast.error("Löschen fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin", "users"] }),
   });
@@ -46,23 +67,28 @@ export function useAdminMutations() {
       return data;
     },
     onMutate: async (name) => {
-      await queryClient.cancelQueries({ queryKey: ["admin", "classes"] });
-      const previousClasses = queryClient.getQueryData<SchoolClass[]>(["admin", "classes"]);
-      queryClient.setQueryData(["admin", "classes"], (old: SchoolClass[] = []) => [
+      await queryClient.cancelQueries({ queryKey: ["classes"] });
+      const previousClasses = queryClient.getQueryData<SchoolClass[]>(["classes"]);
+      queryClient.setQueryData(["classes"], (old: SchoolClass[] = []) => [
         ...old,
         { id: Math.random(), name } // Optimistic temp id
       ]);
-      return { previousClasses };
+      return { previousData: previousClasses } as RollbackContext<SchoolClass>;
     },
-    onError: (err, name, context: any) => {
-      queryClient.setQueryData(["admin", "classes"], context.previousClasses);
+    onError: (err, name, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["classes"], context.previousData);
+      }
+      toast.error("Klasse konnte nicht erstellt werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin", "classes"] }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["classes"] }),
   });
 
   // --- Pupil Mutations ---
   const createPupil = useMutation({
-    mutationFn: async (pupil: any) => {
+    mutationFn: async (pupil: CreatePupilInput) => {
       const { data } = await fetchAuth("/api/pupils", { method: "POST", body: JSON.stringify(pupil) });
       return data;
     },
@@ -83,10 +109,15 @@ export function useAdminMutations() {
       await queryClient.cancelQueries({ queryKey: ["admin", "pupils"] });
       const previousPupils = queryClient.getQueryData<Pupil[]>(["admin", "pupils"]);
       queryClient.setQueryData(["admin", "pupils"], (old: Pupil[] = []) => old.filter(p => p.id !== id));
-      return { previousPupils };
+      return { previousData: previousPupils } as RollbackContext<Pupil>;
     },
-    onError: (err, id, context: any) => {
-      queryClient.setQueryData(["admin", "pupils"], context.previousPupils);
+    onError: (err, id, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["admin", "pupils"], context.previousData);
+      }
+      toast.error("Schüler konnte nicht gelöscht werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin", "pupils"] }),
   });
@@ -104,10 +135,15 @@ export function useAdminMutations() {
         ...old,
         { id: Math.random(), name }
       ]);
-      return { previousRooms };
+      return { previousData: previousRooms } as RollbackContext<Room>;
     },
-    onError: (err, name, context: any) => {
-      queryClient.setQueryData(["admin", "rooms"], context.previousRooms);
+    onError: (err, name, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(["admin", "rooms"], context.previousData);
+      }
+      toast.error("Raum konnte nicht erstellt werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["admin", "rooms"] }),
   });
