@@ -7,9 +7,19 @@
 
 $ErrorActionPreference = "Continue"
 
+# Resolve script directory and elevate if needed
 $ScriptDir = $PSScriptRoot
 if (-not $ScriptDir -and $PSCommandPath) { $ScriptDir = Split-Path -Parent $PSCommandPath }
 if (-not $ScriptDir) { $ScriptDir = Get-Location }
+
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+    $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { Join-Path (Get-Location) "check_requirements.ps1" }
+    Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+    exit 0
+}
+
 if ($ScriptDir) { Set-Location -LiteralPath $ScriptDir }
 
 $PassCount = 0

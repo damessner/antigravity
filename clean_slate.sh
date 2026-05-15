@@ -22,6 +22,13 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Root check for Linux
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ "$EUID" -ne 0 ]; then
+  echo "This script might need root privileges for Docker operations."
+  echo "Consider running with: sudo ./clean_slate.sh"
+  echo ""
+fi
+
 clear
 echo "=================================================="
 echo "🏫 School Management System — Clean Slate Utility"
@@ -173,7 +180,7 @@ if [ -n "$BACKUP_FILE" ] && [ "$backend_ready" = true ]; then
   mkdir -p "$SCRIPT_DIR/school_data/backups"
   cp "$BACKUP_FILE" "$SCRIPT_DIR/school_data/backups/$(basename "$BACKUP_FILE")"
 
-  RESTORE_TMP="$(mktemp /tmp/restore_payload.XXXXXX.json)"
+  RESTORE_TMP="$SCRIPT_DIR/restore_payload_tmp.json"
   printf '{"confirm":"RESTORE","data":%s}' "$(cat "$BACKUP_FILE")" > "$RESTORE_TMP"
   
   set +e

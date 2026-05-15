@@ -43,6 +43,15 @@ Write-Host "This will stop and restart all containers cleanly." -ForegroundColor
 Write-Host "Existing data is preserved. No backup is performed." -ForegroundColor Yellow
 Write-Host ""
 
+$proceed = Read-Host "Proceed with restart? (y/N)"
+if ($proceed -notmatch "^[Yy]$") {
+    Write-Host "`nOperation cancelled by user." -ForegroundColor Yellow
+    Write-Host "Press any key to exit..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 0
+}
+Write-Host ""
+
 # ── Preflight: Docker check ───────────────────────────────────────────────────
 Step "Checking Docker daemon..."
 $dockerInfo = docker info 2>&1

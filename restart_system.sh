@@ -36,8 +36,24 @@ info() { echo -e "   ${GRAY}ℹ️  $1${NC}"; }
 clear
 print_header "🏫 School Management System — Restart Utility"
 
+# Root check for Linux
+if [[ "$OSTYPE" == "linux-gnu"* ]] && [ "$EUID" -ne 0 ]; then
+  echo "This script might need root privileges for Docker operations."
+  echo "Consider running with: sudo ./restart_system.sh"
+  echo ""
+fi
+
 echo -e "${YELLOW}This will stop and restart all containers cleanly.${NC}"
 echo -e "${YELLOW}Existing data is preserved. No backup is performed.${NC}"
+echo ""
+
+read -p "⚠️  Proceed with restart? (y/N): " confirm_restart
+if [[ ! "$confirm_restart" =~ ^[Yy]$ ]]; then
+  echo ""
+  echo "Operation cancelled by user."
+  read -p "Press Enter to exit..."
+  exit 0
+fi
 echo ""
 
 # ── Preflight: Docker check ───────────────────────────────────────────────────
