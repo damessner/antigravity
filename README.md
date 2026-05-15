@@ -26,34 +26,29 @@ After deploying, log in using the following administrative credentials:
 
 ## 🚀 Quickstart & Deployment
 
-### Windows (One-Click)
-Simply double-click the numbered files in order:
-1. **`01_initiate_system.bat`**: Verify system requirements and Docker status. Run this first or if you have issues.
-2. **`02_launch_system.bat`**: Start, restart, or manage the running platform. This is your main daily tool.
+### For New Users (One-Click Installation)
+Open PowerShell on your Windows computer and paste the following command to download and set up the system automatically:
 
-### Standard Linux / Proxmox
-```bash
-docker compose up -d
+```powershell
+irm https://raw.githubusercontent.com/damessner/antigravity/main/scripts/setup_new_installation.ps1 | iex
 ```
-The Frontend becomes accessible at `http://<your-server-ip>:3000`.
 
-### Unraid Deployment
-1. Place the repository in your appdata share.
-2. Load **`scripts/docker-compose.unraid.yml`** inside the Unraid Compose Manager.
-3. Launch the stack.
+### Manual Installation (Windows)
+Simply double-click the numbered files in order:
+1. **`01_initiate_system.bat`**: Verify system requirements and Docker status.
+2. **`02_launch_system.bat`**: Start the platform.
 
 ---
 
 ## 🛠️ Management Tools
 
-The system is now simplified into three main actions in the root folder:
+The system is organized into five main actions to keep your environment healthy:
 
-- **`01_initiate_system.bat`**: Verify Docker and project health.
-- **`02_launch_system.bat`**: Start the system. If it's already running, it will offer to **Restart** (for a clean refresh) or **Stop** the services.
+- **`00_update_system.bat`**: Check GitHub for the latest version and update automatically.
+- **`01_initiate_system.bat`**: Verify Docker status and project file integrity.
+- **`02_launch_system.bat`**: Your main daily tool. Starts/Restarts/Stops the services.
 - **`03_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
 - **`04_system_health_monitor.bat`**: View live logs and resource usage (CPU/RAM) in real-time.
-
-*Technical implementation scripts (.ps1 and .sh) are located in the `scripts/` subdirectory to keep the workspace clean.*
 
 ---
 
