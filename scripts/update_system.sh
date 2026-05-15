@@ -57,7 +57,12 @@ elif [ "$current_remote" != "$REPO_URL" ] && [ "$current_remote" != "${REPO_URL}
     fi
 fi
 
-# 4. Check for local changes
+# 4. Global Git Fixes for Unraid/Docker
+# Ignore file permission changes (nobody:users causes 'fake' changes)
+git config core.filemode false
+
+# 5. Check for local changes
+
 if [ -n "$(git status --porcelain)" ]; then
     echo -e "${YELLOW} [WARN] You have local changes in the folder.${NC}"
     echo -e "${GRAY} Updating might overwrite your changes or cause conflicts.${NC}"

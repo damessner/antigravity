@@ -35,13 +35,13 @@ echo -e "${WHITE}>> Preparing Appdata folder...${NC}"
 git config --global --add safe.directory "$INSTALL_PATH"
 
 if [ -d "$INSTALL_PATH" ]; then
-
     echo -e "${YELLOW} [INFO] Folder already exists. Updating existing installation...${NC}"
-    cd "$INSTALL_PATH" && git pull origin main
+    cd "$INSTALL_PATH" && git config core.filemode false && git pull origin main
 else
     mkdir -p "$INSTALL_PATH"
     echo -e "${WHITE}>> Cloning Antigravity to $INSTALL_PATH...${NC}"
     git clone $REPO_URL "$INSTALL_PATH"
+    cd "$INSTALL_PATH" && git config core.filemode false
 fi
 
 # 3. Fix Permissions (Unraid Standard)

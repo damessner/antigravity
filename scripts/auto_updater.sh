@@ -17,8 +17,10 @@ log() {
 }
 
 cd "$INSTALL_PATH"
+git config core.filemode false
 
 # 0. Check for Manual Trigger from Admin Panel
+
 TRIGGER_FILE="$INSTALL_PATH/school_data/UPDATE_PENDING"
 if [ -f "$TRIGGER_FILE" ]; then
     log "Manual update triggered from Admin Panel!"
@@ -58,6 +60,7 @@ log "Backup complete."
 
 # 3. Pull Changes
 log "Pulling latest changes from GitHub..."
+git config core.filemode false
 git pull origin main >> "$LOG_FILE" 2>&1
 
 # 4. Rebuild & Restart
