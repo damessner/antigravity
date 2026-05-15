@@ -73,7 +73,14 @@ For Unraid users, run this command in your Unraid Terminal to automatically set 
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/unraid_install.sh)"
 ```
 
+### Android Pocket Server (Termux)
+You can even host the entire platform on an Android phone using **Termux**. Run this command inside the Termux app:
+```bash
+pkg install curl -y && bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/android_termux_setup.sh)"
+```
+
 ### Maintenance
+
 
 
 - **Update**: Run `./scripts/update_system.sh` to pull the latest changes and rebuild.

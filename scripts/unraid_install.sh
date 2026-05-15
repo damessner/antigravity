@@ -30,7 +30,12 @@ fi
 
 # 2. Create Appdata Folder
 echo -e "${WHITE}>> Preparing Appdata folder...${NC}"
+
+# Fix "dubious ownership" issues for Git on Unraid
+git config --global --add safe.directory "$INSTALL_PATH"
+
 if [ -d "$INSTALL_PATH" ]; then
+
     echo -e "${YELLOW} [INFO] Folder already exists. Updating existing installation...${NC}"
     cd "$INSTALL_PATH" && git pull origin main
 else
@@ -46,8 +51,15 @@ chmod -R 775 "$INSTALL_PATH"
 
 # 4. Integrate with Docker Compose Manager Plugin
 echo -e "${WHITE}>> Integrating with Compose Manager plugin...${NC}"
-if [ -d "/boot/config/plugins/docker.compose" ]; then
+# Check for common Unraid Compose Manager plugin paths
+if [ -d "/boot/config/plugins/docker.compose" ] || [ -d "/boot/config/plugins/compose.manager" ]; then
+    # Determine the actual path
+    if [ -d "/boot/config/plugins/compose.manager" ]; then
+        COMPOSE_PROJECT_PATH="/boot/config/plugins/compose.manager/projects/antigravity"
+    fi
+    
     mkdir -p "$COMPOSE_PROJECT_PATH"
+
     # Create the project file pointing to our appdata
     cp "$INSTALL_PATH/scripts/docker-compose.unraid.yml" "$COMPOSE_PROJECT_PATH/docker-compose.yml"
     echo -e "   ${GREEN}✅ Project registered in Unraid Docker tab.${NC}"
