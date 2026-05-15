@@ -58,10 +58,11 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:4000/api/setup/status || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+
 
   frontend:
     build:
@@ -74,7 +75,8 @@ services:
       - "3001:3000"
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
+
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ || exit 1"]
       interval: 30s
