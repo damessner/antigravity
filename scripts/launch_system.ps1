@@ -44,8 +44,8 @@ try {
     if (Test-Path ".git") {
         Write-Host ">> Checking for remote updates..." -ForegroundColor Gray
         git fetch --quiet origin main 2>$null
-        $local = git rev-parse @ 2>$null
-        $remote = git rev-parse @{u} 2>$null
+        $local = git rev-parse 'HEAD' 2>$null
+        $remote = git rev-parse 'origin/main' 2>$null
         if ($local -and $remote -and $local -ne $remote) {
             Write-Host "   [UPDATE AVAILABLE] A new version of the platform is ready on GitHub!" -ForegroundColor Green
             Write-Host "   -> Run '00_update_system.bat' to download and install." -ForegroundColor Yellow

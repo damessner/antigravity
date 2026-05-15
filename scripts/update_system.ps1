@@ -58,9 +58,9 @@ try {
     Write-Host ">> Checking for updates on GitHub..." -ForegroundColor White
     git fetch origin main 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
     
-    $local = git rev-parse @
-    $remote = git rev-parse @{u}
-    $base = git merge-base @ @{u}
+    $local = git rev-parse 'HEAD'
+    $remote = git rev-parse 'origin/main'
+    $base = git merge-base 'HEAD' 'origin/main'
 
     if ($local -eq $remote) {
         Write-Host "`n [OK] System is already up to date." -ForegroundColor Green
