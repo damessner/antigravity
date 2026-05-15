@@ -58,19 +58,6 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
   const matrixQuery = useGradebookMatrix(selectedSubject?.id || null);
   const { categories = [], grades = [], pupil_tags: matrixPupilTags = [] } = matrixQuery.data || {};
-  
-  // Rank Preview — teacher-only, loaded per selected subject
-  const rankPreviewQuery = useQuery<RankPreviewEntry[]>({
-    queryKey: ["rank-preview", selectedSubject?.id],
-    queryFn: async () => {
-      if (!selectedSubject) return [];
-      const { data } = await fetchAuth(`/api/gradebook/rank-preview/${selectedSubject.id}`);
-      return data as RankPreviewEntry[];
-    },
-    enabled: !!selectedSubject && isOwner,
-    staleTime: 30_000
-  });
-  const rankPreview = rankPreviewQuery.data || [];
 
   // Mutations
   const mutations = useGradebookMutations(selectedSubject?.id || null);
@@ -140,9 +127,22 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const isOwner = useMemo(() => {
     if (!currentUser || !selectedSubject) return false;
     if (currentUser.role === "admin") return true;
-    return Number(selectedSubject.teacher_id) === Number(currentUser.id) || 
+    return Number(selectedSubject.teacher_id) === Number(currentUser.id) ||
            Number(selectedSubject.second_teacher_id) === Number(currentUser.id);
   }, [currentUser, selectedSubject]);
+
+  // Rank Preview — teacher-only, loaded per selected subject (placed after isOwner to avoid TDZ error)
+  const rankPreviewQuery = useQuery<RankPreviewEntry[]>({
+    queryKey: ["rank-preview", selectedSubject?.id],
+    queryFn: async () => {
+      if (!selectedSubject) return [];
+      const { data } = await fetchAuth(`/api/gradebook/rank-preview/${selectedSubject.id}`);
+      return data as RankPreviewEntry[];
+    },
+    enabled: !!selectedSubject && isOwner,
+    staleTime: 30_000
+  });
+  const rankPreview = rankPreviewQuery.data || [];
 
   // Debounced weight saving
   const saveWeightsDebounced = useCallback((updatedCats: Category[]) => {
