@@ -10,6 +10,7 @@ import { toPercent, fromPercent, ScaleType, getPlaceholderForScale } from "./gra
 import { useWeightBalancer } from "./useWeightBalancer";
 import ImportDiffModal from "./ImportDiffModal";
 import EditAssessmentModal from "./EditAssessmentModal";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 interface GradebookProps {
   classes: { id: number; name: string }[];
@@ -225,7 +226,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   useEffect(() => {
     const fetchU = async () => {
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       try {
         const res = await fetch(`${apiUrl}/api/users`, { headers: { Authorization: `Bearer ${token}` } });
         if (res.ok) {
@@ -257,7 +258,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     const reqId = ++subjectsReqRef.current;
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/subjects?class_id=${classId}`, {
@@ -307,7 +308,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/matrix/${subj.id}`, {
@@ -401,7 +402,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       setCategories(updatedCats); // top-level state alignment
       if (!selectedSubject) return;
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       try {
         await fetch(`${apiUrl}/api/gradebook/weights`, {
           method: "PUT",
@@ -446,7 +447,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const handleCreateSubject = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/subject`, {
@@ -476,7 +477,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const handleToggleProjection = async () => {
     if (!selectedSubject || !isOwnerOrCoTeacher) return;
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/subject/${selectedSubject.id}/toggle-projection`, {
@@ -494,7 +495,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     e.preventDefault();
     if (!selectedSubject) return;
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/category`, {
@@ -528,7 +529,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const handleDeleteCategory = async (catId: number) => {
     if (!confirm("Kategorie inklusive aller eingetragenen Einzelnoten restlos entfernen?")) return;
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/gradebook/category/${catId}`, {
@@ -562,7 +563,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     setNewAssessmentName("");
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       const res = await fetch(`${apiUrl}/api/assessments/0`, {
         method: "PUT",
@@ -615,7 +616,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }));
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       await fetch(`${apiUrl}/api/gradebook/category-scale`, {
         method: "PUT",
@@ -643,7 +644,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     setEditingCol(null);
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       await fetch(`${apiUrl}/api/gradebook/rename-column`, {
         method: "PUT",
@@ -708,7 +709,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     ));
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       await fetch(`${apiUrl}/api/gradebook/column-visibility`, {
         method: "PUT",
@@ -730,7 +731,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       const updatedVal = cellObj?.grade_value !== undefined ? cellObj.grade_value : null;
       
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       setTimeout(async () => {
         try {
           await fetch(`${apiUrl}/api/gradebook/cell-visibility`, {
@@ -786,7 +787,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     if (saveVal === null) return;
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       await fetch(`${apiUrl}/api/gradebook/grade`, {
         method: "POST",
@@ -806,7 +807,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     if (!selectedSubject || !isOwnerOrCoTeacher) return;
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     const targetTag = tierTag === "none" ? null : tierTag;
 
     setPupilTags((prev) => {
@@ -872,7 +873,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       setIsLoading(true);
@@ -917,7 +918,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const handleExportSingleSubject = () => {
     if (!selectedSubject) return;
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     window.open(`${apiUrl}/api/backup/gradebook/${selectedSubject.id}?token=${token}`, "_blank");
   };
 
@@ -931,7 +932,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       const payload = JSON.parse(txt);
 
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
 
       const res = await fetch(`${apiUrl}/api/backup/gradebook`, {
         method: "POST",

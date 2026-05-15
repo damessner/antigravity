@@ -7,6 +7,7 @@ import {
   Smile, Meh, Frown, Bot, AlertCircle
 } from "lucide-react";
 import { Pupil } from "./TeacherDashboard";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 // Fix 6: Deterministic emoji pools per sentiment
 const EMOJI_POOLS: Record<string, string[]> = {
@@ -67,7 +68,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
   const loadClassNotes = async (classId: number) => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/notes/class/${classId}`, {
@@ -164,7 +165,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
     if (!targetId || !newNoteText.trim()) return;
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/notes`, {
@@ -192,7 +193,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
   const handleToggleVisibility = async (id: number) => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/notes/${id}/toggle-visibility`, {
@@ -214,7 +215,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
   const handleDeleteNote = async (id: number) => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/notes/${id}`, {

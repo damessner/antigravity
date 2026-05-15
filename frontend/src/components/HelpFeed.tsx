@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, CheckCircle2, MessageSquare, Clock, RefreshCw, UserCheck } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 interface HelpRequestItem {
   id: number;
@@ -40,7 +41,7 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
   const fetchActiveRequests = async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/help/active`, {
@@ -129,7 +130,7 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
   const handleClaimRequest = async (id: number) => {
     setIsSaving(prev => ({ ...prev, [id]: true }));
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     const comment = claimComments[id]?.trim();
 
     try {
@@ -152,7 +153,7 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
   const handleUpdateCommentOnTheFly = async (id: number) => {
     setIsSaving(prev => ({ ...prev, [id]: true }));
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     const commentTarget = liveUpdateComments[id] || "";
 
     try {

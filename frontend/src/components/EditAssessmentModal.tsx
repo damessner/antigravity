@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { X, Calendar, FileText, Check, Trash2 } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 interface EditAssessmentModalProps {
   assessmentId?: number;
@@ -69,7 +70,7 @@ export default function EditAssessmentModal({
     setError(null);
 
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       const token = localStorage.getItem("token") || "";
       
       // Use numeric id if available, fallback to 0 to trigger composite upsert logic

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
 import { MessageSquare, Send, CheckCircle, Clock, AlertCircle, Sparkles, UserCheck } from "lucide-react";
+import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
 
 interface ActiveHelpRequest {
   id: number;
@@ -40,7 +41,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
   // Establish local reactive WebSocket feed connection
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const wsUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const wsUrl = getWsUrl();
     
     const socket: Socket = io(wsUrl, {
       auth: { token }
@@ -96,7 +97,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
   const fetchMyActiveRequest = async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const userStr = localStorage.getItem("user");
@@ -132,7 +133,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
     setError(null);
     setIsSubmitting(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/help`, {
@@ -160,7 +161,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
   const handleResolveRequest = async () => {
     if (!activeRequest) return;
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/help/${activeRequest.id}/resolve`, {
