@@ -1524,5 +1524,93 @@ router.post('/import/:id', authenticateToken, upload.single('file'), async (req,
   }
 });
 
+// GET /api/gradebook/rank-config/:subject_id
+// Get custom rank configuration for a subject
+router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.subject_id);
+
+  try {
+    const configRes = await req.pool.query(`
+      SELECT rank_level, rank_name, rank_symbol
+      FROM subject_rank_config
+      WHERE subject_id = $1
+      ORDER BY rank_level
+    `, [subjectId]);
+
+    // If no custom config, return defaults
+    if (configRes.rows.length === 0) {
+      return res.json({
+        ranks: [
+          { level: 1, name: 'Lehrling', symbol: '🌱' },
+          { level: 2, name: 'Geselle', symbol: '🛠️' },
+          { level: 3, name: 'Meister', symbol: '👑' }
+        ]
+      });
+    }
+
+    res.json({
+      ranks: configRes.rows.map(r => ({
+        level: r.rank_level,
+        name: r.rank_name,
+        symbol: r.rank_symbol
+      }))
+    });
+  } catch (err) {
+    console.error('Fetch rank config error:', err);
+    res.status(500).json({ error: 'Failed to fetch rank configuration' });
+  }
+});
+
+// PUT /api/gradebook/rank-config/:subject_id
+// Update custom rank configuration for a subject
+router.put('/rank-config/:subject_id', authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.subject_id);
+  const { ranks } = req.body; // Array of {level, name, symbol}
+
+  if (!ranks || !Array.isArray(ranks) || ranks.length !== 3) {
+    return res.status(400).json({ error: 'Must provide exactly 3 ranks' });
+  }
+
+  const client = await req.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Verify teacher ownership
+    const ownerCheck = await client.query(
+      'SELECT teacher_id, second_teacher_id FROM subjects WHERE id = $1',
+      [subjectId]
+    );
+    if (ownerCheck.rows.length === 0) {
+      throw new Error('Subject not found');
+    }
+    const { teacher_id, second_teacher_id } = ownerCheck.rows[0];
+    if (req.user.role !== 'admin' &&
+        Number(req.user.id) !== Number(teacher_id) &&
+        Number(req.user.id) !== Number(second_teacher_id)) {
+      throw new Error('Not authorized');
+    }
+
+    // Delete existing config
+    await client.query('DELETE FROM subject_rank_config WHERE subject_id = $1', [subjectId]);
+
+    // Insert new config
+    for (const rank of ranks) {
+      await client.query(`
+        INSERT INTO subject_rank_config (subject_id, rank_level, rank_name, rank_symbol)
+        VALUES ($1, $2, $3, $4)
+      `, [subjectId, rank.level, rank.name, rank.symbol]);
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, ranks });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Update rank config error:', err);
+    res.status(500).json({ error: 'Failed to update rank configuration' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
 

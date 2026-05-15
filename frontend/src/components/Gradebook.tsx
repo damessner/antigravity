@@ -80,6 +80,12 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [newAssessmentName, setNewAssessmentName] = useState("");
   const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState<EditCategoryState | null>(null);
+  const [showRankConfigModal, setShowRankConfigModal] = useState(false);
+  const [rankConfig, setRankConfig] = useState<{level: number; name: string; symbol: string}[]>([
+    { level: 1, name: 'Lehrling', symbol: '🌱' },
+    { level: 2, name: 'Geselle', symbol: '🛠️' },
+    { level: 3, name: 'Meister', symbol: '👑' }
+  ]);
   const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateWeightsMutateRef = useRef(mutations.updateWeights.mutate);
 
@@ -124,6 +130,19 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   useEffect(() => {
     if (!selectedSubject) return;
     localStorage.setItem(`saved_subject_${selectedClassId}`, String(selectedSubject.id));
+
+    // Load rank configuration for the subject
+    const loadRankConfig = async () => {
+      try {
+        const { data } = await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`);
+        if (data && data.ranks) {
+          setRankConfig(data.ranks);
+        }
+      } catch (err) {
+        console.error('Failed to load rank config:', err);
+      }
+    };
+    loadRankConfig();
   }, [selectedClassId, selectedSubject]);
 
   const isOwner = useMemo(() => {
@@ -492,6 +511,22 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
   };
 
+  const handleSaveRankConfig = async () => {
+    if (!selectedSubject || !isOwner) return;
+    try {
+      await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ranks: rankConfig })
+      });
+      setShowRankConfigModal(false);
+      toast.success("Rang-Konfiguration gespeichert");
+    } catch (err: unknown) {
+      toast.error("Speichern fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
+
 
   if (!selectedClassId && isLoadingSubjects) {
     return <div className="flex-1 flex items-center justify-center">Lade Fächer...</div>;
@@ -512,6 +547,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onToggleWeighting={() => setIsWeightingOpen(!isWeightingOpen)}
         onExport={handleExport}
         onImport={handleImportClick}
+        onOpenRankConfig={() => setShowRankConfigModal(true)}
         isLoading={matrixQuery.isLoading}
 
         refetch={refetchMatrix}
@@ -745,6 +781,76 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
             queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
           }}
         />
+      )}
+
+      {/* Rank Configuration Modal */}
+      {showRankConfigModal && selectedSubject && isOwner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+            <h2 className="text-lg font-bold mb-4 text-white">Rang-Konfiguration</h2>
+            <p className="text-xs text-slate-400 mb-4">Passen Sie die Namen und Symbole der drei Rangstu fen für dieses Fach an.</p>
+
+            <div className="space-y-4">
+              {rankConfig.map((rank, idx) => (
+                <div key={rank.level} className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block">
+                    Stufe {rank.level} {idx === 0 ? '(Niedrigste)' : idx === 2 ? '(Höchste)' : '(Mittlere)'}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={rank.name}
+                      onChange={(e) => {
+                        const newConfig = [...rankConfig];
+                        newConfig[idx].name = e.target.value;
+                        setRankConfig(newConfig);
+                      }}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Symbol"
+                      value={rank.symbol}
+                      maxLength={5}
+                      onChange={(e) => {
+                        const newConfig = [...rankConfig];
+                        newConfig[idx].symbol = e.target.value;
+                        setRankConfig(newConfig);
+                      }}
+                      className="w-20 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-center"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRankConfigModal(false);
+                  // Reset to defaults or reload
+                  setRankConfig([
+                    { level: 1, name: 'Lehrling', symbol: '🌱' },
+                    { level: 2, name: 'Geselle', symbol: '🛠️' },
+                    { level: 3, name: 'Meister', symbol: '👑' }
+                  ]);
+                }}
+                className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRankConfig}
+                className="flex-1 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-bold text-white shadow-lg shadow-indigo-600/20"
+              >
+                Speichern
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

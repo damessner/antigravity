@@ -19,6 +19,7 @@ interface GradebookHeaderProps {
   onToggleWeighting: () => void;
   onExport: () => void;
   onImport: () => void;
+  onOpenRankConfig?: () => void;
   isLoading: boolean;
   refetch: () => void;
   isOwner: boolean;
@@ -37,6 +38,7 @@ export function GradebookHeader({
   onToggleWeighting,
   onExport,
   onImport,
+  onOpenRankConfig,
   isLoading,
   refetch,
   isOwner
@@ -101,7 +103,18 @@ export function GradebookHeader({
                 {selectedSubject.projection_visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                 <span>Projektion: {selectedSubject.projection_visible ? "An" : "Aus"}</span>
               </button>
-              
+
+              {onOpenRankConfig && (
+                <button
+                  onClick={onOpenRankConfig}
+                  className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+                  title="Rang-Namen und -Symbole anpassen"
+                >
+                  <span>🏆</span>
+                  <span>Ränge</span>
+                </button>
+              )}
+
               <button
                 onClick={onAddCategory}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-indigo-600/20"
