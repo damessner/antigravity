@@ -8,9 +8,10 @@ function Write-Header {
     Write-Host "====================================================`n" -ForegroundColor Cyan
 }
 
-# Ensure we are in the script's directory (elevation resets CWD to System32)
+# Resolve script directory and project root
 $ScriptDir = $PSScriptRoot
 if (-not $ScriptDir) { $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
+$ProjectRoot = Split-Path -Parent $ScriptDir
 
 # Wrap everything in try/finally to ensure the window stays open on error
 try {
@@ -22,7 +23,7 @@ try {
         exit
     }
 
-    Set-Location -Path $ScriptDir
+    Set-Location -Path $ProjectRoot
 
 Clear-Host
 
