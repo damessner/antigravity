@@ -40,6 +40,14 @@ export interface Room {
   name: string;
 }
 
+interface User {
+  id: number;
+  username: string;
+  full_name: string;
+  role: "admin" | "teacher" | "pupil" | "lernwerkstatt";
+  requires_password_change?: boolean;
+}
+
 const LESSON_SCHEDULE = [
   { nr: 1, start: "07:55", end: "08:45" },
   { nr: 2, start: "08:50", end: "09:40" },
@@ -62,7 +70,7 @@ export default function TeacherDashboard() {
   const router = useRouter();
 
   // Primary States
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
 
@@ -167,9 +175,9 @@ export default function TeacherDashboard() {
     });
 
     // Real-Time Event Listeners
-    socketInstance.on("pupil_moved", ({ pupilId, toRoomId, log }) => {
-      setPupils((prev) =>
-        prev.map((p) =>
+    socketInstance.on("pupil_moved", ({ pupilId, toRoomId, log }: { pupilId: number, toRoomId: number, log: any }) => {
+      setPupils((prev: Pupil[]) =>
+        prev.map((p: Pupil) =>
           Number(p.id) === Number(pupilId)
             ? {
               ...p,
@@ -185,8 +193,8 @@ export default function TeacherDashboard() {
       );
     });
 
-    socketInstance.on("pupil_enrolled", (newPupil) => {
-      setPupils((prev) => [
+    socketInstance.on("pupil_enrolled", (newPupil: any) => {
+      setPupils((prev: Pupil[]) => [
         ...prev,
         {
           ...newPupil,
@@ -197,13 +205,13 @@ export default function TeacherDashboard() {
       ]);
     });
 
-    socketInstance.on("pupil_unenrolled", ({ pupilId }) => {
-      setPupils((prev) => prev.filter((p) => Number(p.id) !== Number(pupilId)));
+    socketInstance.on("pupil_unenrolled", ({ pupilId }: { pupilId: number }) => {
+      setPupils((prev: Pupil[]) => prev.filter((p: Pupil) => Number(p.id) !== Number(pupilId)));
     });
 
-    socketInstance.on("lesson_reset", ({ resetToRoomId }) => {
-      setPupils((prev) =>
-        prev.map((p) => ({
+    socketInstance.on("lesson_reset", ({ resetToRoomId }: { resetToRoomId: number }) => {
+      setPupils((prev: Pupil[]) =>
+        prev.map((p: Pupil) => ({
           ...p,
           room_id: Number(resetToRoomId || 1),
           arrived_status: false,
@@ -216,8 +224,8 @@ export default function TeacherDashboard() {
       setAlertToast("Unterrichtsstunde zurückgesetzt. Alle Schüler im Klassenzimmer.");
     });
 
-    socketInstance.on("pupil_subject_tag_updated", ({ subject_id, pupil_id, tier_tag }) => {
-      setSubjectTags((prev) => {
+    socketInstance.on("pupil_subject_tag_updated", ({ subject_id, pupil_id, tier_tag }: { subject_id: number, pupil_id: number, tier_tag: string }) => {
+      setSubjectTags((prev: any[]) => {
         // filter out defensive old state
         const filtered = prev.filter(
           (t) => !(Number(t.pupil_id) === Number(pupil_id) && Number(t.subject_id) === Number(subject_id))
@@ -227,9 +235,9 @@ export default function TeacherDashboard() {
       });
     });
 
-    socketInstance.on("pupil_timer_set", ({ pupilId, timer_minutes, timer_started_at, timer_started_at_ms }) => {
-      setPupils((prev) =>
-        prev.map((p) =>
+    socketInstance.on("pupil_timer_set", ({ pupilId, timer_minutes, timer_started_at, timer_started_at_ms }: { pupilId: number, timer_minutes: number, timer_started_at: string, timer_started_at_ms: number }) => {
+      setPupils((prev: Pupil[]) =>
+        prev.map((p: Pupil) =>
           Number(p.id) === Number(pupilId)
             ? {
               ...p,
@@ -246,9 +254,9 @@ export default function TeacherDashboard() {
       );
     });
 
-    socketInstance.on("pupil_comment_set", ({ pupilId, comment }) => {
-      setPupils((prev) =>
-        prev.map((p) =>
+    socketInstance.on("pupil_comment_set", ({ pupilId, comment }: { pupilId: number, comment: string }) => {
+      setPupils((prev: Pupil[]) =>
+        prev.map((p: Pupil) =>
           Number(p.id) === Number(pupilId)
             ? {
               ...p,
@@ -259,11 +267,11 @@ export default function TeacherDashboard() {
       );
     });
 
-    socketInstance.on("note_created", (newNote) => {
-      setNotes((prev) => [newNote, ...prev]);
+    socketInstance.on("note_created", (newNote: any) => {
+      setNotes((prev: any[]) => [newNote, ...prev]);
     });
 
-    socketInstance.on("move_rejected", ({ reason }) => {
+    socketInstance.on("move_rejected", ({ reason }: { reason: string }) => {
       setAlertToast(`Verschieben blockiert: ${reason}`);
     });
 
