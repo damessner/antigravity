@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // Legacy Endpoint preserved for compatibility
 router.get('/pending-tasks', authenticateToken, async (req, res) => {
@@ -249,6 +249,76 @@ router.patch('/plan-task/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Patch plan item error:', err);
     res.status(500).json({ error: 'Fehler beim Aktualisieren des Status' });
+  }
+});
+
+// POST /api/student/submit-task
+// Allows pupils to submit a value for a self-directed task
+router.post('/submit-task', setupLimiter, authenticateToken, async (req, res) => {
+  if (req.user.role !== 'pupil') {
+    return res.status(403).json({ error: 'Nur für Schülerkonten zugänglich' });
+  }
+
+  const { category_id, assessment_name, grade_value } = req.body;
+  if (!category_id || !assessment_name || !grade_value || String(grade_value).trim() === '') {
+    return res.status(400).json({ error: 'Kategorie, Aufgabenname und Bewertungswert sind erforderlich' });
+  }
+
+  const client = await req.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const pupilRes = await client.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
+    if (pupilRes.rows.length === 0) {
+      throw new Error('Schülerprofil nicht gefunden');
+    }
+    const pupilId = pupilRes.rows[0].id;
+
+    const catRes = await client.query(`
+      SELECT c.id
+      FROM assessment_categories c
+      JOIN subjects s ON s.id = c.subject_id
+      JOIN pupils p ON p.class_id = s.class_id
+      WHERE c.id = $1 AND p.id = $2 AND c.is_self_directed = true
+      LIMIT 1
+    `, [Number(category_id), pupilId]);
+    if (catRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'Abgabe nur bei freigegebenen Selbstlern-Aufgaben möglich' });
+    }
+
+    const existingRes = await client.query(`
+      SELECT id FROM grades
+      WHERE category_id = $1 AND pupil_id = $2 AND assessment_name = $3
+      LIMIT 1
+    `, [Number(category_id), pupilId, assessment_name.trim()]);
+
+    let saved;
+    if (existingRes.rows.length > 0) {
+      const upRes = await client.query(`
+        UPDATE grades
+        SET grade_value = $1, is_visible = true, date = NOW()
+        WHERE id = $2
+        RETURNING *
+      `, [String(grade_value).trim(), existingRes.rows[0].id]);
+      saved = upRes.rows[0];
+    } else {
+      const insRes = await client.query(`
+        INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, is_visible)
+        VALUES ($1, $2, $3, $4, true)
+        RETURNING *
+      `, [Number(category_id), pupilId, assessment_name.trim(), String(grade_value).trim()]);
+      saved = insRes.rows[0];
+    }
+
+    await client.query('COMMIT');
+    res.json({ success: true, grade: saved });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Submit task error:', err);
+    res.status(500).json({ error: 'Fehler beim Speichern der Abgabe' });
+  } finally {
+    client.release();
   }
 });
 

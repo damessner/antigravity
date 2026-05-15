@@ -39,7 +39,7 @@ interface PlanItem {
 }
 
 // 1. Sidebar Pool Draggable Card (Cloner Source)
-function SidebarTaskCard({ task }: { task: OpenTask }) {
+function SidebarTaskCard({ task, onSubmit }: { task: OpenTask; onSubmit: (task: OpenTask) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `source_${task.task_id}`,
     data: { type: "source", task }
@@ -144,6 +144,19 @@ function SidebarTaskCard({ task }: { task: OpenTask }) {
           Freie Einteilung
         </div>
       )}
+
+      <div className="mt-2 pt-2 border-t border-slate-800/50">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSubmit(task);
+          }}
+          className="w-full px-2 py-1.5 rounded-lg bg-emerald-600/20 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-600/30 text-[10px] font-bold transition-colors"
+        >
+          Abgeben
+        </button>
+      </div>
     </div>
   );
 }
@@ -316,6 +329,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<any | null>(null);
+  const [submitTaskModal, setSubmitTaskModal] = useState<{ task: OpenTask; value: string } | null>(null);
 
   // Configure robust mobile & desktop drag sensors avoiding rapid unintended clicks
   const sensors = useSensors(
@@ -576,6 +590,37 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     }
   };
 
+  const handleSubmitTask = async (task: OpenTask) => {
+    setSubmitTaskModal({ task, value: "" });
+  };
+
+  const handleConfirmSubmitTask = async () => {
+    if (!submitTaskModal) return;
+    const value = submitTaskModal.value.trim();
+    if (!value) return;
+
+    const token = localStorage.getItem("token");
+    const apiUrl = getApiUrl();
+
+    try {
+      const res = await fetch(`${apiUrl}/api/student/submit-task`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          category_id: submitTaskModal.task.category_id,
+          assessment_name: submitTaskModal.task.assessment_name,
+          grade_value: value
+        })
+      });
+      if (!res.ok) throw new Error("Abgabe fehlgeschlagen");
+      setTasksPool(prev => prev.filter(t => t.task_id !== submitTaskModal.task.task_id));
+      setSubmitTaskModal(null);
+      setNotification("Aufgabe abgegeben.");
+    } catch (err) {
+      setNotification("Abgabe fehlgeschlagen.");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full animate-fadeIn duration-200">
       {/* Title Header Toolbar */}
@@ -626,7 +671,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
 
             <div className="p-3 flex-1 overflow-y-auto space-y-2.5">
               {tasksPool.map(task => (
-                <SidebarTaskCard key={task.task_id} task={task} />
+                <SidebarTaskCard key={task.task_id} task={task} onSubmit={handleSubmitTask} />
               ))}
 
               {tasksPool.length === 0 && !isLoading && (
@@ -728,6 +773,42 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {submitTaskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-white">Aufgabe abgeben</h3>
+            <p className="text-xs text-slate-400">{submitTaskModal.task.assessment_name}</p>
+            <label htmlFor="submit-task-grade-input" className="text-xs text-slate-300">
+              Bewertungswert
+            </label>
+            <input
+              id="submit-task-grade-input"
+              type="text"
+              value={submitTaskModal.value}
+              onChange={(e) => setSubmitTaskModal({ ...submitTaskModal, value: e.target.value })}
+              placeholder="Bewertung eingeben"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setSubmitTaskModal(null)}
+                className="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSubmitTask}
+                className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"
+              >
+                Abgeben
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // Helper to calculate rank rank priority
 const getRankWeight = (tag) => {
@@ -444,6 +444,61 @@ router.post('/category', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Kategorie mit Auto-Scaling konnte nicht instanziiert werden' });
   } finally {
     client.release();
+  }
+});
+
+// PUT /api/gradebook/category/:id
+router.put('/category/:id', setupLimiter, authenticateToken, async (req, res) => {
+  const categoryId = Number(req.params.id);
+  const { name, weight_percentage, scale_type, is_self_directed } = req.body;
+  if (!name || Number.isNaN(categoryId)) {
+    return res.status(400).json({ error: 'Fehlende Kategorie-Parameter' });
+  }
+
+  const allowedScales = ['numeric_1_5', 'gpa_4_0', 'symbolic', 'numeric_0_100', 'percentage', 'letters_A_F', 'symbols'];
+  const normalizedScale = scale_type === 'symbols' ? 'symbolic' : scale_type;
+  const targetScale = allowedScales.includes(normalizedScale) ? normalizedScale : 'numeric_1_5';
+  const targetWeight = Math.max(0, Math.min(100, Number(weight_percentage) || 0));
+
+  try {
+    const accessRes = await req.pool.query(`
+      SELECT c.id, c.subject_id, s.teacher_id, s.second_teacher_id
+      FROM assessment_categories c
+      JOIN subjects s ON s.id = c.subject_id
+      WHERE c.id = $1
+      LIMIT 1
+    `, [categoryId]);
+
+    if (accessRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+    }
+
+    const row = accessRes.rows[0];
+    const canEdit = req.user.role === 'admin'
+      || Number(row.teacher_id) === Number(req.user.id)
+      || Number(row.second_teacher_id) === Number(req.user.id);
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Keine Berechtigung zum Bearbeiten dieses Bereichs' });
+    }
+
+    const updateRes = await req.pool.query(`
+      UPDATE assessment_categories
+      SET name = $1, weight_percentage = $2, scale_type = $3, is_self_directed = $4
+      WHERE id = $5
+      RETURNING *
+    `, [name.trim(), targetWeight, targetScale, !!is_self_directed, categoryId]);
+
+    if (req.io) {
+      req.io.emit('subject_updated', { subject_id: Number(row.subject_id) });
+    }
+
+    res.json(updateRes.rows[0]);
+  } catch (err) {
+    console.error('Update category error:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Bereichsname existiert bereits in diesem Fach' });
+    }
+    res.status(500).json({ error: 'Kategorie konnte nicht aktualisiert werden' });
   }
 });
 

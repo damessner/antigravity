@@ -1,6 +1,7 @@
 "use client";
+
 import React from "react";
-import { EyeOff, Eye } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface GradeCellProps {
   categoryId: number;
@@ -14,6 +15,7 @@ interface GradeCellProps {
   isCatLastCol: boolean;
   onChange: (catId: number, pId: number, assName: string, val: string) => void;
   onContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
+  onToggleVisibility: (catId: number, pId: number, assName: string, isVisible: boolean) => void;
 }
 
 export const GradeCell = React.memo(function GradeCell({
@@ -27,18 +29,15 @@ export const GradeCell = React.memo(function GradeCell({
   maxLength = 3,
   isCatLastCol,
   onChange,
-  onContextMenu
+  onContextMenu,
+  onToggleVisibility
 }: GradeCellProps) {
-  const toggleVisibility = (e: React.MouseEvent) => {
-    e.preventDefault();
-    onContextMenu(e, categoryId, pupilId, assessmentName);
-  };
-
   return (
-    <td className={`p-0 w-12 min-w-[44px] max-w-[52px] h-11 align-middle group/cell ${isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}>
+    <td className={`p-0 w-12 min-w-[44px] max-w-[52px] h-11 align-middle ${isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}>
       <div 
-        className={`w-full h-full flex items-center justify-center relative ${!isVisible ? "bg-slate-950/80" : ""}`}
-        title="Klicken Sie auf das Auge, um die Sichtbarkeit für diesen Schüler zu steuern"
+        onContextMenu={(e) => onContextMenu(e, categoryId, pupilId, assessmentName)}
+        className={`w-full h-full flex items-center justify-center relative ${!isVisible ? "opacity-30 bg-slate-950/80" : ""}`}
+        title="Rechtsklick/Longpress zum Umschalten der spezifischen Schülersichtbarkeit"
       >
         <input
           type="text"
@@ -47,17 +46,25 @@ export const GradeCell = React.memo(function GradeCell({
           disabled={disabled}
           onChange={(e) => onChange(categoryId, pupilId, assessmentName, e.target.value)}
           placeholder={placeholderGuide}
-          className={`w-full h-full bg-transparent hover:bg-slate-900/50 focus:bg-slate-900 text-center font-mono text-sm font-bold text-white focus:outline-none transition-colors p-0 rounded-none border-none disabled:opacity-50 disabled:cursor-not-allowed selection:bg-cyan-500/30 touch-manipulation ${!isVisible ? "opacity-30" : ""}`}
+          className="w-full h-full bg-transparent hover:bg-slate-900/50 focus:bg-slate-900 text-center font-mono text-sm font-bold text-white focus:outline-none transition-colors p-0 rounded-none border-none disabled:opacity-50 disabled:cursor-not-allowed selection:bg-cyan-500/30 touch-manipulation"
         />
-        
         {!disabled && (
           <button
-            onClick={toggleVisibility}
-            className={`absolute right-0.5 top-0.5 p-0.5 rounded-full transition-opacity bg-slate-900/80 backdrop-blur-sm ${isVisible ? "opacity-0 group-hover/cell:opacity-100 text-slate-500 hover:text-white" : "opacity-100 text-rose-500"}`}
-            title={isVisible ? "Für diesen Schüler ausblenden" : "Für diesen Schüler einblenden"}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleVisibility(categoryId, pupilId, assessmentName, !isVisible);
+            }}
+            className="absolute left-0.5 top-0.5 p-0.5 rounded bg-slate-950/80 text-slate-400 hover:text-white transition-colors"
+            title={isVisible ? "Für Schüler ausblenden" : "Für Schüler einblenden"}
           >
-            {isVisible ? <Eye className="w-2.5 h-2.5" /> : <EyeOff className="w-2.5 h-2.5" />}
+            {isVisible ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
           </button>
+        )}
+        {!isVisible && (
+          <span className="absolute right-0.5 top-0.5 pointer-events-none text-[8px] text-rose-500 select-none font-bold" title="Für Schüler ausgeblendet">
+            ∅
+          </span>
         )}
       </div>
     </td>

@@ -11,6 +11,8 @@ interface GradeMutationContext {
   optimisticGrade: Grade;
 }
 
+let optimisticTagId = -1;
+
 function isSameCell(a: Pick<Grade, "category_id" | "pupil_id" | "assessment_name">, b: Pick<Grade, "category_id" | "pupil_id" | "assessment_name">) {
   return Number(a.category_id) === Number(b.category_id)
     && Number(a.pupil_id) === Number(b.pupil_id)
@@ -168,7 +170,7 @@ export function useGradebookMutations(subjectId: number | null) {
         const nextTags = previousMatrix.pupil_tags.filter(t => t.pupil_id !== newTag.pupil_id);
         if (newTag.tier_tag) {
           nextTags.push({
-            id: Date.now(), // temporary
+            id: optimisticTagId--,
             pupil_id: newTag.pupil_id,
             subject_id: Number(subjectId),
             tier_tag: newTag.tier_tag

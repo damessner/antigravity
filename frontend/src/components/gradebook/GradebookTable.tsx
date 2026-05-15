@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { ChevronDown, Plus, Edit3, Settings2, Trash2, Award, Calendar, Info, Zap } from "lucide-react";
-import { Category, Grade, Pupil, User, ColumnMetadata, PupilTag } from "@/types";
+import { Plus, Edit3, Settings2, Trash2 } from "lucide-react";
+import { Category, Grade, Pupil, User, ColumnMetadata } from "@/types";
 import { GradeCell } from "./GradeCell";
 import { getPlaceholderForScale } from "../gradeUtils";
 import { ScaleType } from "../gradeUtils";
@@ -18,42 +18,38 @@ interface GradebookTableProps {
   pupils: Pupil[];
   categories: Category[];
   grades: Grade[];
-  pupilTags: PupilTag[];
   columns: GradebookColumn[];
   currentUser: User | null;
   isOwner: boolean;
   onGradeChange: (catId: number, pId: number, assName: string, val: string) => void;
   onCellContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
-  onTagChange: (pupilId: number, tier: string | null) => void;
-  onEditCategory: (cat: Category) => void;
-  onEditAssessment: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
   onAddAssessment: (catId: number) => void;
   onRenameColumn: (catId: number, oldName: string) => void;
   onEditMetadata: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
   onDeleteCategory: (catId: number) => void;
   onScaleSwitch: (catId: number, newScale: ScaleType) => void;
   onToggleColumnVisibility: (catId: number, assName: string) => void;
+  onEditCategory: (category: Category) => void;
+  onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
 }
 
 function GradebookTableBase({
   pupils,
   categories,
   grades,
-  pupilTags,
   columns,
   currentUser,
   isOwner,
   onGradeChange,
   onCellContextMenu,
-  onTagChange,
-  onEditCategory,
-  onEditAssessment,
   onAddAssessment,
   onRenameColumn,
   onEditMetadata,
   onDeleteCategory,
   onScaleSwitch,
-  onToggleColumnVisibility
+  onToggleColumnVisibility,
+  onEditCategory,
+  onToggleCellVisibility
 }: GradebookTableProps) {
   const columnsByCategory = React.useMemo(() => {
     const map = new Map<number, GradebookColumn[]>();
@@ -104,15 +100,14 @@ function GradebookTableBase({
                   className="px-2 py-2 border-b border-r-2 border-slate-800 text-left relative group"
                 >
                   <div className="flex items-center justify-between gap-2 overflow-hidden">
-                    <span 
-                      className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8 cursor-pointer hover:text-indigo-300"
+                    <button
+                      type="button"
                       onClick={() => isOwner && onEditCategory(cat)}
+                      className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8 text-left hover:text-indigo-300 transition-colors"
+                      title={isOwner ? "Bereich bearbeiten" : cat.name}
                     >
-                      {cat.name} ({cat.weight_percentage}%)
-                      {cat.is_self_directed && (
-                        <Zap className="inline-block w-3 h-3 ml-1 text-amber-400" title="Selbstgesteuertes Lernen" />
-                      )}
-                    </span>
+                      {cat.name} ({cat.weight_percentage}%){cat.is_self_directed ? " • SDL" : ""}
+                    </button>
                     
                     {isOwner && (
                       <div className="absolute right-1 top-1.5 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity bg-slate-900/80 rounded-md p-0.5 backdrop-blur-sm">
@@ -146,27 +141,34 @@ function GradebookTableBase({
                 key={`${col.category.id}-${col.assessmentName}-${idx}`}
                 className={`p-0 h-10 align-middle font-mono font-bold text-slate-400 border-b border-slate-800 ${col.isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}
               >
-                  <div 
-                    className="w-full h-full flex flex-col items-center justify-center relative group/col px-1 cursor-pointer hover:bg-slate-800/30 transition-colors"
-                    onClick={() => isOwner && onEditAssessment(col.category.id, col.assessmentName, col.metadata)}
+                <div className="w-full h-full flex flex-col items-center justify-center relative group/col px-1">
+                  <span 
+                    className="truncate max-w-full cursor-help"
+                    title={col.metadata?.info_text || col.assessmentName}
+                    onDoubleClick={() => isOwner && onRenameColumn(col.category.id, col.assessmentName)}
                   >
-                    <div className="flex items-center gap-1 max-w-full">
-                      <span 
-                        className="truncate font-mono font-bold text-slate-400"
-                        title={col.metadata?.info_text || col.assessmentName}
+                    {col.assessmentName}
+                  </span>
+                  
+                  {isOwner && (
+                    <div className="absolute inset-0 opacity-0 group-hover/col:opacity-100 bg-slate-900/90 flex items-center justify-center gap-1.5 transition-opacity">
+                      <button 
+                        onClick={() => onEditMetadata(col.category.id, col.assessmentName, col.metadata)}
+                        className="p-2 text-slate-400 hover:text-cyan-400"
+                        title="Metadaten & Info bearbeiten"
                       >
-                        {col.assessmentName}
-                      </span>
-                      {col.metadata?.info_text && <Info className="w-2.5 h-2.5 text-cyan-500/60" />}
-                      {col.metadata?.deadline && <Calendar className="w-2.5 h-2.5 text-rose-500/60" />}
+                        <Settings2 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => onToggleColumnVisibility(col.category.id, col.assessmentName)}
+                        className="p-2 text-slate-400 hover:text-amber-400"
+                        title="Sichtbarkeit für Schüler umschalten"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
                     </div>
-                    
-                    {col.metadata?.deadline && (
-                      <span className="text-[7px] text-slate-600 mt-0.5 font-mono">
-                        {new Date(col.metadata.deadline).toLocaleDateString("de-AT", { day: "2.digit", month: "2.digit" })}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                </div>
               </th>
             ))}
           </tr>
@@ -179,48 +181,9 @@ function GradebookTableBase({
               className={`group/row transition-colors ${pIdx % 2 === 0 ? "bg-transparent" : "bg-slate-900/10"} hover:bg-indigo-500/5`}
             >
               <td className="sticky left-0 z-30 px-4 py-2 h-11 bg-slate-950/80 border-r-2 border-slate-800 text-[11px] font-bold text-slate-300 group-hover/row:text-white backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-2 overflow-visible">
-                  <div className="flex items-center gap-2 truncate">
-                    <span className="text-[9px] text-slate-600 font-mono w-4">{pIdx + 1}</span>
-                    {p.name}
-                  </div>
-                  
-                  {/* Mastery Tag */}
-                  <div className="relative group/tag shrink-0">
-                    {(() => {
-                      const tag = pupilTags.find(t => t.pupil_id === p.id);
-                      const tier = tag?.tier_tag || null;
-                      
-                      const colors: Record<string, string> = {
-                        "Meister": "bg-amber-400/20 text-amber-400 border-amber-400/30",
-                        "Geselle": "bg-slate-300/20 text-slate-300 border-slate-300/30",
-                        "Lehrling": "bg-orange-500/20 text-orange-400 border-orange-500/30",
-                        "Anwärter": "bg-indigo-400/20 text-indigo-400 border-indigo-400/30"
-                      };
-                      
-                      return (
-                        <div className="flex items-center gap-1">
-                          <span className={`px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tighter border ${tier ? colors[tier] || "bg-slate-800 text-slate-500 border-slate-700" : "bg-transparent text-slate-700 border-transparent group-hover/tag:border-slate-800 group-hover/tag:text-slate-500"}`}>
-                            {tier || "Kein Rang"}
-                          </span>
-                          
-                          {isOwner && (
-                            <select
-                              value={tier || "none"}
-                              onChange={(e) => onTagChange(p.id, e.target.value === "none" ? null : e.target.value)}
-                              className="absolute inset-0 opacity-0 cursor-pointer w-full"
-                            >
-                              <option value="none">Kein Rang</option>
-                              <option value="Meister">Meister</option>
-                              <option value="Geselle">Geselle</option>
-                              <option value="Lehrling">Lehrling</option>
-                              <option value="Anwärter">Anwärter</option>
-                            </select>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
+                <div className="flex items-center gap-2 truncate">
+                  <span className="text-[9px] text-slate-600 font-mono w-4">{pIdx + 1}</span>
+                  {p.name}
                 </div>
               </td>
               {columns.map((col, cIdx) => {
@@ -239,6 +202,7 @@ function GradebookTableBase({
                     isCatLastCol={col.isCatLastCol}
                     onChange={onGradeChange}
                     onContextMenu={onCellContextMenu}
+                    onToggleVisibility={onToggleCellVisibility}
                   />
                 );
               })}

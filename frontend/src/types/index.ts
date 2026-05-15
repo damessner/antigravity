@@ -65,7 +65,6 @@ export interface SubjectTag {
 
 export interface ColumnMetadata {
   id?: number;
-  category_id?: number;
   name: string;
   info_text?: string | null;
   deadline?: string | null;
@@ -96,8 +95,8 @@ export interface Grade {
 export interface PupilTag {
   id: number;
   pupil_id: number;
-  subject_id: number;
-  tier_tag: string | null;
+  tag: string;
+  color?: string;
 }
 
 export interface GradebookMatrix {
