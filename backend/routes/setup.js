@@ -5,7 +5,7 @@ const { authenticateToken, setupLimiter } = require('../server');
 const crudLimiter = setupLimiter;
 
 // GET /api/setup/status — returns whether initial setup is needed
-router.get('/status', setupLimiter, async (req, res) => {
+router.get('/status', async (req, res) => {
   try {
     const result = await req.pool.query('SELECT COUNT(*) FROM rooms');
     const count = Number(result.rows[0].count);
