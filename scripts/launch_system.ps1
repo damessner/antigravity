@@ -1,6 +1,6 @@
 # ============================================================
-# restart_system.ps1
-# School Management System - Safe Restart Utility
+# launch_system.ps1
+# School Management System - Unified Launcher & Monitor
 # ============================================================
 
 $ErrorActionPreference = "Continue"
@@ -13,15 +13,11 @@ $ProjectRoot = Split-Path -Parent $ScriptDir
 
 # Wrap everything in try/finally to ensure the window stays open on error
 try {
+    # Ensure Admin for Docker management
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
         Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
-        $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { Join-Path $ScriptDir "restart_system.ps1" }
-        if (-not (Test-Path $scriptPath)) {
-             Write-Host "ERROR: Could not find script at $scriptPath" -ForegroundColor Red
-             Pause
-             exit 1
-        }
+        $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { Join-Path $ScriptDir "launch_system.ps1" }
         Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
         exit 0
     }
@@ -42,68 +38,71 @@ try {
     function Write-Info($msg) { Write-Host "   [INFO] $msg" -ForegroundColor Gray }
 
     Clear-Host
-    Write-Header "School Management System - Restart Utility"
-    Write-Host "This will stop and restart all containers cleanly." -ForegroundColor Yellow
-    Write-Host "Existing data is preserved. No backup is performed." -ForegroundColor Yellow
-    Write-Host ""
-
-    $proceed = Read-Host "Proceed with restart? (y/N)"
-    if ($proceed -notmatch "^[Yy]$") {
-        Write-Host "`nOperation cancelled by user." -ForegroundColor Yellow
-        exit 0
-    }
-    Write-Host ""
+    Write-Header "🏫 School Management System - Launcher"
 
     # Preflight: Docker check
-    Step "Checking Docker daemon..."
+    Step "Checking Docker status..."
     docker info 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "Docker daemon is not running. Please start Docker Desktop."
+        Write-Fail "Docker Desktop is not running."
+        Write-Host "   Please start Docker Desktop and run this script again." -ForegroundColor Yellow
         exit 1
     }
-    Write-Ok "Docker daemon is running"
-    Write-Host ""
+    Write-Ok "Docker is ready"
 
-    # Step 1: Bring stack down
-    Write-Header "Step 1. Stopping current containers"
-    Step "Running: docker compose down --remove-orphans ..."
-    docker compose down --remove-orphans 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
-    if ($LASTEXITCODE -ne 0) {
-        Write-Warn "docker compose down returned non-zero"
+    # Detect current state
+    $runningContainers = docker ps --format "{{.Names}}" 2>&1 | Where-Object { $_ -match "school_|antigravity_" }
+    
+    if ($runningContainers) {
+        Write-Host "`nSystem is already partially or fully running." -ForegroundColor Cyan
+        Write-Host "1) Continue (Ensure everything is up)" -ForegroundColor White
+        Write-Host "2) Safe Restart (Stop and Start again - recommended if buggy)" -ForegroundColor White
+        Write-Host "3) Stop System" -ForegroundColor White
+        Write-Host "q) Exit" -ForegroundColor Gray
+        
+        $choice = Read-Host "`nSelect an option"
+        if ($choice -eq "2") {
+            Write-Header "Performing Safe Restart..."
+            docker compose down --remove-orphans 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+            Start-Sleep -Seconds 2
+        } elseif ($choice -eq "3") {
+            Write-Header "Stopping System..."
+            docker compose down 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+            Write-Ok "System stopped."
+            exit 0
+        } elseif ($choice -eq "q") {
+            exit 0
+        }
     }
-    Start-Sleep -Seconds 2
-    Write-Ok "Stack stopped"
-    Write-Host ""
 
-    # Step 2: Bring stack up
-    Write-Header "Step 2. Starting containers"
-    Step "Running: docker compose up -d ..."
+    # Start the stack
+    Write-Header "Starting Services..."
     docker compose up -d 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+    
     if ($LASTEXITCODE -ne 0) {
-        Write-Fail "Failed to start containers. Run 'docker compose logs' for details."
+        Write-Fail "Failed to start containers. Check Docker Desktop for errors."
         exit 1
     }
-    Write-Ok "docker compose up completed"
-    Write-Host ""
+    Write-Ok "Containers are launching"
 
-    # Step 3: Wait for backend
-    Write-Header "Step 3. Waiting for services"
-    Step "Waiting for backend API (up to 60s)..."
+    # Wait for services
+    Write-Header "Waiting for services to be ready..."
+    Step "Checking Backend API (up to 60s)..."
     $backendReady = $false
     for ($i = 1; $i -le 60; $i++) {
         try {
             $r = Invoke-WebRequest -Uri "http://localhost:4000/api/setup/status" -UseBasicParsing -TimeoutSec 2 -ErrorAction SilentlyContinue
             if ($r.StatusCode -eq 200) { 
-                Write-Ok "Backend API ready ($i s)"
+                Write-Ok "Backend ready ($i s)"
                 $backendReady = $true
                 break 
             }
         } catch {}
         Start-Sleep -Seconds 1
     }
-    if (-not $backendReady) { Write-Warn "Backend did not respond within 60s" }
+    if (-not $backendReady) { Write-Warn "Backend did not respond within 60s - it might still be initializing database." }
 
-    Step "Waiting for frontend (up to 30s)..."
+    Step "Checking Frontend (up to 30s)..."
     for ($j = 1; $j -le 30; $j++) {
         try {
             $r = Invoke-WebRequest -Uri "http://localhost:3000/" -UseBasicParsing -TimeoutSec 3 -ErrorAction SilentlyContinue
@@ -114,37 +113,28 @@ try {
         } catch {}
         Start-Sleep -Seconds 1
     }
-    Write-Host ""
 
-    # Step 4: Status report
-    Write-Header "Step 4. System Status"
-
-    Step "Container health:"
-    docker ps --format "   {{.Names}}`t{{.Status}}`t{{.Ports}}" 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Gray }
-    Write-Host ""
-
-    Step "Network info:"
+    # Status Report
+    Write-Header "System Status & Access"
+    
     $localIp = (Get-NetIPAddress | Where-Object {
         $_.AddressFamily -eq 'InterNetwork' -and $_.InterfaceAlias -notmatch 'Loopback|vEthernet'
     } | Select-Object -First 1).IPAddress
     if (-not $localIp) { $localIp = "localhost" }
 
-    Write-Host ""
-    Write-Host "   System is available at:" -ForegroundColor Green
-    Write-Host "     -> Local:    http://localhost:3000" -ForegroundColor Cyan
+    Write-Host "   Access URLS:" -ForegroundColor White
+    Write-Host "     -> This PC:  http://localhost:3000" -ForegroundColor Green
     if ($localIp -ne "localhost") {
-        Write-Host "     -> Network:  http://$localIp:3000" -ForegroundColor Cyan
+        Write-Host "     -> Network:  http://$localIp:3000" -ForegroundColor Green
     }
     Write-Host ""
-    Write-Host "   Useful commands:" -ForegroundColor White
-    Write-Host "     -> View logs:    docker compose logs -f" -ForegroundColor Gray
-    Write-Host "     -> Stop system:  docker compose down" -ForegroundColor Gray
-    Write-Host "     -> Check status: docker compose ps" -ForegroundColor Gray
-    Write-Host "     -> Reset system: .\clean_slate.ps1" -ForegroundColor Gray
-    Write-Host ""
+    
+    Write-Host "   Containers:" -ForegroundColor White
+    docker ps --format "     {{.Names}}`t{{.Status}}" 2>&1 | ForEach-Object { Write-Host $_ -ForegroundColor Gray }
 
-    Write-Header "Restart Complete"
-    Write-Host "The system has been restarted. Open a browser." -ForegroundColor Green
+    Write-Header "Launch Complete"
+    Write-Host "The system is running in the background." -ForegroundColor White
+    Write-Host "You can close this window now." -ForegroundColor Gray
     Write-Host ""
 
 } catch {

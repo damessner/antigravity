@@ -28,8 +28,8 @@ After deploying, log in using the following administrative credentials:
 
 ### Windows (One-Click)
 Simply double-click the numbered files in order:
-1. **`01_initiate_system.bat`**: Verify system requirements and Docker status.
-2. **`02_start_system.bat`**: Start the platform.
+1. **`01_initiate_system.bat`**: Verify system requirements and Docker status. Run this first or if you have issues.
+2. **`02_launch_system.bat`**: Start, restart, or manage the running platform. This is your main daily tool.
 
 ### Standard Linux / Proxmox
 ```bash
@@ -46,12 +46,11 @@ The Frontend becomes accessible at `http://<your-server-ip>:3000`.
 
 ## 🛠️ Management Tools
 
-The system includes several "One-Click" utilities in the root folder:
+The system is now simplified into three main actions in the root folder:
 
 - **`01_initiate_system.bat`**: Verify Docker and project health.
-- **`02_start_system.bat`**: Start the system.
-- **`03_restart_system.bat`**: Safely stop and restart all services.
-- **`04_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
+- **`02_launch_system.bat`**: Start the system. If it's already running, it will offer to **Restart** (for a clean refresh) or **Stop** the services.
+- **`03_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
 
 *Technical implementation scripts (.ps1 and .sh) are located in the `scripts/` subdirectory to keep the workspace clean.*
 
