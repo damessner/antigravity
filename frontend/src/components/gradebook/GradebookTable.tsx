@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { ChevronDown, Plus, Edit3, Settings2, Trash2, Award } from "lucide-react";
+import { ChevronDown, Plus, Edit3, Settings2, Trash2, Award, Calendar, Info, Zap } from "lucide-react";
 import { Category, Grade, Pupil, User, ColumnMetadata, PupilTag } from "@/types";
 import { GradeCell } from "./GradeCell";
 import { getPlaceholderForScale } from "../gradeUtils";
@@ -25,6 +25,8 @@ interface GradebookTableProps {
   onGradeChange: (catId: number, pId: number, assName: string, val: string) => void;
   onCellContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
   onTagChange: (pupilId: number, tier: string | null) => void;
+  onEditCategory: (cat: Category) => void;
+  onEditAssessment: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
   onAddAssessment: (catId: number) => void;
   onRenameColumn: (catId: number, oldName: string) => void;
   onEditMetadata: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
@@ -44,6 +46,8 @@ function GradebookTableBase({
   onGradeChange,
   onCellContextMenu,
   onTagChange,
+  onEditCategory,
+  onEditAssessment,
   onAddAssessment,
   onRenameColumn,
   onEditMetadata,
@@ -100,8 +104,14 @@ function GradebookTableBase({
                   className="px-2 py-2 border-b border-r-2 border-slate-800 text-left relative group"
                 >
                   <div className="flex items-center justify-between gap-2 overflow-hidden">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8">
+                    <span 
+                      className="text-[10px] font-black uppercase tracking-wider text-indigo-400 truncate pr-8 cursor-pointer hover:text-indigo-300"
+                      onClick={() => isOwner && onEditCategory(cat)}
+                    >
                       {cat.name} ({cat.weight_percentage}%)
+                      {cat.is_self_directed && (
+                        <Zap className="inline-block w-3 h-3 ml-1 text-amber-400" title="Selbstgesteuertes Lernen" />
+                      )}
                     </span>
                     
                     {isOwner && (
@@ -136,34 +146,27 @@ function GradebookTableBase({
                 key={`${col.category.id}-${col.assessmentName}-${idx}`}
                 className={`p-0 h-10 align-middle font-mono font-bold text-slate-400 border-b border-slate-800 ${col.isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}
               >
-                <div className="w-full h-full flex flex-col items-center justify-center relative group/col px-1">
-                  <span 
-                    className="truncate max-w-full cursor-help"
-                    title={col.metadata?.info_text || col.assessmentName}
-                    onDoubleClick={() => isOwner && onRenameColumn(col.category.id, col.assessmentName)}
+                  <div 
+                    className="w-full h-full flex flex-col items-center justify-center relative group/col px-1 cursor-pointer hover:bg-slate-800/30 transition-colors"
+                    onClick={() => isOwner && onEditAssessment(col.category.id, col.assessmentName, col.metadata)}
                   >
-                    {col.assessmentName}
-                  </span>
-                  
-                  {isOwner && (
-                    <div className="absolute inset-0 opacity-0 group-hover/col:opacity-100 bg-slate-900/90 flex items-center justify-center gap-1.5 transition-opacity">
-                      <button 
-                        onClick={() => onEditMetadata(col.category.id, col.assessmentName, col.metadata)}
-                        className="p-2 text-slate-400 hover:text-cyan-400"
-                        title="Metadaten & Info bearbeiten"
+                    <div className="flex items-center gap-1 max-w-full">
+                      <span 
+                        className="truncate font-mono font-bold text-slate-400"
+                        title={col.metadata?.info_text || col.assessmentName}
                       >
-                        <Settings2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => onToggleColumnVisibility(col.category.id, col.assessmentName)}
-                        className="p-2 text-slate-400 hover:text-amber-400"
-                        title="Sichtbarkeit für Schüler umschalten"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
+                        {col.assessmentName}
+                      </span>
+                      {col.metadata?.info_text && <Info className="w-2.5 h-2.5 text-cyan-500/60" />}
+                      {col.metadata?.deadline && <Calendar className="w-2.5 h-2.5 text-rose-500/60" />}
                     </div>
-                  )}
-                </div>
+                    
+                    {col.metadata?.deadline && (
+                      <span className="text-[7px] text-slate-600 mt-0.5 font-mono">
+                        {new Date(col.metadata.deadline).toLocaleDateString("de-AT", { day: "2.digit", month: "2.digit" })}
+                      </span>
+                    )}
+                  </div>
               </th>
             ))}
           </tr>

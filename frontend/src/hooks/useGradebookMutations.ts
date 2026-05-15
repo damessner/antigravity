@@ -193,10 +193,56 @@ export function useGradebookMutations(subjectId: number | null) {
     },
   });
 
+  const updateCategory = useMutation({
+    mutationFn: async (category: Category) => {
+      // Since the backend uses a batch update for categories on the subject route,
+      // we need to fetch the current categories and swap the one being edited.
+      const previousMatrix = queryClient.getQueryData<GradebookMatrix>(["matrix", subjectId]);
+      if (!previousMatrix) return;
+
+      const nextCategories = previousMatrix.categories.map(c => 
+        Number(c.id) === Number(category.id) ? category : c
+      );
+
+      await fetchAuth(`/api/gradebook/subjects/${subjectId}`, {
+        method: "PUT",
+        body: JSON.stringify({ 
+          categories: nextCategories 
+        }),
+      });
+    },
+    onSuccess: () => {
+      scheduleMatrixInvalidation();
+      toast.success("Kategorie aktualisiert");
+    },
+    onError: (err) => {
+      toast.error("Kategorie konnte nicht aktualisiert werden");
+    }
+  });
+
+  const updateAssessment = useMutation({
+    mutationFn: async (input: { category_id: number; old_name: string; name: string; info_text: string | null; deadline: string | null }) => {
+      const { data } = await fetchAuth("/api/assessments/0", {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
+      return data;
+    },
+    onSuccess: () => {
+      scheduleMatrixInvalidation();
+      toast.success("Bewertung aktualisiert");
+    },
+    onError: (err) => {
+      toast.error("Bewertung konnte nicht aktualisiert werden");
+    }
+  });
+
   return {
     updateGrade,
     updateWeights,
     createCategory,
     updateTag,
+    updateCategory,
+    updateAssessment,
   };
 }
