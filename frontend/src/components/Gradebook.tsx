@@ -9,6 +9,7 @@ import { fetchAuth } from "@/utils/fetchAuth";
 import { ScaleType } from "./gradeUtils";
 import { useWeightBalancer } from "./useWeightBalancer";
 import EditAssessmentModal from "./EditAssessmentModal";
+import ParticipationTracker from "./ParticipationTracker";
 
 // Modular Sub-components
 import { WeightingOverlay } from "./gradebook/WeightingOverlay";
@@ -53,24 +54,12 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isWeightingOpen, setIsWeightingOpen] = useState(false);
+  const [gradebookView, setGradebookView] = useState<"matrix" | "participation">("matrix");
 
   // Data Queries
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
   const matrixQuery = useGradebookMatrix(selectedSubject?.id || null);
   const { categories = [], grades = [], pupil_tags: matrixPupilTags = [] } = matrixQuery.data || {};
-  
-  // Rank Preview — teacher-only, loaded per selected subject
-  const rankPreviewQuery = useQuery<RankPreviewEntry[]>({
-    queryKey: ["rank-preview", selectedSubject?.id],
-    queryFn: async () => {
-      if (!selectedSubject) return [];
-      const { data } = await fetchAuth(`/api/gradebook/rank-preview/${selectedSubject.id}`);
-      return data as RankPreviewEntry[];
-    },
-    enabled: !!selectedSubject && isOwner,
-    staleTime: 30_000
-  });
-  const rankPreview = rankPreviewQuery.data || [];
 
   // Mutations
   const mutations = useGradebookMutations(selectedSubject?.id || null);
@@ -91,6 +80,12 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [newAssessmentName, setNewAssessmentName] = useState("");
   const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
   const [showEditCategoryModal, setShowEditCategoryModal] = useState<EditCategoryState | null>(null);
+  const [showRankConfigModal, setShowRankConfigModal] = useState(false);
+  const [rankConfig, setRankConfig] = useState<{level: number; name: string; symbol: string}[]>([
+    { level: 1, name: 'Lehrling', symbol: '🌱' },
+    { level: 2, name: 'Geselle', symbol: '🛠️' },
+    { level: 3, name: 'Meister', symbol: '👑' }
+  ]);
   const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateWeightsMutateRef = useRef(mutations.updateWeights.mutate);
 
@@ -135,14 +130,40 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   useEffect(() => {
     if (!selectedSubject) return;
     localStorage.setItem(`saved_subject_${selectedClassId}`, String(selectedSubject.id));
+
+    // Load rank configuration for the subject
+    const loadRankConfig = async () => {
+      try {
+        const { data } = await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`);
+        if (data && data.ranks) {
+          setRankConfig(data.ranks);
+        }
+      } catch (err) {
+        console.error('Failed to load rank config:', err);
+      }
+    };
+    loadRankConfig();
   }, [selectedClassId, selectedSubject]);
 
   const isOwner = useMemo(() => {
     if (!currentUser || !selectedSubject) return false;
     if (currentUser.role === "admin") return true;
-    return Number(selectedSubject.teacher_id) === Number(currentUser.id) || 
+    return Number(selectedSubject.teacher_id) === Number(currentUser.id) ||
            Number(selectedSubject.second_teacher_id) === Number(currentUser.id);
   }, [currentUser, selectedSubject]);
+
+  // Rank Preview — teacher-only, loaded per selected subject (placed after isOwner to avoid TDZ error)
+  const rankPreviewQuery = useQuery<RankPreviewEntry[]>({
+    queryKey: ["rank-preview", selectedSubject?.id],
+    queryFn: async () => {
+      if (!selectedSubject) return [];
+      const { data } = await fetchAuth(`/api/gradebook/rank-preview/${selectedSubject.id}`);
+      return data as RankPreviewEntry[];
+    },
+    enabled: !!selectedSubject && isOwner,
+    staleTime: 30_000
+  });
+  const rankPreview = rankPreviewQuery.data || [];
 
   // Debounced weight saving
   const saveWeightsDebounced = useCallback((updatedCats: Category[]) => {
@@ -490,6 +511,22 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
   };
 
+  const handleSaveRankConfig = async () => {
+    if (!selectedSubject || !isOwner) return;
+    try {
+      await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ranks: rankConfig })
+      });
+      setShowRankConfigModal(false);
+      toast.success("Rang-Konfiguration gespeichert");
+    } catch (err: unknown) {
+      toast.error("Speichern fehlgeschlagen", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
+
 
   if (!selectedClassId && isLoadingSubjects) {
     return <div className="flex-1 flex items-center justify-center">Lade Fächer...</div>;
@@ -510,6 +547,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onToggleWeighting={() => setIsWeightingOpen(!isWeightingOpen)}
         onExport={handleExport}
         onImport={handleImportClick}
+        onOpenRankConfig={() => setShowRankConfigModal(true)}
         isLoading={matrixQuery.isLoading}
 
         refetch={refetchMatrix}
@@ -534,27 +572,63 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         />
       )}
 
-      <GradebookTable
-        pupils={classPupils}
-        categories={balancedCategories}
-        grades={grades}
-        columns={allColumns}
-        pupilTags={matrixPupilTags}
-        rankPreview={rankPreview}
-        currentUser={currentUser}
-        isOwner={isOwner}
-        onGradeChange={handleGradeChange}
-        onCellContextMenu={handleCellContextMenu}
-        onAddAssessment={handleOpenAddAssessment}
-        onRenameColumn={handleRenameColumn}
-        onEditMetadata={handleOpenEditMetadata}
-        onDeleteCategory={handleDeleteCategory}
-        onScaleSwitch={handleScaleSwitch}
-        onToggleColumnVisibility={handleToggleColumnVisibility}
-        onToggleCategoryVisibility={handleToggleCategoryVisibility}
-        onEditCategory={handleOpenEditCategory}
-        onToggleCellVisibility={handleToggleCellVisibility}
-      />
+      {/* Tab Switcher for Matrix / Mitarbeit */}
+      <div className="flex gap-2 mb-4 pb-4 border-b border-slate-800/40">
+        <button
+          onClick={() => setGradebookView("matrix")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            gradebookView === "matrix"
+              ? "bg-slate-800 text-white shadow-xs"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/50"
+          }`}
+        >
+          📊 Notenmatrix
+        </button>
+        <button
+          onClick={() => setGradebookView("participation")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            gradebookView === "participation"
+              ? "bg-slate-800 text-white shadow-xs"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/50"
+          }`}
+        >
+          💎 Mitarbeit
+        </button>
+      </div>
+
+      {gradebookView === "matrix" && (
+        <GradebookTable
+          pupils={classPupils}
+          categories={balancedCategories}
+          grades={grades}
+          columns={allColumns}
+          pupilTags={matrixPupilTags}
+          rankPreview={rankPreview}
+          currentUser={currentUser}
+          isOwner={isOwner}
+          onGradeChange={handleGradeChange}
+          onCellContextMenu={handleCellContextMenu}
+          onAddAssessment={handleOpenAddAssessment}
+          onRenameColumn={handleRenameColumn}
+          onEditMetadata={handleOpenEditMetadata}
+          onDeleteCategory={handleDeleteCategory}
+          onScaleSwitch={handleScaleSwitch}
+          onToggleColumnVisibility={handleToggleColumnVisibility}
+          onToggleCategoryVisibility={handleToggleCategoryVisibility}
+          onEditCategory={handleOpenEditCategory}
+          onToggleCellVisibility={handleToggleCellVisibility}
+        />
+      )}
+
+      {gradebookView === "participation" && selectedSubject && (
+        <div className="flex-1 overflow-y-auto">
+          <ParticipationTracker
+            subjects={subjects}
+            pupils={classPupils}
+            classId={selectedClassId}
+          />
+        </div>
+      )}
 
       {showAddSubject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
@@ -707,6 +781,76 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
             queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
           }}
         />
+      )}
+
+      {/* Rank Configuration Modal */}
+      {showRankConfigModal && selectedSubject && isOwner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+            <h2 className="text-lg font-bold mb-4 text-white">Rang-Konfiguration</h2>
+            <p className="text-xs text-slate-400 mb-4">Passen Sie die Namen und Symbole der drei Rangstu fen für dieses Fach an.</p>
+
+            <div className="space-y-4">
+              {rankConfig.map((rank, idx) => (
+                <div key={rank.level} className="space-y-2">
+                  <label className="text-[10px] text-slate-500 font-bold uppercase block">
+                    Stufe {rank.level} {idx === 0 ? '(Niedrigste)' : idx === 2 ? '(Höchste)' : '(Mittlere)'}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={rank.name}
+                      onChange={(e) => {
+                        const newConfig = [...rankConfig];
+                        newConfig[idx].name = e.target.value;
+                        setRankConfig(newConfig);
+                      }}
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Symbol"
+                      value={rank.symbol}
+                      maxLength={5}
+                      onChange={(e) => {
+                        const newConfig = [...rankConfig];
+                        newConfig[idx].symbol = e.target.value;
+                        setRankConfig(newConfig);
+                      }}
+                      className="w-20 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-center"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRankConfigModal(false);
+                  // Reset to defaults or reload
+                  setRankConfig([
+                    { level: 1, name: 'Lehrling', symbol: '🌱' },
+                    { level: 2, name: 'Geselle', symbol: '🛠️' },
+                    { level: 3, name: 'Meister', symbol: '👑' }
+                  ]);
+                }}
+                className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRankConfig}
+                className="flex-1 px-4 py-2 bg-indigo-600 rounded-xl text-xs font-bold text-white shadow-lg shadow-indigo-600/20"
+              >
+                Speichern
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
