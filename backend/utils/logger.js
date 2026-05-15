@@ -105,8 +105,9 @@ function log(level, context, message, err) {
 
   try {
     fs.appendFileSync(filePath, JSON.stringify(entry) + '\n');
-    // Trim on every 50th write to avoid doing it every call
-    // We use a simple modulo trick via file size check is too slow, so use a counter
+    // Trim on every 50th write to avoid doing it every call.
+    // We use a simple counter rather than a file size check since file size
+    // checks on every write would be too slow on low-powered hardware.
     logWriteCount++;
     if (logWriteCount % 50 === 0) {
       trimOldEntries(filePath);

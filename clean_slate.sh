@@ -75,7 +75,7 @@ if curl -sf "$API_URL/api/setup/status" > /dev/null 2>&1; then
     echo "   🐘 Database container found: $DB_CONTAINER"
     echo "   📦 Exporting database schema + data via pg_dump..."
     docker exec "$DB_CONTAINER" pg_dump -U postgres school_management --data-only --inserts 2>/dev/null > "$BACKUP_PATH.sql" && \
-      echo "   ✅ SQL backup saved: pre_clean_slate_${TIMESTAMP}.json.sql" && \
+      echo "   ✅ SQL backup saved: pre_clean_slate_${TIMESTAMP}.sql" && \
       BACKUP_SAVED="$BACKUP_PATH.sql" || \
       echo "   ⚠️  pg_dump failed — continuing without automatic backup"
   else

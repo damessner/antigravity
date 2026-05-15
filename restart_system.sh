@@ -134,7 +134,7 @@ echo -e "   ${GRAY}  → Reset system:      ./clean_slate.sh${NC}"
 echo ""
 
 print_header "✅ Restart Complete"
-echo -e "${GREEN}The system is restarting. Open a browser and navigate to:${NC}"
+echo -e "${GREEN}The system has been restarted. Open a browser and navigate to:${NC}"
 echo -e "${CYAN}  http://${LOCAL_IP}:3000${NC}"
 echo ""
 read -p "Press Enter to exit this window..."

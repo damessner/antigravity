@@ -137,7 +137,7 @@ Write-Host "     → Reset system: .\clean_slate.ps1" -ForegroundColor Gray
 Write-Host ""
 
 Print-Header "✅ Restart Complete"
-Write-Host "The system is restarting. Open a browser and navigate to:" -ForegroundColor Green
+Write-Host "The system has been restarted. Open a browser and navigate to:" -ForegroundColor Green
 Write-Host "  http://${localIp}:3000" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press any key to exit this window..." -ForegroundColor Gray
