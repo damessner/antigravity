@@ -130,6 +130,15 @@ export function GradebookHeader({
           >
             <FileSpreadsheet className="w-4 h-4" />
           </button>
+
+          <button
+            onClick={onImport}
+            className="p-2 text-slate-400 hover:text-blue-400 transition-colors"
+            title="Excel Import"
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+
         </div>
       </div>
     </div>

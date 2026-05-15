@@ -423,6 +423,48 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
   };
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedSubject) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const toastId = toast.loading("Daten werden importiert...");
+
+    try {
+      const token = localStorage.getItem("token");
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/gradebook/import/${selectedSubject.id}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Import fehlgeschlagen");
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject.id] });
+      toast.success("Import erfolgreich", { id: toastId });
+    } catch (err: unknown) {
+      toast.error("Import fehlgeschlagen", {
+        id: toastId,
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    } finally {
+      if (e.target) e.target.value = "";
+    }
+  };
+
+
   if (!selectedClassId && isLoadingSubjects) {
     return <div className="flex-1 flex items-center justify-center">Lade Fächer...</div>;
   }
@@ -441,11 +483,21 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onToggleProjection={handleToggleProjection}
         onToggleWeighting={() => setIsWeightingOpen(!isWeightingOpen)}
         onExport={handleExport}
-        onImport={() => {}} 
+        onImport={handleImportClick}
         isLoading={matrixQuery.isLoading}
+
         refetch={refetchMatrix}
         isOwner={isOwner}
       />
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".xlsx"
+        className="hidden"
+      />
+
 
       {isWeightingOpen && (
         <WeightingOverlay

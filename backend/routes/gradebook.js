@@ -1135,4 +1135,109 @@ router.post('/import-batch', authenticateToken, async (req, res) => {
   }
 });
 
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
+
+// POST /api/gradebook/import/:id
+router.post('/import/:id', authenticateToken, upload.single('file'), async (req, res) => {
+  const subjectId = Number(req.params.id);
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(req.file.buffer);
+    const worksheet = workbook.getWorksheet('Notenliste') || workbook.worksheets[0];
+
+    const header1 = worksheet.getRow(1).values; // Categories
+    const header2 = worksheet.getRow(2).values; // Assessments
+
+    // 1. Fetch Subject & Metadata
+    const subRes = await req.pool.query('SELECT class_id FROM subjects WHERE id = $1', [subjectId]);
+    if (subRes.rows.length === 0) throw new Error('Subject not found');
+    const classId = subRes.rows[0].class_id;
+
+    // 2. Fetch Pupils & Categories
+    const [pupilsRes, catsRes] = await Promise.all([
+      req.pool.query(`
+        SELECT p.id, u.full_name as name FROM pupils p
+        JOIN users u ON p.user_id = u.id WHERE p.class_id = $1
+      `, [classId]),
+      req.pool.query('SELECT id, name FROM assessment_categories WHERE subject_id = $1', [subjectId])
+    ]);
+    const pupils = pupilsRes.rows;
+    const categories = catsRes.rows;
+
+    const client = await req.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const colMapping = []; 
+      let currentCatName = '';
+      header1.forEach((val, idx) => {
+        if (idx <= 1) return;
+        if (val && val !== 'Schüler') {
+          currentCatName = val.toString().trim();
+        }
+        
+        if (currentCatName) {
+          const cat = categories.find(c => c.name === currentCatName);
+          if (cat) {
+            const assName = header2[idx] ? header2[idx].toString().trim() : '';
+            colMapping[idx] = { catId: cat.id, assName };
+          }
+        }
+      });
+
+
+      for (let i = 3; i <= worksheet.rowCount; i++) {
+        const row = worksheet.getRow(i).values;
+        if (!row || !row[1]) continue;
+        const pupilName = row[1].toString().trim();
+        const pupil = pupils.find(p => p.name === pupilName);
+        if (!pupil) continue;
+
+        for (let j = 2; j < row.length; j++) {
+          const mapping = colMapping[j];
+          if (!mapping) continue;
+
+          const rawVal = row[j];
+          const gradeValue = (rawVal !== undefined && rawVal !== null && rawVal !== '') ? rawVal.toString().trim() : null;
+          
+          const checkRes = await client.query(`
+            SELECT id FROM grades WHERE category_id = $1 AND pupil_id = $2 AND assessment_name = $3
+          `, [mapping.catId, pupil.id, mapping.assName]);
+
+          if (gradeValue === null) {
+            if (checkRes.rows.length > 0) {
+              await client.query('DELETE FROM grades WHERE id = $1', [checkRes.rows[0].id]);
+            }
+          } else {
+            if (checkRes.rows.length > 0) {
+              await client.query('UPDATE grades SET grade_value = $1, date = NOW() WHERE id = $2', [gradeValue, checkRes.rows[0].id]);
+            } else {
+              await client.query(`
+                INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, is_visible)
+                VALUES ($1, $2, $3, $4, true)
+              `, [mapping.catId, pupil.id, mapping.assName, gradeValue]);
+            }
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+      req.io.emit('matrix_imported_batch', { subject_id: Number(subjectId) });
+      res.json({ success: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Excel Import Error:', err);
+    res.status(500).json({ error: 'Import failed: ' + err.message });
+  }
+});
+
 module.exports = router;
+
