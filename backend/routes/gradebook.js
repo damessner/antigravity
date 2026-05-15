@@ -1,11 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, setupLimiter } = require('../server');
+const { authenticateToken, setupLimiter, stateLimiter } = require('../server');
 const ExcelJS = require('exceljs');
 
 // GET /api/gradebook/export/:id
-router.get('/export/:id', authenticateToken, async (req, res) => {
+router.get('/export/:id', stateLimiter, authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.id);
+  const exportType = req.query.type || 'class'; // 'class' or 'pupil'
+  const pupilIdFilter = req.query.pupil_id ? Number(req.query.pupil_id) : null;
+
   try {
     // 1. Fetch Subject & Metadata
     const subRes = await req.pool.query(`
@@ -29,14 +32,28 @@ router.get('/export/:id', authenticateToken, async (req, res) => {
     }
 
     // 3. Fetch Pupils & Grades
-    const pupilsRes = await req.pool.query(`
+    let pupilQuery = `
       SELECT p.id, u.full_name as name 
       FROM pupils p
       JOIN users u ON p.user_id = u.id
       WHERE p.class_id = $1
-      ORDER BY u.full_name
-    `, [subject.class_id]);
+    `;
+    const pupilParams = [subject.class_id];
+    if (pupilIdFilter) {
+      pupilQuery += ` AND p.id = $2`;
+      pupilParams.push(pupilIdFilter);
+    }
+    pupilQuery += ' ORDER BY u.full_name';
+
+    const pupilsRes = await req.pool.query(pupilQuery, pupilParams);
     const pupils = pupilsRes.rows;
+
+    // Fetch tags for rank insignia
+    const tagsRes = await req.pool.query(
+      'SELECT pupil_id, tier_tag FROM pupil_subject_tags WHERE subject_id = $1', [subjectId]
+    );
+    const tagMap = {};
+    tagsRes.rows.forEach(t => { tagMap[t.pupil_id] = t.tier_tag; });
 
     let grades = [];
     if (catIds.length > 0) {
@@ -46,56 +63,179 @@ router.get('/export/:id', authenticateToken, async (req, res) => {
 
     // 4. Create Excel Workbook
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Notenliste');
+    workbook.creator = 'Antigravity School System';
+    workbook.created = new Date();
+
+    // ── Helper: conditional fill colour for numeric grade 1-5 ──────────────
+    const gradeToFill = (val) => {
+      const n = parseFloat(String(val));
+      if (isNaN(n)) return null;
+      if (n <= 1.5) return { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF22C55E' } }; // green-500
+      if (n <= 2.5) return { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF86EFAC' } }; // green-300
+      if (n <= 3.5) return { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFBBF24' } }; // amber-400
+      if (n <= 4.5) return { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFB923C' } }; // orange-400
+      return { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEF4444' } };               // red-500
+    };
+
+    // ── CLASS MATRIX worksheet ───────────────────────────────────────────────
+    const worksheet = workbook.addWorksheet('Notenliste', {
+      pageSetup: {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        paperSize: 9 // A4
+      }
+    });
 
     // Header Rows
-    const header1 = ['Schüler'];
-    const header2 = ['']; // For assessment names
-    const colMetadata = [{ type: 'pupil', id: 'name' }];
+    const header1 = ['Schüler', 'Rang'];
+    const header2 = ['', ''];
+    const colMetadata = [{ type: 'pupil' }, { type: 'rank' }];
 
     categories.forEach(cat => {
-      const catAssessments = assessments.filter(a => a.category_id === cat.id);
+      const catAssessments = assessments.filter(a => Number(a.category_id) === Number(cat.id));
       if (catAssessments.length === 0) {
-        header1.push(cat.name);
+        header1.push(`${cat.name} (${cat.weight_percentage}%)`);
         header2.push('');
         colMetadata.push({ type: 'grade', catId: cat.id, assName: '' });
       } else {
         catAssessments.forEach((ass, idx) => {
-          header1.push(idx === 0 ? cat.name : '');
+          header1.push(idx === 0 ? `${cat.name} (${cat.weight_percentage}%)` : '');
           header2.push(ass.name);
           colMetadata.push({ type: 'grade', catId: cat.id, assName: ass.name });
         });
       }
     });
+    header1.push('Ø Note');
+    header2.push('');
+    colMetadata.push({ type: 'avg' });
+
+    const HEADER_BG = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+    const HEADER_FONT = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
 
     worksheet.addRow(header1);
     worksheet.addRow(header2);
 
-    // Styling headers
-    worksheet.getRow(1).font = { bold: true };
-    worksheet.getRow(2).font = { italic: true };
+    worksheet.getRow(1).eachCell(cell => {
+      cell.font = HEADER_FONT;
+      cell.fill = HEADER_BG;
+      cell.alignment = { wrapText: true, vertical: 'middle' };
+    });
+    worksheet.getRow(2).eachCell(cell => {
+      cell.font = { italic: true, color: { argb: 'FF94A3B8' }, size: 9 };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    });
+    worksheet.getRow(1).height = 30;
 
     // Fill Data
     pupils.forEach(pupil => {
-      const rowData = [pupil.name];
-      colMetadata.slice(1).forEach(col => {
-        const grade = grades.find(g => 
-          Number(g.pupil_id) === Number(pupil.id) && 
-          Number(g.category_id) === Number(col.catId) && 
-          (g.assessment_name === col.assName || (!g.assessment_name && !col.assName))
-        );
-        rowData.push(grade ? grade.grade_value : '');
+      const numericGradesForAvg = [];
+      const rowData = [pupil.name, tagMap[pupil.id] || '–'];
+
+      colMetadata.slice(2).forEach(col => {
+        if (col.type === 'avg') {
+          const avg = numericGradesForAvg.length > 0
+            ? (numericGradesForAvg.reduce((a, b) => a + b, 0) / numericGradesForAvg.length).toFixed(2)
+            : '';
+          rowData.push(avg);
+        } else {
+          const grade = grades.find(g =>
+            Number(g.pupil_id) === Number(pupil.id) &&
+            Number(g.category_id) === Number(col.catId) &&
+            (g.assessment_name === col.assName || (!g.assessment_name && !col.assName))
+          );
+          const val = grade ? grade.grade_value : '';
+          rowData.push(val);
+          const n = parseFloat(String(val));
+          if (!isNaN(n)) numericGradesForAvg.push(n);
+        }
       });
-      worksheet.addRow(rowData);
+
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell, colNumber) => {
+        if (colNumber > 2) {
+          const fill = gradeToFill(cell.value);
+          if (fill) {
+            cell.fill = fill;
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+          }
+        }
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 1 ? 'left' : 'center' };
+      });
     });
 
-    // Auto-fit columns (basic)
-    worksheet.columns.forEach(column => {
-      column.width = 20;
-    });
+    // Column widths
+    worksheet.getColumn(1).width = 24; // Schüler
+    worksheet.getColumn(2).width = 10; // Rang
+    for (let i = 3; i <= colMetadata.length; i++) {
+      worksheet.getColumn(i).width = 14;
+    }
+
+    // ── PUPIL PROFILE worksheet (when single pupil or always as second tab) ──
+    if (exportType === 'pupil' || pupils.length <= 1) {
+      for (const pupil of pupils) {
+        const safeTabName = pupil.name.replace(/[:/\\?*[\]]/g, '').substring(0, 31);
+        const profileSheet = workbook.addWorksheet(safeTabName, {
+          pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, paperSize: 9 }
+        });
+
+        profileSheet.addRow(['Schülerprofil', pupil.name]);
+        profileSheet.addRow(['Fach', subject.name]);
+        profileSheet.addRow(['Rang', tagMap[pupil.id] || '–']);
+        profileSheet.addRow([]);
+
+        const numericAll = [];
+        categories.forEach(cat => {
+          const catAssessments = assessments.filter(a => Number(a.category_id) === Number(cat.id));
+          profileSheet.addRow([`${cat.name} (${cat.weight_percentage}%)`]);
+          profileSheet.lastRow.eachCell(cell => {
+            cell.font = { bold: true, size: 11 };
+            cell.fill = HEADER_BG;
+            cell.font = HEADER_FONT;
+          });
+
+          const names = catAssessments.length > 0
+            ? catAssessments.map(a => a.name)
+            : ['Bewertung'];
+
+          names.forEach(assName => {
+            const grade = grades.find(g =>
+              Number(g.pupil_id) === Number(pupil.id) &&
+              Number(g.category_id) === Number(cat.id) &&
+              g.assessment_name === assName
+            );
+            const val = grade ? grade.grade_value : '–';
+            profileSheet.addRow([assName, val]);
+            const lastRow = profileSheet.lastRow;
+            const gradeCell = lastRow.getCell(2);
+            const fill = gradeToFill(val);
+            if (fill) {
+              gradeCell.fill = fill;
+              gradeCell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            }
+            const n = parseFloat(String(val));
+            if (!isNaN(n)) numericAll.push(n);
+          });
+        });
+
+        profileSheet.addRow([]);
+        const overallAvg = numericAll.length > 0
+          ? (numericAll.reduce((a, b) => a + b, 0) / numericAll.length).toFixed(2)
+          : '–';
+        const avgRow = profileSheet.addRow(['Gesamtschnitt', overallAvg]);
+        avgRow.eachCell(cell => { cell.font = { bold: true, size: 12 }; });
+
+        profileSheet.getColumn(1).width = 28;
+        profileSheet.getColumn(2).width = 12;
+      }
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=Notenliste_${subject.abbreviation}_${subject.class_name}.xlsx`);
+    const fileName = exportType === 'pupil' && pupils.length === 1
+      ? `Profil_${pupils[0].name.replace(/\s+/g, '_')}_${subject.abbreviation}.xlsx`
+      : `Notenliste_${subject.abbreviation}_${subject.class_name}.xlsx`;
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
     await workbook.xlsx.write(res);
     res.end();
@@ -113,6 +253,106 @@ const getRankWeight = (tag) => {
   if (tag === 'Lehrling') return 1;
   return 0;
 };
+
+/**
+ * Calculates predicted rank for a pupil based on grades and SDL completions.
+ * Rule A: avg numeric grade < 1.5 → Meister (top performer)
+ * Rule B: ≥ 3 completed SDL tasks (is_self_directed category, has a grade) → Geselle
+ * Otherwise → Lehrling if any grade exists, else null (unranked)
+ *
+ * Returns: 'Meister' | 'Geselle' | 'Lehrling' | null
+ */
+function computePredictedRank(grades, sdlCompletedCount) {
+  const numericGrades = grades
+    .map(g => parseFloat(g.grade_value))
+    .filter(v => !isNaN(v) && v >= 1 && v <= 5);
+
+  if (numericGrades.length === 0 && sdlCompletedCount === 0) return null;
+
+  const avg = numericGrades.length > 0
+    ? numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length
+    : null;
+
+  // Rule A: average grade ≤ 1.5 → Master
+  if (avg !== null && avg <= 1.5) return 'Meister';
+
+  // Rule B: 3 or more SDL tasks graded → Journeyman
+  if (sdlCompletedCount >= 3) return 'Geselle';
+
+  // Fallback: any grade exists → Apprentice
+  if (numericGrades.length > 0 || sdlCompletedCount > 0) return 'Lehrling';
+
+  return null;
+}
+
+// GET /api/gradebook/rank-preview/:subject_id
+// Returns predicted rank and current grade average for all pupils in a subject
+router.get('/rank-preview/:subject_id', stateLimiter, authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.subject_id);
+  if (!subjectId) return res.status(400).json({ error: 'subject_id required' });
+
+  try {
+    // Fetch all categories and grades for this subject
+    const catsRes = await req.pool.query(`
+      SELECT id, is_self_directed FROM assessment_categories WHERE subject_id = $1
+    `, [subjectId]);
+    const catIds = catsRes.rows.map(c => c.id);
+    const sdlCatIds = catsRes.rows.filter(c => c.is_self_directed).map(c => c.id);
+
+    if (catIds.length === 0) return res.json([]);
+
+    const gradesRes = await req.pool.query(`
+      SELECT g.pupil_id, g.category_id, g.grade_value
+      FROM grades g
+      WHERE g.category_id = ANY($1::int[]) AND g.grade_value IS NOT NULL AND g.grade_value != ''
+    `, [catIds]);
+
+    const tagsRes = await req.pool.query(`
+      SELECT pupil_id, tier_tag FROM pupil_subject_tags WHERE subject_id = $1
+    `, [subjectId]);
+
+    const pupilsRes = await req.pool.query(`
+      SELECT p.id, u.full_name as name
+      FROM pupils p
+      JOIN users u ON p.user_id = u.id
+      JOIN subjects s ON s.class_id = p.class_id
+      WHERE s.id = $1
+      ORDER BY u.full_name
+    `, [subjectId]);
+
+    const result = pupilsRes.rows.map(pupil => {
+      const pupilGrades = gradesRes.rows.filter(g => Number(g.pupil_id) === Number(pupil.id));
+      const sdlDone = sdlCatIds.length > 0
+        ? pupilGrades.filter(g => sdlCatIds.includes(Number(g.category_id))).length
+        : 0;
+
+      const numericGrades = pupilGrades
+        .map(g => parseFloat(g.grade_value))
+        .filter(v => !isNaN(v) && v >= 1 && v <= 5);
+
+      const avg = numericGrades.length > 0
+        ? Math.round((numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length) * 100) / 100
+        : null;
+
+      const currentTag = tagsRes.rows.find(t => Number(t.pupil_id) === Number(pupil.id))?.tier_tag || null;
+      const predictedRank = computePredictedRank(pupilGrades, sdlDone);
+
+      return {
+        pupil_id: pupil.id,
+        pupil_name: pupil.name,
+        current_rank: currentTag,
+        predicted_rank: predictedRank,
+        grade_average: avg,
+        sdl_completed: sdlDone
+      };
+    });
+
+    res.json(result);
+  } catch (err) {
+    console.error('Rank preview error:', err);
+    res.status(500).json({ error: 'Failed to compute rank predictions' });
+  }
+});
 
 // GET /api/gradebook/subjects
 router.get('/subjects', authenticateToken, async (req, res) => {
@@ -415,7 +655,14 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
     const subj = subRes.rows[0];
 
     const catsRes = await req.pool.query('SELECT * FROM assessment_categories WHERE subject_id = $1 ORDER BY id', [subjectId]);
-    const catIds = catsRes.rows.map(c => c.id);
+    let visibleCats = catsRes.rows;
+
+    // Security: pupils cannot see categories marked as hidden
+    if (req.user.role === 'pupil') {
+      visibleCats = catsRes.rows.filter(c => !c.is_hidden_from_pupils);
+    }
+
+    const catIds = visibleCats.map(c => c.id);
     let grades = [];
     let column_metadata = [];
     if (catIds.length > 0) {
@@ -440,7 +687,7 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
     }
     const tagsRes = await req.pool.query('SELECT * FROM pupil_subject_tags WHERE subject_id = $1', [subjectId]);
 
-    const categoriesWithMeta = catsRes.rows.map(c => ({
+    const categoriesWithMeta = visibleCats.map(c => ({
       ...c,
       column_metadata: column_metadata.filter(a => Number(a.category_id) === Number(c.id))
     }));
@@ -616,6 +863,40 @@ router.delete('/category/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /api/gradebook/category/:id/toggle-visibility
+// Toggles whether the entire category is hidden from pupils
+router.put('/category/:id/toggle-visibility', setupLimiter, authenticateToken, async (req, res) => {
+  const categoryId = Number(req.params.id);
+
+  try {
+    const accessRes = await req.pool.query(`
+      SELECT c.id, c.subject_id, c.is_hidden_from_pupils, s.teacher_id, s.second_teacher_id
+      FROM assessment_categories c
+      JOIN subjects s ON s.id = c.subject_id
+      WHERE c.id = $1
+    `, [categoryId]);
+
+    if (accessRes.rows.length === 0) return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+
+    const row = accessRes.rows[0];
+    const canEdit = req.user.role === 'admin'
+      || Number(row.teacher_id) === Number(req.user.id)
+      || Number(row.second_teacher_id) === Number(req.user.id);
+    if (!canEdit) return res.status(403).json({ error: 'Keine Berechtigung' });
+
+    const newVal = !row.is_hidden_from_pupils;
+    await req.pool.query(`
+      UPDATE assessment_categories SET is_hidden_from_pupils = $1 WHERE id = $2
+    `, [newVal, categoryId]);
+
+    if (req.io) req.io.emit('subject_updated', { subject_id: Number(row.subject_id) });
+    res.json({ success: true, is_hidden_from_pupils: newVal });
+  } catch (err) {
+    console.error('Category visibility toggle error:', err);
+    res.status(500).json({ error: 'Sichtbarkeit konnte nicht umgeschaltet werden' });
+  }
+});
+
 // POST /api/gradebook/grade (singular mapping support)
 router.post('/grade', authenticateToken, async (req, res) => {
   const { category_id, pupil_id, assessment_name, grade_value, is_visible } = req.body;
@@ -733,7 +1014,7 @@ router.delete('/subjects/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/gradebook/grades
-router.get('/grades', authenticateToken, async (req, res) => {
+router.get('/grades', stateLimiter, authenticateToken, async (req, res) => {
   const subjectId = Number(req.query.subject_id);
   if (!subjectId) return res.status(400).json({ error: 'subject_id parameter required' });
 
@@ -745,15 +1026,19 @@ router.get('/grades', authenticateToken, async (req, res) => {
       JOIN assessment_categories c ON g.category_id = c.id
       WHERE c.subject_id = $1
     `;
+    const queryParams = [subjectId];
+
     if (req.user.role === 'pupil') {
-      // Find pupil mapping
+      // Security: always derive pupil_id from the authenticated JWT — never trust client-supplied IDs
       const pRes = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
-      const targetPupilId = pRes.rows.length > 0 ? pRes.rows[0].id : 0;
-      queryStr += ` AND g.pupil_id = ${Number(targetPupilId)} AND g.is_visible = true`;
+      if (pRes.rows.length === 0) return res.status(403).json({ error: 'Schülerprofil nicht gefunden' });
+      const securePupilId = pRes.rows[0].id;
+      queryStr += ` AND g.pupil_id = $2 AND g.is_visible = true`;
+      queryParams.push(securePupilId);
     }
     queryStr += ` ORDER BY g.date, g.id`;
 
-    const gradesRes = await req.pool.query(queryStr, [subjectId]);
+    const gradesRes = await req.pool.query(queryStr, queryParams);
     res.json(gradesRes.rows);
   } catch (err) {
     console.error('Fetch grades error:', err);

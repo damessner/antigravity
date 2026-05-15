@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { Pupil, SchoolClass, Subject, Category, Grade, User, ColumnMetadata } from "@/types";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Pupil, SchoolClass, Subject, Category, Grade, User, ColumnMetadata, PupilTag, RankPreviewEntry } from "@/types";
 import { getApiUrl } from "@/utils/apiDiscovery";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { ScaleType } from "./gradeUtils";
@@ -57,8 +57,21 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   // Data Queries
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
   const matrixQuery = useGradebookMatrix(selectedSubject?.id || null);
-  const { categories = [], grades = [] } = matrixQuery.data || {};
+  const { categories = [], grades = [], pupil_tags: matrixPupilTags = [] } = matrixQuery.data || {};
   
+  // Rank Preview — teacher-only, loaded per selected subject
+  const rankPreviewQuery = useQuery<RankPreviewEntry[]>({
+    queryKey: ["rank-preview", selectedSubject?.id],
+    queryFn: async () => {
+      if (!selectedSubject) return [];
+      const { data } = await fetchAuth(`/api/gradebook/rank-preview/${selectedSubject.id}`);
+      return data as RankPreviewEntry[];
+    },
+    enabled: !!selectedSubject && isOwner,
+    staleTime: 30_000
+  });
+  const rankPreview = rankPreviewQuery.data || [];
+
   // Mutations
   const mutations = useGradebookMutations(selectedSubject?.id || null);
 
@@ -377,6 +390,19 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     }
   };
 
+  const handleToggleCategoryVisibility = async (catId: number) => {
+    if (!isOwner) return;
+    try {
+      await fetchAuth(`/api/gradebook/category/${catId}/toggle-visibility`, { method: "PUT" });
+      queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+      toast.success("Bereichssichtbarkeit aktualisiert");
+    } catch (err: unknown) {
+      toast.error("Sichtbarkeit konnte nicht geändert werden", {
+        description: err instanceof Error ? err.message : "Bitte erneut versuchen."
+      });
+    }
+  };
+
   const handleSaveCategoryEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showEditCategoryModal) return;
@@ -513,6 +539,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         categories={balancedCategories}
         grades={grades}
         columns={allColumns}
+        pupilTags={matrixPupilTags}
+        rankPreview={rankPreview}
         currentUser={currentUser}
         isOwner={isOwner}
         onGradeChange={handleGradeChange}
@@ -523,6 +551,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onDeleteCategory={handleDeleteCategory}
         onScaleSwitch={handleScaleSwitch}
         onToggleColumnVisibility={handleToggleColumnVisibility}
+        onToggleCategoryVisibility={handleToggleCategoryVisibility}
         onEditCategory={handleOpenEditCategory}
         onToggleCellVisibility={handleToggleCellVisibility}
       />

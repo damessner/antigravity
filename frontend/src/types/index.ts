@@ -82,6 +82,7 @@ export interface Category {
   scale_type: ScaleType;
 
   is_self_directed: boolean;
+  is_hidden_from_pupils?: boolean;
   isLocked?: boolean;
   column_metadata?: ColumnMetadata[];
 }
@@ -103,6 +104,33 @@ export interface PupilTag {
   subject_id?: number;
   tier_tag: string;
   color?: string;
+}
+
+export interface RankPreviewEntry {
+  pupil_id: number;
+  pupil_name: string;
+  current_rank: string | null;
+  predicted_rank: string | null;
+  grade_average: number | null;
+  sdl_completed: number;
+}
+
+export interface ParticipationLog {
+  id: number;
+  pupil_id: number;
+  pupil_name: string;
+  subject_id: number;
+  lesson_date: string;
+  rating: "excellent" | "engaged" | "passive";
+  applied_to_grade: boolean;
+  created_at: string;
+}
+
+export interface SeatingPosition {
+  pupil_id: number;
+  name: string;
+  desk_row: number;
+  desk_col: number;
 }
 
 

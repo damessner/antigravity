@@ -153,14 +153,18 @@ export default function PupilDraggable({
           {/* Mastery Tags Row Section 8 */}
           {masteryTags.length > 0 && (
             <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {masteryTags.map((tagStr, i) => (
-                <span
-                  key={i}
-                  className="bg-slate-950/80 px-1 py-0.2 rounded text-[9px] font-mono text-slate-300 tracking-tight"
-                >
-                  {tagStr}
-                </span>
-              ))}
+              {masteryTags.map((tagStr, i) => {
+                const icon = tagStr === "Meister" ? "🥇" : tagStr === "Geselle" ? "🥈" : tagStr === "Lehrling" ? "🥉" : null;
+                return (
+                  <span
+                    key={i}
+                    className="bg-slate-950/80 px-1 py-0.2 rounded text-[9px] font-mono text-slate-300 tracking-tight flex items-center gap-0.5"
+                  >
+                    {icon && <span className="text-[11px]">{icon}</span>}
+                    {tagStr}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

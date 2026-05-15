@@ -95,6 +95,7 @@ CREATE TABLE assessment_categories (
     weight_percentage INTEGER CHECK (weight_percentage >= 0 AND weight_percentage <= 100),
     scale_type VARCHAR(50) DEFAULT 'numeric_1_5',
     is_self_directed BOOLEAN DEFAULT false,
+    is_hidden_from_pupils BOOLEAN DEFAULT false,
     CONSTRAINT uq_category_subject UNIQUE (subject_id, name)
 );
 
@@ -173,6 +174,32 @@ CREATE TABLE help_requests (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX idx_help_requests_status ON help_requests(status);
+
+-- One-tap participation tracker
+CREATE TABLE participation_logs (
+    id SERIAL PRIMARY KEY,
+    pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+    teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
+    lesson_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    rating VARCHAR(20) NOT NULL DEFAULT 'engaged',
+    -- 'excellent' (💎), 'engaged' (✅), 'passive' (⚠️)
+    applied_to_grade BOOLEAN DEFAULT false,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_participation_pupil ON participation_logs(pupil_id);
+CREATE INDEX idx_participation_date ON participation_logs(lesson_date);
+CREATE INDEX idx_participation_subject ON participation_logs(subject_id);
+
+-- Visual seating plan — persistent desk position map
+CREATE TABLE seating_positions (
+    id SERIAL PRIMARY KEY,
+    pupil_id INTEGER UNIQUE REFERENCES pupils(id) ON DELETE CASCADE,
+    desk_row INTEGER NOT NULL DEFAULT 1,
+    desk_col INTEGER NOT NULL DEFAULT 1,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_seating_pupil ON seating_positions(pupil_id);
 
 -- Seed admin account (first login: da.messner / weissenbach — password change required)
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
