@@ -66,11 +66,12 @@ try {
     Set-Location $targetDir
     
     Write-Header "Setup Complete!"
-    Write-Host "The system is now located on your Desktop in the 'Antigravity' folder." -ForegroundColor Green
-    Write-Host "I will now launch the Requirement Checker (01_initiate_system.bat)." -ForegroundColor White
+    Write-Host "The system is now located in: $targetDir" -ForegroundColor Green
+    Write-Host "I will now launch the Requirement Checker (00_initiate_system.bat)." -ForegroundColor White
     Write-Host ""
     
-    Start-Process "01_initiate_system.bat"
+    Start-Process "00_initiate_system.bat"
+
     
 } catch {
     Write-Host "`n [ERROR] Setup failed: $_" -ForegroundColor Red
