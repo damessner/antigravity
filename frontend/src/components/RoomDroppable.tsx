@@ -1,7 +1,8 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { Room } from "./TeacherDashboard";
+import { Room } from "@/types";
+
 import LernwerkstattDashboard from "./LernwerkstattDashboard";
 
 interface RoomDroppableProps {

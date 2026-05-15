@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { Subject, GradebookMatrix } from "@/types";
 
+const EMPTY_ARRAY: any[] = [];
+
 export function useGradebookData(classId: number | null) {
   const subjectsQuery = useQuery({
     queryKey: ["subjects", classId],
@@ -13,11 +15,12 @@ export function useGradebookData(classId: number | null) {
   });
 
   return {
-    subjects: subjectsQuery.data || [],
+    subjects: subjectsQuery.data || EMPTY_ARRAY,
     isLoadingSubjects: subjectsQuery.isLoading,
     refetchSubjects: subjectsQuery.refetch,
   };
 }
+
 
 export function useGradebookMatrix(subjectId: number | null) {
   return useQuery<GradebookMatrix>({

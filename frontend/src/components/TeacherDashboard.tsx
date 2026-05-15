@@ -111,13 +111,14 @@ export default function TeacherDashboard() {
   }, [dashboardState]);
 
   useEffect(() => {
-    if (classesData) {
+    if (classesData && JSON.stringify(classesData) !== JSON.stringify(classes)) {
       setClasses(classesData);
       if (classesData.length > 0 && selectedClass === "all") {
         setSelectedClass(classesData[0].name);
       }
     }
-  }, [classesData, selectedClass]);
+  }, [classesData, selectedClass, classes]);
+
 
   // Socket Connection Setup
   useEffect(() => {

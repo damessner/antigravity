@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
 import { MessageSquare, Send, CheckCircle, Clock, AlertCircle, Sparkles, UserCheck } from "lucide-react";
 import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
+import { fetchAuth } from "@/utils/fetchAuth";
+
 
 interface ActiveHelpRequest {
   id: number;
@@ -96,21 +98,16 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
 
   const fetchMyActiveRequest = async () => {
     setIsLoading(true);
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-
     try {
       const userStr = localStorage.getItem("user");
       const currentUser = userStr ? JSON.parse(userStr) : null;
       const myNameTarget = currentUser?.full_name || "";
 
-      const res = await fetch(`${apiUrl}/api/help/active`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data: ActiveHelpRequest[] = await res.json();
+      const { data } = await fetchAuth("/api/help/active");
+      if (data) {
+        const activeRequests: ActiveHelpRequest[] = data;
         // Match against own full name
-        const match = data.find(r => {
+        const match = activeRequests.find(r => {
           const targetName = r.pupil_name || r.full_name || "";
           return targetName.toLowerCase() === myNameTarget.toLowerCase();
         });
@@ -123,6 +120,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
     }
   };
 
+
   useEffect(() => {
     fetchMyActiveRequest();
   }, []);
@@ -132,20 +130,12 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
     e.preventDefault();
     setError(null);
     setIsSubmitting(true);
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
 
     try {
-      const res = await fetch(`${apiUrl}/api/help`, {
+      const { data } = await fetchAuth("/api/help", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ subject: selectedSubject, message: message.trim() || "" })
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Fehler beim Senden der Anfrage");
-      }
 
       // Clear input fields
       setMessage("");
@@ -157,16 +147,14 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
     }
   };
 
+
   // Resolve request trigger (Resets to State 1)
   const handleResolveRequest = async () => {
     if (!activeRequest) return;
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
 
     try {
-      const res = await fetch(`${apiUrl}/api/help/${activeRequest.id}/resolve`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}` }
+      const { res } = await fetchAuth(`/api/help/${activeRequest.id}/resolve`, {
+        method: "PUT"
       });
       if (res.ok) {
         setActiveRequest(null);
@@ -175,6 +163,7 @@ export default function StudentHelpWidget({ subjectsList }: { subjectsList?: str
       console.error("Resolve operation exception:", err);
     }
   };
+
 
   if (isLoading) {
     return (

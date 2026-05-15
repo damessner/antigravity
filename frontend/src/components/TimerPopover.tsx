@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Socket } from "socket.io-client";
 import { Clock, RotateCcw, Check } from "lucide-react";
-import { Pupil } from "./TeacherDashboard";
+import { Pupil } from "@/types";
+
 
 interface TimerPopoverProps {
   pupil: Pupil;

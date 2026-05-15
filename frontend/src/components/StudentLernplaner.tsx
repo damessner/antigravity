@@ -11,6 +11,8 @@ import {
 import { Socket } from "socket.io-client";
 import StudentHelpWidget from "./StudentHelpWidget";
 import { getApiUrl } from "@/utils/apiDiscovery";
+import { fetchAuth } from "@/utils/fetchAuth";
+
 
 interface OpenTask {
   task_id: string;
@@ -369,15 +371,9 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-
     try {
-      const res = await fetch(`${apiUrl}/api/student/tasks`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const { data } = await fetchAuth("/api/student/tasks");
+      if (data) {
         setTasksPool(data.tasks || []);
         setLearningPlan(data.plan || []);
       }
@@ -387,6 +383,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchDashboardData();
@@ -439,19 +436,16 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     // Optimistic cache swap
     setLearningPlan(prev => prev.map(p => p.id === itemId ? { ...p, completed: targetStatus } : p));
 
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-
     try {
-      await fetch(`${apiUrl}/api/student/plan-task/${itemId}`, {
+      await fetchAuth(`/api/student/plan-task/${itemId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ completed: targetStatus })
       });
     } catch (err) {
       // Re-hydrate state upon async pipeline exceptions
       fetchDashboardData();
     }
+
   };
 
   // Handle deletion of scheduled task instances from blocks
@@ -460,17 +454,14 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     setLearningPlan(prev => prev.map(p => p.id === itemId ? { ...p, removing: true } : p).filter(p => p.id !== itemId));
     setNotification("Zuweisung entfernt.");
 
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-
     try {
-      await fetch(`${apiUrl}/api/student/plan-task/${itemId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+      await fetchAuth(`/api/student/plan-task/${itemId}`, {
+        method: "DELETE"
       });
     } catch (err) {
       fetchDashboardData();
     }
+
   };
 
   const handleDragStart = (event: any) => {
@@ -523,9 +514,8 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
       setNotification(`Aufgabe in Block ${targetSlotNum} eingeplant.`);
 
       try {
-        const res = await fetch(`${apiUrl}/api/student/plan-task`, {
+        const { data: persistedData, res } = await fetchAuth("/api/student/plan-task", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             category_id: openTask.category_id,
             assessment_name: openTask.assessment_name,
@@ -535,7 +525,6 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
         });
 
         if (res.ok) {
-          const persistedData = await res.json();
           // Swap synthetic optimistic ID with actual db allocated key
           setLearningPlan(prev => prev.map(p => p.id === optimisticId ? { ...p, id: persistedData.id } : p));
         } else {
@@ -544,6 +533,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
       } catch (err) {
         fetchDashboardData();
       }
+
     } 
     // CASE B: Moving an existing planned card between specific slots
     else if (activeData.type === "plan") {
@@ -562,14 +552,12 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
       // Proxy server record via delete & create sequence guaranteeing idempotent allocation constraints
       try {
         // Run concurrent or sequential replication tasks
-        await fetch(`${apiUrl}/api/student/plan-task/${planItem.id}`, {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` }
+        await fetchAuth(`/api/student/plan-task/${planItem.id}`, {
+          method: "DELETE"
         });
 
-        const res = await fetch(`${apiUrl}/api/student/plan-task`, {
+        const { data: persistedData, res } = await fetchAuth("/api/student/plan-task", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             category_id: planItem.category_id,
             assessment_name: planItem.assessment_name,
@@ -579,7 +567,6 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
         });
 
         if (res.ok) {
-          const persistedData = await res.json();
           setLearningPlan(prev => prev.map(p => p.id === planItem.id ? { ...p, id: persistedData.id } : p));
         } else {
           fetchDashboardData();
@@ -587,6 +574,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
       } catch (err) {
         fetchDashboardData();
       }
+
     }
   };
 
@@ -603,9 +591,8 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     const apiUrl = getApiUrl();
 
     try {
-      const res = await fetch(`${apiUrl}/api/student/submit-task`, {
+      const { res } = await fetchAuth("/api/student/submit-task", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           category_id: submitTaskModal.task.category_id,
           assessment_name: submitTaskModal.task.assessment_name,
@@ -619,6 +606,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     } catch (err) {
       setNotification("Abgabe fehlgeschlagen.");
     }
+
   };
 
   return (

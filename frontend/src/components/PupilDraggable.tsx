@@ -5,7 +5,8 @@ import { useDraggable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Socket } from "socket.io-client";
 import { Clock, CheckCircle2, Circle } from "lucide-react";
-import { Pupil } from "./TeacherDashboard";
+import { Pupil } from "@/types";
+
 
 // Stand-Alone High-Performance TimerBadge Sub-Component
 function TimerBadge({ startedAtMs, minutes }: { startedAtMs: number; minutes: number }) {

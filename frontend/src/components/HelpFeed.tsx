@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Filter, CheckCircle2, MessageSquare, Clock, RefreshCw, UserCheck } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
+import { fetchAuth } from "@/utils/fetchAuth";
+
 
 interface HelpRequestItem {
   id: number;
@@ -40,15 +42,9 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
 
   const fetchActiveRequests = async () => {
     setIsLoading(true);
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-
     try {
-      const res = await fetch(`${apiUrl}/api/help/active`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const { data } = await fetchAuth("/api/help/active");
+      if (data) {
         setRequests(data || []);
         
         // Populate live commentary inputs initially
@@ -66,6 +62,7 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchActiveRequests();
@@ -129,18 +126,14 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
 
   const handleClaimRequest = async (id: number) => {
     setIsSaving(prev => ({ ...prev, [id]: true }));
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
     const comment = claimComments[id]?.trim();
 
     try {
-      const res = await fetch(`${apiUrl}/api/help/${id}/claim`, {
+      const { data: updated } = await fetchAuth(`/api/help/${id}/claim`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ teacher_comment: comment || undefined })
       });
-      if (res.ok) {
-        const updated = await res.json();
+      if (updated) {
         setRequests(prev => prev.map(r => Number(r.id) === Number(id) ? updated : r));
       }
     } catch (err) {
@@ -150,20 +143,17 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
     }
   };
 
+
   const handleUpdateCommentOnTheFly = async (id: number) => {
     setIsSaving(prev => ({ ...prev, [id]: true }));
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
     const commentTarget = liveUpdateComments[id] || "";
 
     try {
-      const res = await fetch(`${apiUrl}/api/help/${id}/comment`, {
+      const { data: updated } = await fetchAuth(`/api/help/${id}/comment`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ teacher_comment: commentTarget })
       });
-      if (res.ok) {
-        const updated = await res.json();
+      if (updated) {
         setRequests(prev => prev.map(r => Number(r.id) === Number(id) ? updated : r));
       }
     } catch (err) {
@@ -172,6 +162,7 @@ export default function HelpFeed({ socket, currentUser }: { socket: any; current
       setIsSaving(prev => ({ ...prev, [id]: false }));
     }
   };
+
 
   // Helper computing humanized wait elapsed strings
   const renderTimeElapsed = (dateStr: string) => {

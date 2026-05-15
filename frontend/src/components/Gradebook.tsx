@@ -103,15 +103,20 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
 
   useEffect(() => {
     if (subjects.length === 0) {
-      setSelectedSubject(null);
+      if (selectedSubject !== null) setSelectedSubject(null);
       return;
     }
     const currentIsStillValid = selectedSubject && subjects.some((s) => Number(s.id) === Number(selectedSubject.id));
     if (currentIsStillValid) return;
+    
     const savedSubjId = localStorage.getItem(`saved_subject_${selectedClassId}`);
     const targetSubj = subjects.find((s) => Number(s.id) === Number(savedSubjId)) || subjects[0];
-    setSelectedSubject(targetSubj);
+    
+    if (targetSubj && (!selectedSubject || Number(targetSubj.id) !== Number(selectedSubject.id))) {
+      setSelectedSubject(targetSubj);
+    }
   }, [subjects, selectedClassId, selectedSubject]);
+
 
   useEffect(() => {
     if (!selectedSubject) return;
