@@ -52,7 +52,23 @@ The system is organized into five main actions to keep your environment healthy:
 
 ---
 
+## 🐧 Linux / Unraid / Proxmox Support
+
+For users running on Linux environments, use the included shell scripts in the `scripts/` directory:
+
+### Deployment
+1.  **Clone the repository**: `git clone https://github.com/damessner/antigravity.git`
+2.  **Start the system**: `./scripts/restart_system.sh`
+
+### Maintenance
+- **Update**: Run `./scripts/update_system.sh` to pull the latest changes and rebuild.
+- **Reset**: Run `./scripts/clean_slate.sh` to clear the environment.
+- **Permissions**: Ensure scripts are executable with `chmod +x scripts/*.sh`.
+
+---
+
 ## 🛠️ Technology Stack
+
 
 - **Frontend**: Next.js 15 (React 19), Tailwind CSS.
 - **Backend**: Node.js, Express.js, Socket.IO.
