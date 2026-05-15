@@ -13,6 +13,7 @@ import { ClassManagement } from "@/components/admin/ClassManagement";
 import { PupilManagement } from "@/components/admin/PupilManagement";
 import { RoomManagement } from "@/components/admin/RoomManagement";
 import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
+import { OnboardingTip } from "@/components/OnboardingTip";
 
 import { User, SchoolClass, Pupil, Room } from "@/types";
 import { useDashboardData } from "@/hooks/useDashboardData";
@@ -300,14 +301,27 @@ export default function AdminPage() {
           </h1>
         </div>
 
-        <button
-          onClick={() => refetch()}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
-          <span>Aktualisieren</span>
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => refetch()}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            <span>Aktualisieren</span>
+          </button>
+          <OnboardingTip
+            pageKey="admin"
+            title="⚙️ Administrator-Steuerkonsole"
+            tips={[
+              "👥 Unter 'Benutzer' legst du Lehrer- und Schülerkonten an.",
+              "📚 Klassen und Schüler werden getrennt verwaltet.",
+              "💾 Im Bereich 'System-Sicherung' kannst du Backups herunterladen und wiederherstellen.",
+              "🔑 Passwörter können jederzeit zurückgesetzt werden — der Nutzer wird beim nächsten Login zur Änderung aufgefordert.",
+              "🏠 Räume lassen sich im Bereich 'Räume' hinzufügen, umbenennen oder löschen.",
+            ]}
+          />
+        </div>
       </header>
 
       {/* Main Workspace Area */}

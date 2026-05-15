@@ -56,7 +56,12 @@ try {
     Write-Log "🏫 School Management System — Clean Slate Utility" -ForegroundColor Cyan
     Write-Log "==================================================`n" -ForegroundColor Cyan
 
-    Write-Log "⚠️  WARNING: This will stop running containers and completely clear the database." -ForegroundColor DarkYellow
+    Write-Log "⚠️  This will:" -ForegroundColor DarkYellow
+    Write-Log "    1. Download a safety backup of the current database" -ForegroundColor DarkYellow
+    Write-Log "    2. Stop all running containers" -ForegroundColor DarkYellow
+    Write-Log "    3. Wipe the database" -ForegroundColor DarkYellow
+    Write-Log "    4. Restart with a clean state`n" -ForegroundColor DarkYellow
+
     $proceed = Read-Host "Proceed with clean slate? (y/N)"
     if ($proceed -notmatch "^[Yy]$") {
         Write-Log "`nOperation cancelled by user." -ForegroundColor Yellow
@@ -79,8 +84,48 @@ try {
         throw "Docker is not running or accessible. Error details: $_"
     }
 
+    # Step 1b: Auto-backup before wiping
+    Write-Log "💾 Step 1/4 — Attempting automatic safety backup..." -ForegroundColor Yellow
+    $ApiUrl = if ($env:NEXT_PUBLIC_API_URL) { $env:NEXT_PUBLIC_API_URL } else { "http://localhost:4000" }
+    $BackupSaved = $false
+
+    # Try pg_dump via docker exec if DB container is running
+    $dbContainer = docker ps --format "{{.Names}}" 2>&1 | Where-Object { $_ -match "school_db|antigravity_db" } | Select-Object -First 1
+    if ($dbContainer) {
+        Write-Log "   🐘 Database container found: $dbContainer" -ForegroundColor Gray
+        $BackupsDir = Join-Path $ScriptDir "school_data\backups"
+        if (-not (Test-Path $BackupsDir)) { New-Item -ItemType Directory -Path $BackupsDir -Force | Out-Null }
+        $Timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
+        $SqlBackupPath = Join-Path $BackupsDir "pre_clean_slate_${Timestamp}.sql"
+        try {
+            Write-Log "   📦 Exporting database via pg_dump..." -ForegroundColor Gray
+            docker exec $dbContainer pg_dump -U postgres school_management --data-only --inserts 2>&1 | Out-File -FilePath $SqlBackupPath -Encoding utf8
+            if ($LASTEXITCODE -eq 0) {
+                Write-Log "   ✅ Safety backup saved: pre_clean_slate_${Timestamp}.sql" -ForegroundColor Green
+                $BackupSaved = $true
+            } else {
+                Write-Log "   ⚠️  pg_dump failed — continuing without automatic backup" -ForegroundColor DarkYellow
+                Remove-Item $SqlBackupPath -ErrorAction SilentlyContinue
+            }
+        } catch {
+            Write-Log "   ⚠️  Backup error: $_" -ForegroundColor DarkYellow
+        }
+    } else {
+        Write-Log "   ℹ️  No running database container found — skipping automatic backup" -ForegroundColor Gray
+    }
+
+    if (-not $BackupSaved) {
+        Write-Log "   ⚠️  No automatic backup was created." -ForegroundColor DarkYellow
+        $continueAnyway = Read-Host "   Continue without a backup? (y/N)"
+        if ($continueAnyway -notmatch "^[Yy]$") {
+            Write-Log "   Operation cancelled. Create a manual backup via Admin Panel first." -ForegroundColor Yellow
+            exit 0
+        }
+    }
+    Write-Log ""
+
     # Step 2: Stop containers and clear network/volume locks
-    Write-Log "⏹  Stopping Docker containers and clearing mappings..." -ForegroundColor Yellow
+    Write-Log "⏹  Step 2/4 — Stopping Docker containers and clearing mappings..." -ForegroundColor Yellow
     try {
         $prevEA = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
