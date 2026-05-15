@@ -65,7 +65,8 @@ export function UserManagement({
             >
               <option value="teacher">Lehrperson</option>
               <option value="admin">Administrator</option>
-              <option value="lernwerkstatt">Lernwerkstatt-Aufsicht</option>
+              <option value="pupil">Schüler</option>
+
             </select>
           </div>
           <button
@@ -110,7 +111,8 @@ export function UserManagement({
                     >
                       <option value="teacher">Lehrer</option>
                       <option value="admin">Admin</option>
-                      <option value="lernwerkstatt">LW-Aufsicht</option>
+                      <option value="pupil">Schüler</option>
+
                     </select>
                   </td>
                   <td className="px-6 py-4 text-right">
