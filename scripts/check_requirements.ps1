@@ -134,8 +134,21 @@ try {
     
     if ($FailCount -eq 0) {
         Write-Host "  Everything looks excellent! Your system is ready for the next lesson.`n" -ForegroundColor Green
-        Write-Host "  -> Run '02_launch_system.bat' to start the platform." -ForegroundColor Gray
+        
+        # Optional: Enable Auto-Updates (Task Scheduler)
+        $autoUpdate = Read-Host "  >> Enable automatic nightly updates & backups at 2:00 AM? (y/n)"
+        if ($autoUpdate -match "^[Yy]$") {
+            $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-ExecutionPolicy Bypass -File `"$ScriptDir\auto_updater.ps1`""
+            $trigger = New-ScheduledTaskTrigger -Daily -At 2am
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
+            
+            Register-ScheduledTask -TaskName "Antigravity_AutoUpdate" -Action $action -Trigger $trigger -Settings $settings -Description "Automatic updates and backups for Antigravity" -Force | Out-Null
+            Write-Host "     ✅ Auto-updates scheduled for 2:00 AM in Windows Task Scheduler." -ForegroundColor Green
+        }
+        
+        Write-Host "`n  -> Run '02_launch_system.bat' to start the platform." -ForegroundColor Gray
     } else {
+
         Write-Host "  Please resolve the failed items above to ensure a stable experience.`n" -ForegroundColor Red
     }
 
