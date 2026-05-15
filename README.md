@@ -111,8 +111,26 @@ cd ~/antigravity && ./scripts/update_android.sh
 
 ---
 
+### 🤖 Unattended Auto-Updates
+For total automation, you can schedule the system to check for updates and backup itself every night.
+
+**Linux / Proxmox / Unraid (Cron)**
+Run `crontab -e` and add this line to update every night at 2:00 AM:
+```bash
+0 2 * * * /bin/bash /opt/antigravity/scripts/auto_updater.sh
+```
+
+**Windows (Task Scheduler)**
+1. Open **Task Scheduler** and create a new task.
+2. Trigger: **Daily at 02:00**.
+3. Action: `powershell.exe`
+4. Arguments: `-ExecutionPolicy Bypass -File "C:\Path\To\antigravity\scripts\auto_updater.ps1"`
+
+---
+
 - **Reset**: Run `./scripts/clean_slate.sh` to clear the environment.
 - **Permissions**: Ensure scripts are executable with `chmod +x scripts/*.sh`.
+
 
 
 ---
