@@ -4,8 +4,7 @@ export type ScaleType =
   | "symbolic"
   | "numeric_0_100"
   | "percentage"
-  | "letters_A_F"
-  | "symbols";
+  | "letters_A_F";
 
 /**
  * Universal Grade Normalization: Converts localized grade strings into standardized floats (0.0 to 1.0)

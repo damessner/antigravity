@@ -329,6 +329,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
   const [activeDragItem, setActiveDragItem] = useState<any | null>(null);
+  const [submitTaskModal, setSubmitTaskModal] = useState<{ task: OpenTask; value: string } | null>(null);
 
   // Configure robust mobile & desktop drag sensors avoiding rapid unintended clicks
   const sensors = useSensors(
@@ -590,9 +591,12 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
   };
 
   const handleSubmitTask = async (task: OpenTask) => {
-    const entered = window.prompt(`Bewertung für "${task.assessment_name}" eingeben:`, "");
-    if (entered === null) return;
-    const value = entered.trim();
+    setSubmitTaskModal({ task, value: "" });
+  };
+
+  const handleConfirmSubmitTask = async () => {
+    if (!submitTaskModal) return;
+    const value = submitTaskModal.value.trim();
     if (!value) return;
 
     const token = localStorage.getItem("token");
@@ -603,13 +607,14 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          category_id: task.category_id,
-          assessment_name: task.assessment_name,
+          category_id: submitTaskModal.task.category_id,
+          assessment_name: submitTaskModal.task.assessment_name,
           grade_value: value
         })
       });
       if (!res.ok) throw new Error("Abgabe fehlgeschlagen");
-      setTasksPool(prev => prev.filter(t => t.task_id !== task.task_id));
+      setTasksPool(prev => prev.filter(t => t.task_id !== submitTaskModal.task.task_id));
+      setSubmitTaskModal(null);
       setNotification("Aufgabe abgegeben.");
     } catch (err) {
       setNotification("Abgabe fehlgeschlagen.");
@@ -768,6 +773,42 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
           ) : null}
         </DragOverlay>
       </DndContext>
+
+      {submitTaskModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-white">Aufgabe abgeben</h3>
+            <p className="text-xs text-slate-400">{submitTaskModal.task.assessment_name}</p>
+            <label htmlFor="submit-task-grade-input" className="text-xs text-slate-300">
+              Bewertungswert
+            </label>
+            <input
+              id="submit-task-grade-input"
+              type="text"
+              value={submitTaskModal.value}
+              onChange={(e) => setSubmitTaskModal({ ...submitTaskModal, value: e.target.value })}
+              placeholder="Bewertung eingeben"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            />
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => setSubmitTaskModal(null)}
+                className="px-3 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSubmitTask}
+                className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold"
+              >
+                Abgeben
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

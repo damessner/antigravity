@@ -201,7 +201,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     setShowAddAssessment({ categoryId: catId });
   }, []);
 
-  const handleOpenRenameColumn = async (catId: number, oldName: string) => {
+  const handleRenameColumn = async (catId: number, oldName: string) => {
     if (!isOwner) return;
     const nextName = prompt("Neuer Name für die Bewertung:", oldName);
     if (!nextName || !nextName.trim() || nextName.trim() === oldName) return;
@@ -460,7 +460,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onGradeChange={handleGradeChange}
         onCellContextMenu={handleCellContextMenu}
         onAddAssessment={handleOpenAddAssessment}
-        onRenameColumn={handleOpenRenameColumn}
+        onRenameColumn={handleRenameColumn}
         onEditMetadata={handleOpenEditMetadata}
         onDeleteCategory={handleDeleteCategory}
         onScaleSwitch={handleScaleSwitch}
@@ -512,6 +512,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                   <option value="numeric_1_5">Noten 1-5</option>
                   <option value="gpa_4_0">4.0 Skala (4.0 = Sehr Gut)</option>
                   <option value="symbolic">Symbole (+ / ~ / -)</option>
+                  <option value="numeric_0_100">0 - 100 Punkte</option>
+                  <option value="percentage">0 - 100%</option>
+                  <option value="letters_A_F">A - F</option>
                 </select>
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-300">
@@ -564,6 +567,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                   <option value="numeric_1_5">Noten 1-5</option>
                   <option value="gpa_4_0">4.0 Skala (4.0 = Sehr Gut)</option>
                   <option value="symbolic">Symbole (+ / ~ / -)</option>
+                  <option value="numeric_0_100">0 - 100 Punkte</option>
+                  <option value="percentage">0 - 100%</option>
+                  <option value="letters_A_F">A - F</option>
                 </select>
               </div>
               <label className="flex items-center gap-2 text-xs text-slate-300">

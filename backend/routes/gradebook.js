@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // Helper to calculate rank rank priority
 const getRankWeight = (tag) => {
@@ -448,15 +448,16 @@ router.post('/category', authenticateToken, async (req, res) => {
 });
 
 // PUT /api/gradebook/category/:id
-router.put('/category/:id', authenticateToken, async (req, res) => {
+router.put('/category/:id', setupLimiter, authenticateToken, async (req, res) => {
   const categoryId = Number(req.params.id);
   const { name, weight_percentage, scale_type, is_self_directed } = req.body;
   if (!name || Number.isNaN(categoryId)) {
     return res.status(400).json({ error: 'Fehlende Kategorie-Parameter' });
   }
 
-  const allowedScales = ['numeric_1_5', 'gpa_4_0', 'symbolic'];
-  const targetScale = allowedScales.includes(scale_type) ? scale_type : 'numeric_1_5';
+  const allowedScales = ['numeric_1_5', 'gpa_4_0', 'symbolic', 'numeric_0_100', 'percentage', 'letters_A_F', 'symbols'];
+  const normalizedScale = scale_type === 'symbols' ? 'symbolic' : scale_type;
+  const targetScale = allowedScales.includes(normalizedScale) ? normalizedScale : 'numeric_1_5';
   const targetWeight = Math.max(0, Math.min(100, Number(weight_percentage) || 0));
 
   try {

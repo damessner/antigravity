@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // Legacy Endpoint preserved for compatibility
 router.get('/pending-tasks', authenticateToken, async (req, res) => {
@@ -254,13 +254,13 @@ router.patch('/plan-task/:id', authenticateToken, async (req, res) => {
 
 // POST /api/student/submit-task
 // Allows pupils to submit a value for a self-directed task
-router.post('/submit-task', authenticateToken, async (req, res) => {
+router.post('/submit-task', setupLimiter, authenticateToken, async (req, res) => {
   if (req.user.role !== 'pupil') {
     return res.status(403).json({ error: 'Nur für Schülerkonten zugänglich' });
   }
 
   const { category_id, assessment_name, grade_value } = req.body;
-  if (!category_id || !assessment_name || grade_value === null || grade_value === undefined || String(grade_value).trim() === '') {
+  if (!category_id || !assessment_name || !grade_value || String(grade_value).trim() === '') {
     return res.status(400).json({ error: 'Kategorie, Aufgabenname und Bewertungswert sind erforderlich' });
   }
 

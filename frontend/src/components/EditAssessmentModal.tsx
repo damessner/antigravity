@@ -32,7 +32,10 @@ export default function EditAssessmentModal({
     try {
       const d = new Date(initialDeadline);
       if (isNaN(d.getTime())) return "";
-      return d.toISOString().slice(0, 10);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
     } catch {
       return "";
     }
@@ -66,7 +69,7 @@ export default function EditAssessmentModal({
         deadline: deadline
           ? (() => {
               const [year, month, day] = deadline.split("-").map(Number);
-              return new Date(Date.UTC(year, month - 1, day, 23, 59, 0)).toISOString();
+              return new Date(year, month - 1, day, 23, 59, 0).toISOString();
             })()
           : null
       };
