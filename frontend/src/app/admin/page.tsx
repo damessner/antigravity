@@ -38,6 +38,8 @@ export default function AdminPage() {
   const [newRoomName, setNewRoomName] = useState("");
   const [serverRestoreFile, setServerRestoreFile] = useState<string | null>(null);
   const [serverRestoreConfirm, setServerRestoreConfirm] = useState("");
+  const [systemStatus, setSystemStatus] = useState<{ isPending: boolean; lastLog: string } | null>(null);
+
   
   // Forms states
   const [newUser, setNewUser] = useState({ username: "", full_name: "", role: "teacher" });
@@ -64,6 +66,16 @@ export default function AdminPage() {
     }
   };
 
+  const loadSystemStatus = async () => {
+    try {
+      const { data } = await fetchAuth("/api/admin/system/status");
+      setSystemStatus(data);
+    } catch (err) {
+      console.error("Failed to load system status", err);
+    }
+  };
+
+
   useEffect(() => {
     const userStr = localStorage.getItem("user");
     if (!userStr) {
@@ -82,8 +94,12 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeSection === "backup") {
       loadSavedBackups();
+      loadSystemStatus();
+      const interval = setInterval(loadSystemStatus, 30000); // Poll every 30s
+      return () => clearInterval(interval);
     }
   }, [activeSection]);
+
 
   const handleUpdateRole = async (userId: number, userName: string, newRole: string) => {
     try {
@@ -282,6 +298,20 @@ export default function AdminPage() {
     }
   };
 
+  const handleTriggerUpdate = async () => {
+    try {
+      setIsLoading(true);
+      await fetchAuth("/api/admin/system/update", { method: "POST" });
+      toast.success("Update angefordert!", { description: "Das System wird in Kürze gesichert und aktualisiert." });
+      loadSystemStatus();
+    } catch (err: any) {
+      toast.error("Update konnte nicht ausgelöst werden", { description: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Top Header Navigation */}
@@ -449,7 +479,10 @@ export default function AdminPage() {
               isLoading={isLoading}
               savedBackups={savedBackups}
               loadSavedBackups={loadSavedBackups}
+              systemStatus={systemStatus}
+              handleTriggerUpdate={handleTriggerUpdate}
             />
+
           )}
 
           {/* SECTION 5: RAUMVERWALTUNG */}

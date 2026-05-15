@@ -187,6 +187,7 @@ app.use('/api/help', require('./routes/help'));
 app.use('/api/setup', require('./routes/setup'));
 app.use('/api/admin', require('./routes/admin'));
 const pushModule = require('./routes/push');
+
 app.use('/api/push', pushModule.router);
 app.use('/api/users/preferences', pushModule.preferencesRouter);
 

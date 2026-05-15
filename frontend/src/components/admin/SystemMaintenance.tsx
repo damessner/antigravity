@@ -17,7 +17,11 @@ interface SystemMaintenanceProps {
   isLoading: boolean;
   savedBackups: any[];
   loadSavedBackups: () => void;
+  // New System Update Props
+  systemStatus: { isPending: boolean; lastLog: string } | null;
+  handleTriggerUpdate: () => void;
 }
+
 
 export function SystemMaintenance({
   handleDownloadBackup,
@@ -33,8 +37,11 @@ export function SystemMaintenance({
   handleRestoreServerFile,
   isLoading,
   savedBackups,
-  loadSavedBackups
+  loadSavedBackups,
+  systemStatus,
+  handleTriggerUpdate
 }: SystemMaintenanceProps) {
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -200,6 +207,60 @@ export function SystemMaintenance({
           </div>
         )}
       </div>
+
+      {/* System Update & Maintenance Log */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm border-indigo-500/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-500/10 rounded-xl">
+              <RefreshCw className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">System-Aktualisierung</h3>
+              <p className="text-[11px] text-slate-500 italic">Code & Datenbank-Struktur aktualisieren</p>
+            </div>
+          </div>
+          
+          {systemStatus?.isPending && (
+            <div className="flex items-center gap-2 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full text-[10px] font-bold border border-amber-500/20 animate-pulse">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              UPDATE LÄUFT ODER GEPLANT
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-4">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Dieser Vorgang erstellt ein Backup, lädt den neuesten Code von GitHub und startet die Container neu. 
+              <strong> Das System ist währenddessen für ca. 30-60 Sekunden nicht erreichbar.</strong>
+            </p>
+            <button
+              onClick={() => {
+                if(confirm("Bist du sicher? Das System startet neu und ist kurzzeitig offline.")) {
+                  handleTriggerUpdate();
+                }
+              }}
+              disabled={isLoading || systemStatus?.isPending}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all shadow-lg shadow-indigo-500/10 flex items-center justify-center gap-2 text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${systemStatus?.isPending ? "animate-spin" : ""}`} />
+              {systemStatus?.isPending ? "Update angefordert..." : "Jetzt aktualisieren"}
+            </button>
+          </div>
+
+          <div className="lg:col-span-2 bg-black/50 border border-slate-800 rounded-xl p-4 font-mono text-[10px] text-slate-400 overflow-hidden flex flex-col h-[180px]">
+             <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-800">
+                <span className="text-slate-500 uppercase tracking-widest text-[9px]">Letzter Update-Log (Host)</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
+             </div>
+             <pre className="flex-1 overflow-y-auto whitespace-pre-wrap custom-scrollbar">
+                {systemStatus?.lastLog || "Keine Logs verfügbar."}
+             </pre>
+          </div>
+        </div>
+      </div>
     </div>
+
   );
 }

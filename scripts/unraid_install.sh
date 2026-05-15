@@ -49,7 +49,16 @@ echo -e "${WHITE}>> Setting Unraid permissions (nobody:users)...${NC}"
 chown -R nobody:users "$INSTALL_PATH"
 chmod -R 775 "$INSTALL_PATH"
 
-# 4. Integrate with Docker Compose Manager Plugin
+# 4. Optional: Enable Auto-Updates (Cron)
+echo -en "${YELLOW}>> Enable automatic nightly updates & backups at 2:00 AM? (y/n): ${NC}"
+read -r auto_update
+if [[ "$auto_update" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+    (crontab -l 2>/dev/null; echo "0 2 * * * /bin/bash $INSTALL_PATH/scripts/auto_updater.sh") | crontab -
+    echo -e "   ${GREEN}✅ Auto-updates scheduled for 2:00 AM.${NC}"
+fi
+
+# 5. Integrate with Docker Compose Manager Plugin
+
 echo -e "${WHITE}>> Integrating with Compose Manager plugin...${NC}"
 # Check for common Unraid Compose Manager plugin paths
 if [ -d "/boot/config/plugins/docker.compose" ] || [ -d "/boot/config/plugins/compose.manager" ]; then

@@ -18,16 +18,26 @@ log() {
 
 cd "$INSTALL_PATH"
 
+# 0. Check for Manual Trigger from Admin Panel
+TRIGGER_FILE="$INSTALL_PATH/school_data/UPDATE_PENDING"
+if [ -f "$TRIGGER_FILE" ]; then
+    log "Manual update triggered from Admin Panel!"
+    rm "$TRIGGER_FILE"
+    FORCE_UPDATE=true
+fi
+
 # 1. Check for updates
 log "Checking for updates..."
+
 git fetch origin main &>/dev/null
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/main)
 
-if [ "$LOCAL" == "$REMOTE" ]; then
+if [ "$LOCAL" == "$REMOTE" ] && [ "$FORCE_UPDATE" != "true" ]; then
     log "System is up to date. No action needed."
     exit 0
 fi
+
 
 log "Update found! Starting safe upgrade process..."
 

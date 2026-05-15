@@ -46,7 +46,16 @@ echo -e "${WHITE}>> Setting permissions...${NC}"
 chmod +x scripts/*.sh
 chmod +x *.bat 2>/dev/null || true
 
-# 5. Initialize System
+# 5. Optional: Enable Auto-Updates (Cron)
+echo -en "${CYAN}>> Enable automatic nightly updates & backups at 2:00 AM? (y/n): ${NC}"
+read -r auto_update
+if [[ "$auto_update" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+    (crontab -l 2>/dev/null; echo "0 2 * * * /bin/bash /opt/antigravity/scripts/auto_updater.sh") | crontab -
+    echo -e "   ${GREEN}✅ Auto-updates scheduled for 2:00 AM.${NC}"
+fi
+
+# 6. Initialize System
+
 echo -e "${WHITE}>> Initializing Docker Stack...${NC}"
 # We run build first to prepare images
 docker compose build &>/dev/null

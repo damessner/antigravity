@@ -53,9 +53,18 @@ fi
 # 5. Fix permissions
 chmod +x scripts/*.sh
 
-# 6. Launch System
+# 6. Optional: Enable Auto-Updates (Cron)
+echo -en "${YELLOW}>> Enable automatic nightly updates & backups at 2:00 AM? (y/n): ${NC}"
+read -r auto_update
+if [[ "$auto_update" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+    (crontab -l 2>/dev/null; echo "0 2 * * * /bin/bash $(pwd)/scripts/auto_updater.sh") | crontab -
+    echo -e "   ${GREEN}✅ Auto-updates scheduled for 2:00 AM.${NC}"
+fi
+
+# 7. Launch System
 echo -e "${WHITE}>> Launching the system...${NC}"
 ./scripts/restart_system.sh --yes
+
 
 # 7. Success
 echo -e "\n${CYAN}============================================================${NC}"

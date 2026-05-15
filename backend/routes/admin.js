@@ -1,46 +1,53 @@
 const express = require('express');
 const router = express.Router();
 const fs = require('fs');
-const rateLimit = require('express-rate-limit');
+const path = require('path');
 const { authenticateToken } = require('../server');
-const logger = require('../utils/logger');
 
-const requireAdmin = (req, res, next) => {
-  if (!req.user || req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Administrative access required' });
-  }
-  next();
+// Helper to check if user is admin
+const isAdmin = (req, res, next) => {
+    if (req.user && req.user.role === 'admin') {
+        next();
+    } else {
+        res.status(403).json({ error: 'Nur Administratoren erlaubt' });
+    }
 };
 
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
-  message: { error: 'Too many requests.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+// Define paths based on volume mapping
+const DATA_DIR = '/opt/school-management/school_data';
+const TRIGGER_FILE = path.join(DATA_DIR, 'UPDATE_PENDING');
+const LOG_FILE = path.join(DATA_DIR, 'logs/auto_update.log');
+
+// GET /api/admin/system/status — Check system update status
+router.get('/status', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const isPending = fs.existsSync(TRIGGER_FILE);
+        let lastLog = "";
+        if (fs.existsSync(LOG_FILE)) {
+            // Read last 20 lines of log
+            const content = fs.readFileSync(LOG_FILE, 'utf8');
+            lastLog = content.split('\n').slice(-20).join('\n');
+        }
+        res.json({ 
+            isPending, 
+            lastLog,
+            timestamp: new Date().toISOString()
+        });
+    } catch (err) {
+        res.status(500).json({ error: 'Status konnte nicht geladen werden' });
+    }
 });
 
-// GET /api/admin/logs — return retained error log entries (JSON)
-router.get('/logs', adminLimiter, authenticateToken, requireAdmin, (req, res) => {
-  try {
-    const entries = logger.readEntries();
-    res.json({ entries, logFile: logger.getPath() });
-  } catch (err) {
-    logger.error('[Logs API]', 'Failed to read log entries', err);
-    res.status(500).json({ error: 'Could not read log file' });
-  }
-});
-
-// GET /api/admin/logs/download — download raw log file
-router.get('/logs/download', adminLimiter, authenticateToken, requireAdmin, (req, res) => {
-  const filePath = logger.getPath();
-  if (!filePath || !fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'Log file not available' });
-  }
-  const filename = `errors_${new Date().toISOString().split('T')[0]}.log`;
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-  res.setHeader('Content-Type', 'text/plain');
-  fs.createReadStream(filePath).pipe(res);
+// POST /api/admin/system/update — Trigger an immediate update
+router.post('/update', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        // Write the trigger file
+        fs.writeFileSync(TRIGGER_FILE, `Update requested by ${req.user.full_name} at ${new Date().toISOString()}`);
+        res.json({ success: true, message: 'Update wurde angefordert. Das System startet in Kürze neu.' });
+    } catch (err) {
+        console.error('Update trigger error:', err);
+        res.status(500).json({ error: 'Update konnte nicht ausgelöst werden' });
+    }
 });
 
 module.exports = router;
