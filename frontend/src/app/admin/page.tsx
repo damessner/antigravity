@@ -6,6 +6,7 @@ import {
   Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, 
   Trash2, Key, Download, Upload, AlertTriangle, CheckCircle2, Building2, Edit2
 } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function AdminPage() {
 
   const fetchAuth = async (path: string, options: RequestInit = {}) => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     
     const headers = {
       "Content-Type": "application/json",
@@ -294,7 +295,7 @@ export default function AdminPage() {
   const handleDownloadBackup = async (type: "full" | "gradebooks" | "notes") => {
     try {
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       const url = `${apiUrl}/api/backup/${type}`;
 
       const res = await fetch(url, {
@@ -723,7 +724,7 @@ export default function AdminPage() {
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => {
-                                const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+                                const apiUrl = getApiUrl();
                                 window.open(`${apiUrl}/api/notes/export/${p.id}`, "_blank");
                               }}
                               title="Verhaltensdokumentation als Word (.doc) exportieren"

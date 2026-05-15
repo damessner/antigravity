@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Socket } from "socket.io-client";
 import StudentHelpWidget from "./StudentHelpWidget";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 interface OpenTask {
   task_id: string;
@@ -355,7 +356,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
   const fetchDashboardData = async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/student/tasks`, {
@@ -425,7 +426,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     setLearningPlan(prev => prev.map(p => p.id === itemId ? { ...p, completed: targetStatus } : p));
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       await fetch(`${apiUrl}/api/student/plan-task/${itemId}`, {
@@ -446,7 +447,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     setNotification("Zuweisung entfernt.");
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       await fetch(`${apiUrl}/api/student/plan-task/${itemId}`, {
@@ -482,7 +483,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
     if (!activeData) return;
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     // CASE A: Dropping a source item from the pool sidebar cloner list
     if (activeData.type === "source") {

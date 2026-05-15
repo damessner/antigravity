@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Camera, Download, ChevronDown, ChevronUp, Clock, Users, RefreshCw } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 export default function LernwerkstattDashboard() {
   const [snapshots, setSnapshots] = useState<any[]>([]);
@@ -11,7 +12,7 @@ export default function LernwerkstattDashboard() {
 
   const fetchSnapshots = async () => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/lernwerkstatt/snapshots?limit=3`, {
@@ -36,7 +37,7 @@ export default function LernwerkstattDashboard() {
     setIsLoading(true);
     setAlertMsg(null);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/lernwerkstatt/snapshot`, {
@@ -60,7 +61,7 @@ export default function LernwerkstattDashboard() {
 
   const handleExportSnapshot = (id: number) => {
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     window.open(`${apiUrl}/api/lernwerkstatt/snapshot/${id}/export?token=${token}`, "_blank");
   };
 

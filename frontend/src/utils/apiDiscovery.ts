@@ -5,21 +5,16 @@
  */
 
 export const getApiUrl = (): string => {
-  if (typeof window !== "undefined") {
-    if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    return `${protocol}//${host}:4000`;
-  }
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  return "";
 };
 
 export const getWsUrl = (): string => {
-  if (typeof window !== "undefined") {
-    if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.hostname;
-    return `${wsProtocol}//${host}:4000`;
-  }
-  return process.env.NEXT_PUBLIC_WS_URL || "http://localhost:4000";
+  const configuredWs = process.env.NEXT_PUBLIC_WS_URL?.trim();
+  if (configuredWs) return configuredWs.replace(/\/+$/, "");
+  const configuredApi = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configuredApi) return configuredApi.replace(/\/+$/, "");
+  if (typeof window !== "undefined") return window.location.origin;
+  return "";
 };

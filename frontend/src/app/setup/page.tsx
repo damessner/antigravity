@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Building2, CheckCircle2, Plus, Trash2, ArrowRight, ArrowLeft } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 const DEFAULT_ROOMS = ["Klassenzimmer", "Lernwerkstatt", "Gang 1. OG", "Gang 2. OG"];
 
@@ -34,7 +35,7 @@ export default function SetupPage() {
       finalRooms.push("TimeOut");
     }
 
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
     try {
       const res = await fetch(`${apiUrl}/api/setup/init-rooms`, {
         method: "POST",

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Bell, BellRing, Smartphone, ShieldCheck, AlertTriangle, RefreshCw, CheckCircle2 } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 interface UserPreferences {
   notify_help_requests: boolean;
@@ -62,7 +63,7 @@ export default function ProfilePage() {
   const fetchPreferences = async () => {
     setIsLoading(true);
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/users/preferences`, {
@@ -88,7 +89,7 @@ export default function ProfilePage() {
     setPreferences(nextState); // Optimistic immediate flip
 
     const token = localStorage.getItem("token");
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+    const apiUrl = getApiUrl();
 
     try {
       const res = await fetch(`${apiUrl}/api/users/preferences`, {
@@ -128,7 +129,7 @@ export default function ProfilePage() {
 
       // Securely fetch application VAPID operational target key
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
       
       const vapidRes = await fetch(`${apiUrl}/api/push/vapid-public-key`);
       if (!vapidRes.ok) throw new Error("Konnte öffentlichen Push-Schlüssel nicht vom Server abrufen.");

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { getApiUrl } from "@/utils/apiDiscovery";
 
 export default function ChangePasswordPage() {
   const router = useRouter();
@@ -40,7 +41,7 @@ export default function ChangePasswordPage() {
     setIsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
+      const apiUrl = getApiUrl();
 
       const res = await fetch(`${apiUrl}/api/users/change-password`, {
         method: "POST",
