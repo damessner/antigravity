@@ -133,6 +133,22 @@ else
 fi
 echo ""
 
+# Step 3.5: Optional Code Reset (GitHub Sync)
+echo "📦 Step 3.5 — Optional Code Reset (GitHub Sync)"
+read -p "   Reset application code to latest GitHub version? (y/N): " reset_code
+if [[ "$reset_code" =~ ^[Yy]$ ]]; then
+  if [ -d "$SCRIPT_DIR/../.git" ] || [ -d ".git" ]; then
+    echo "   >> Syncing code with GitHub..."
+    # Ensure we are in the project root
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    (cd "$PROJECT_ROOT" && git fetch origin main > /dev/null 2>&1 && git reset --hard origin/main 2>&1) | while read line; do echo -e "      \033[0;90m$line\033[0m"; done
+    echo "   ✅ Codebase reset to official GitHub version."
+  else
+    echo "   ⚠️  Not a Git repository. Cannot sync code."
+  fi
+fi
+echo ""
+
 # Step 5: Optional backup import
 BACKUP_FILE=""
 read -p "📦 Import a backup file before starting? (y/N): " import_backup

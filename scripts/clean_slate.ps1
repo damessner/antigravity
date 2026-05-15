@@ -79,7 +79,22 @@ try {
         }
     }
 
-    # 4. Re-initialize
+    # 4. Optional Code Reset (GitHub Sync)
+    Write-Host ""
+    $syncCode = Read-Host "  [OPTIONAL] Reset application code to latest GitHub version? (y/N)"
+    if ($syncCode -match "^[Yy]$") {
+        Step "Syncing code with GitHub..."
+        if (Test-Path ".git") {
+            git fetch origin main 2>&1 | Out-Null
+            git reset --hard origin/main 2>&1 | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
+            Write-Ok "Codebase reset to official GitHub version."
+        } else {
+            Write-Fail "Not a Git repository. Cannot sync code."
+        }
+    }
+
+    # 5. Re-initialize
+
     Write-Banner "CLEAN SLATE READY"
     Write-Host "  The system has been restored to factory settings." -ForegroundColor Green
     Write-Host "  The database will be re-seeded upon next launch.`n" -ForegroundColor White
