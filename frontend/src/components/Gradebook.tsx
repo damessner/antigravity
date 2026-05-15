@@ -9,6 +9,7 @@ import { fetchAuth } from "@/utils/fetchAuth";
 import { ScaleType } from "./gradeUtils";
 import { useWeightBalancer } from "./useWeightBalancer";
 import EditAssessmentModal from "./EditAssessmentModal";
+import ParticipationTracker from "./ParticipationTracker";
 
 // Modular Sub-components
 import { WeightingOverlay } from "./gradebook/WeightingOverlay";
@@ -53,6 +54,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isWeightingOpen, setIsWeightingOpen] = useState(false);
+  const [gradebookView, setGradebookView] = useState<"matrix" | "participation">("matrix");
 
   // Data Queries
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
@@ -534,27 +536,63 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         />
       )}
 
-      <GradebookTable
-        pupils={classPupils}
-        categories={balancedCategories}
-        grades={grades}
-        columns={allColumns}
-        pupilTags={matrixPupilTags}
-        rankPreview={rankPreview}
-        currentUser={currentUser}
-        isOwner={isOwner}
-        onGradeChange={handleGradeChange}
-        onCellContextMenu={handleCellContextMenu}
-        onAddAssessment={handleOpenAddAssessment}
-        onRenameColumn={handleRenameColumn}
-        onEditMetadata={handleOpenEditMetadata}
-        onDeleteCategory={handleDeleteCategory}
-        onScaleSwitch={handleScaleSwitch}
-        onToggleColumnVisibility={handleToggleColumnVisibility}
-        onToggleCategoryVisibility={handleToggleCategoryVisibility}
-        onEditCategory={handleOpenEditCategory}
-        onToggleCellVisibility={handleToggleCellVisibility}
-      />
+      {/* Tab Switcher for Matrix / Mitarbeit */}
+      <div className="flex gap-2 mb-4 pb-4 border-b border-slate-800/40">
+        <button
+          onClick={() => setGradebookView("matrix")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            gradebookView === "matrix"
+              ? "bg-slate-800 text-white shadow-xs"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/50"
+          }`}
+        >
+          📊 Notenmatrix
+        </button>
+        <button
+          onClick={() => setGradebookView("participation")}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+            gradebookView === "participation"
+              ? "bg-slate-800 text-white shadow-xs"
+              : "text-slate-400 hover:text-slate-200 hover:bg-slate-900/50"
+          }`}
+        >
+          💎 Mitarbeit
+        </button>
+      </div>
+
+      {gradebookView === "matrix" && (
+        <GradebookTable
+          pupils={classPupils}
+          categories={balancedCategories}
+          grades={grades}
+          columns={allColumns}
+          pupilTags={matrixPupilTags}
+          rankPreview={rankPreview}
+          currentUser={currentUser}
+          isOwner={isOwner}
+          onGradeChange={handleGradeChange}
+          onCellContextMenu={handleCellContextMenu}
+          onAddAssessment={handleOpenAddAssessment}
+          onRenameColumn={handleRenameColumn}
+          onEditMetadata={handleOpenEditMetadata}
+          onDeleteCategory={handleDeleteCategory}
+          onScaleSwitch={handleScaleSwitch}
+          onToggleColumnVisibility={handleToggleColumnVisibility}
+          onToggleCategoryVisibility={handleToggleCategoryVisibility}
+          onEditCategory={handleOpenEditCategory}
+          onToggleCellVisibility={handleToggleCellVisibility}
+        />
+      )}
+
+      {gradebookView === "participation" && selectedSubject && (
+        <div className="flex-1 overflow-y-auto">
+          <ParticipationTracker
+            subjects={subjects}
+            pupils={classPupils}
+            classId={selectedClassId}
+          />
+        </div>
+      )}
 
       {showAddSubject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
