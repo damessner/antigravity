@@ -69,6 +69,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [editingCol, setEditingCol] = useState<{ categoryId: number; oldName: string; newName: string } | null>(null);
   const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
   const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const updateWeightsMutateRef = useRef(mutations.updateWeights.mutate);
 
   const classPupils = useMemo(() => {
     const targetClass = classes.find((c) => Number(c.id) === Number(selectedClassId));
@@ -119,16 +120,20 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const saveWeightsDebounced = useCallback((updatedCats: Category[]) => {
     if (weightsDebounceRef.current) clearTimeout(weightsDebounceRef.current);
     weightsDebounceRef.current = setTimeout(() => {
-      mutations.updateWeights.mutate(updatedCats.map(c => ({ 
+      updateWeightsMutateRef.current(updatedCats.map(c => ({ 
       id: c.id, 
       weight_percentage: c.weight_percentage 
     })));
     }, 250);
-  }, [mutations.updateWeights]);
+  }, []);
 
   useEffect(() => () => {
     if (weightsDebounceRef.current) clearTimeout(weightsDebounceRef.current);
   }, []);
+
+  useEffect(() => {
+    updateWeightsMutateRef.current = mutations.updateWeights.mutate;
+  }, [mutations.updateWeights.mutate]);
 
   const { categories: balancedCategories, handleWeightChange, toggleLock } = useWeightBalancer(categories, saveWeightsDebounced);
 
@@ -182,6 +187,22 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       is_visible: targetVis
     });
   }, [isOwner, grades, mutations.updateGrade]);
+
+  const handleOpenAddAssessment = useCallback((catId: number) => {
+    setShowAddAssessment({ categoryId: catId });
+  }, []);
+
+  const handleOpenRenameColumn = useCallback((catId: number, oldName: string) => {
+    setEditingCol({ categoryId: catId, oldName, newName: oldName });
+  }, []);
+
+  const handleOpenEditMetadata = useCallback((catId: number, assName: string, metadata?: ColumnMetadata) => {
+    setShowEditMetadataModal({ categoryId: catId, oldName: assName, metadata });
+  }, []);
+
+  const refetchMatrix = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
+  }, [queryClient, selectedSubject?.id]);
 
   const handleCreateSubject = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -338,7 +359,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         onExport={handleExport}
         onImport={() => {}} 
         isLoading={matrixQuery.isLoading}
-        refetch={() => queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] })}
+        refetch={refetchMatrix}
         isOwner={isOwner}
       />
 
@@ -360,9 +381,9 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         isOwner={isOwner}
         onGradeChange={handleGradeChange}
         onCellContextMenu={handleCellContextMenu}
-        onAddAssessment={(catId) => setShowAddAssessment({ categoryId: catId })}
-        onRenameColumn={(catId, oldName) => setEditingCol({ categoryId: catId, oldName, newName: oldName })}
-        onEditMetadata={(catId, assName, metadata) => setShowEditMetadataModal({ categoryId: catId, oldName: assName, metadata })}
+        onAddAssessment={handleOpenAddAssessment}
+        onRenameColumn={handleOpenRenameColumn}
+        onEditMetadata={handleOpenEditMetadata}
         onDeleteCategory={handleDeleteCategory}
         onScaleSwitch={handleScaleSwitch}
         onToggleColumnVisibility={handleToggleColumnVisibility}
