@@ -27,10 +27,9 @@ After deploying, log in using the following administrative credentials:
 ## 🚀 Quickstart & Deployment
 
 ### Windows (One-Click)
-Simply double-click **`Start.bat`** in the root folder. This will:
-1. Verify system requirements.
-2. Launch the Docker containers.
-3. Open the system status window.
+Simply double-click the numbered files in order:
+1. **`01_initiate_system.bat`**: Verify system requirements and Docker status.
+2. **`02_start_system.bat`**: Start the platform.
 
 ### Standard Linux / Proxmox
 ```bash
@@ -47,12 +46,12 @@ The Frontend becomes accessible at `http://<your-server-ip>:3000`.
 
 ## 🛠️ Management Tools
 
-The system includes several "One-Click" utilities in the root folder for easy maintenance:
+The system includes several "One-Click" utilities in the root folder:
 
-- **`Start.bat`**: Start the system and check status.
-- **`check_requirements.bat`**: Verify Docker and project health.
-- **`restart_system.bat`**: Safely stop and restart all services.
-- **`clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
+- **`01_initiate_system.bat`**: Verify Docker and project health.
+- **`02_start_system.bat`**: Start the system.
+- **`03_restart_system.bat`**: Safely stop and restart all services.
+- **`04_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
 
 *Technical implementation scripts (.ps1 and .sh) are located in the `scripts/` subdirectory to keep the workspace clean.*
 

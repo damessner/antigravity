@@ -72,7 +72,9 @@ try {
         $dockerVer = (docker --version 2>&1)
         Write-CheckOk "Docker installed: $dockerVer"
     } else {
-        Write-CheckFail "Docker NOT found. Install from https://docs.docker.com/desktop/windows/"
+        Write-CheckFail "Docker NOT found."
+        Write-Host "   -> Action Required: Please install Docker Desktop from https://docs.docker.com/desktop/windows/" -ForegroundColor Yellow
+        Write-Host "   -> After installation, restart your computer and run this script again." -ForegroundColor Yellow
     }
 
     Step "Checking Docker daemon..."
