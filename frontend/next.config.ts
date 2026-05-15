@@ -9,11 +9,11 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "http://backend:4000/api/:path*",
+        destination: `${process.env.BACKEND_URL || "http://localhost:4000"}/api/:path*`,
       },
       {
         source: "/socket.io/:path*",
-        destination: "http://backend:4000/socket.io/:path*",
+        destination: `${process.env.BACKEND_URL || "http://localhost:4000"}/socket.io/:path*`,
       },
     ];
   },
