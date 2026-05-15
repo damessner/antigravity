@@ -51,6 +51,7 @@ The system is now simplified into three main actions in the root folder:
 - **`01_initiate_system.bat`**: Verify Docker and project health.
 - **`02_launch_system.bat`**: Start the system. If it's already running, it will offer to **Restart** (for a clean refresh) or **Stop** the services.
 - **`03_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
+- **`04_system_health_monitor.bat`**: View live logs and resource usage (CPU/RAM) in real-time.
 
 *Technical implementation scripts (.ps1 and .sh) are located in the `scripts/` subdirectory to keep the workspace clean.*
 
