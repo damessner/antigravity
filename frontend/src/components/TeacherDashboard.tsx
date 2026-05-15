@@ -54,8 +54,9 @@ export default function TeacherDashboard() {
 
   // Primary States
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help" | "participation">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help" | "karriere">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
+  const [featureModal, setFeatureModal] = useState<{title: string; description: string} | null>(null);
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pupils, setPupils] = useState<Pupil[]>([]);
@@ -506,8 +507,13 @@ export default function TeacherDashboard() {
           )}
 
           <button
-            onClick={() => setActiveTab("gradebook")}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+            onClick={() => {
+              setFeatureModal({
+                title: "Evaluationsbereich",
+                description: "Der Evaluationsbereich ermöglicht Ihnen eine umfassende Verwaltung von Noten, Bewertungen und Leistungsanalysen. Hier können Sie Kategorien erstellen, Bewertungen eintragen und die Leistungsentwicklung Ihrer Schüler verfolgen. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
+              });
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
               }`}
           >
             <GraduationCap className="w-4 h-4 md:w-3.5 md:h-3.5 text-cyan-400 shrink-0" />
@@ -515,8 +521,13 @@ export default function TeacherDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveTab("notes")}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+            onClick={() => {
+              setFeatureModal({
+                title: "Notizen",
+                description: "Der Notizenbereich ermöglicht Ihnen, disziplinarische und allgemeine Notizen zu Schülern zu erfassen. Sie können Verhaltensbeobachtungen dokumentieren und später nachvollziehen. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
+              });
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
               }`}
           >
             <ClipboardList className="w-4 h-4 md:w-3.5 md:h-3.5 text-amber-400 shrink-0" />
@@ -524,8 +535,13 @@ export default function TeacherDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveTab("help")}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+            onClick={() => {
+              setFeatureModal({
+                title: "Live-Hilfe",
+                description: "Das Live-Hilfe-System ermöglicht es Schülern, in Echtzeit Hilfe anzufordern. Lehrer können die Anfragen sehen und priorisieren. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
+              });
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
               }`}
           >
             <span className="text-indigo-400 shrink-0">🙋</span>
@@ -534,12 +550,12 @@ export default function TeacherDashboard() {
 
           {user?.role !== "pupil" && (
             <button
-              onClick={() => setActiveTab("participation")}
-              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "participation" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+              onClick={() => setActiveTab("karriere")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "karriere" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
                 }`}
             >
-              <span className="text-emerald-400 shrink-0">💎</span>
-              <span>Mitarbeit</span>
+              <span className="text-purple-400 shrink-0">🏆</span>
+              <span>Karriere</span>
             </button>
           )}
 
@@ -764,18 +780,90 @@ export default function TeacherDashboard() {
           <StudentLernplaner socket={socket} />
         </div>
 
-        {/* TAB 6: PARTICIPATION TRACKER */}
-        {activeTab === "participation" && (
-          <div className="flex-1 p-4 md:p-6 max-w-5xl mx-auto w-full">
+        {/* TAB 6: KARRIERE DASHBOARD - View pupil ranks and achievements */}
+        {activeTab === "karriere" && user?.role !== "pupil" && (
+          <div className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
             <div className="mb-4">
-              <h2 className="text-lg font-bold text-white">Mitarbeit</h2>
-              <p className="text-[11px] text-slate-500 mt-0.5">Einmal tippen, um die Beteiligungsstufe eines Schülers zu erfassen. Am Wochenende als Note eintragen.</p>
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>🏆 Karriere-Dashboard</span>
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">Hier können Sie die Leistungsränge aller Schüler nach Fach einsehen und filtern.</p>
             </div>
-            <ParticipationTracker
-              subjects={subjects}
-              pupils={stableGradebookPupils}
-              classId={classes.length > 0 ? classes[0].id : 0}
-            />
+
+            {/* Class filter */}
+            <div className="mb-4 flex gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Klasse:</span>
+              {classes.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => setSelectedClass(c.name)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    selectedClass === c.name
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Subjects and pupil ranks display */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subjects
+                .filter(subj => {
+                  const pupilsInSubject = pupils.filter(p => p.class_name === selectedClass);
+                  return pupilsInSubject.length > 0;
+                })
+                .map((subject) => {
+                  const pupilsInClass = pupils.filter((p) => p.class_name === selectedClass);
+                  const pupilRanks = pupilsInClass
+                    .map((pupil) => {
+                      const tag = subjectTags.find(
+                        (t) => Number(t.pupil_id) === Number(pupil.id) && Number(t.subject_id) === Number(subject.id)
+                      );
+                      return {
+                        pupil,
+                        rank: tag?.tier_tag || "Keine",
+                        rankSymbol: tag?.tier_tag === "Meister" ? "👑" : tag?.tier_tag === "Geselle" ? "🛠️" : tag?.tier_tag === "Lehrling" ? "🌱" : "➖"
+                      };
+                    })
+                    .sort((a, b) => {
+                      const rankOrder = { Meister: 0, Geselle: 1, Lehrling: 2, Keine: 3 };
+                      return rankOrder[a.rank as keyof typeof rankOrder] - rankOrder[b.rank as keyof typeof rankOrder];
+                    });
+
+                  return (
+                    <div key={subject.id} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{subject.name}</span>
+                        <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] font-mono rounded border border-amber-500/20">
+                          {subject.abbreviation}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {pupilRanks.map(({ pupil, rank, rankSymbol }) => (
+                          <div key={pupil.id} className="flex items-center justify-between p-2 bg-slate-950/60 rounded-lg border border-slate-800/40">
+                            <span className="text-xs text-slate-300">{pupil.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{rankSymbol}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">{rank}</span>
+                            </div>
+                          </div>
+                        ))}
+                        {pupilRanks.length === 0 && (
+                          <div className="text-xs text-slate-500 italic text-center py-4">Keine Schüler in dieser Klasse</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              {subjects.length === 0 && (
+                <div className="col-span-full text-center text-slate-500 text-sm py-12">
+                  Keine Fächer für diese Klasse verfügbar.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </main>
@@ -803,6 +891,38 @@ export default function TeacherDashboard() {
           onConfirm={handleConfirmTimeOut}
           onCancel={() => setPendingDropIntent(null)}
         />
+      )}
+
+      {/* Feature Information Modal */}
+      {featureModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <div className="flex items-start justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">{featureModal.title}</h3>
+              <button
+                onClick={() => setFeatureModal(null)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-sm text-slate-300 leading-relaxed mb-4">
+              {featureModal.description}
+            </p>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
+              <p className="text-xs text-amber-300 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten.</span>
+              </p>
+            </div>
+            <button
+              onClick={() => setFeatureModal(null)}
+              className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
+            >
+              Verstanden
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
