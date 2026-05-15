@@ -8,14 +8,42 @@ import {
 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 
+interface User {
+  id: number;
+  full_name: string;
+  username: string;
+  role: string;
+  requires_password_change?: boolean;
+  isUpdatingRole?: boolean;
+}
+
+interface SchoolClass {
+  id: number;
+  name: string;
+}
+
+interface Pupil {
+  id: number;
+  name: string;
+  username: string;
+  class_id: number;
+  class_name?: string;
+}
+
+interface Room {
+  id: number;
+  name: string;
+  capacity?: number;
+}
+
 export default function AdminPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms">("users");
   
-  const [users, setUsers] = useState<any[]>([]);
-  const [classes, setClasses] = useState<any[]>([]);
-  const [pupils, setPupils] = useState<any[]>([]);
-  const [rooms, setRooms] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [classes, setClasses] = useState<SchoolClass[]>([]);
+  const [pupils, setPupils] = useState<Pupil[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [savedBackups, setSavedBackups] = useState<any[]>([]);
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [editingRoomName, setEditingRoomName] = useState("");
@@ -68,7 +96,7 @@ export default function AdminPage() {
       setPupils(pData || []);
       setRooms(rData || []);
       if (cData?.length > 0 && !newPupil.class_id) {
-        setNewPupil((prev) => ({ ...prev, class_id: String(cData[0].id) }));
+        setNewPupil((prev: any) => ({ ...prev, class_id: String(cData[0].id) }));
       }
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Fehler beim Laden der Admin-Daten", details: err.message });
@@ -115,7 +143,7 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify(newUser),
       });
-      setUsers((prev) => [...prev, data.user]);
+      setUsers((prev: User[]) => [...prev, data.user]);
       setAlertMsg({
         type: "success",
         text: `Benutzer "${data.user.full_name}" erstellt!`,
@@ -146,7 +174,7 @@ export default function AdminPage() {
     if (!confirm(`Konto von "${name}" unwiderruflich löschen?`)) return;
     try {
       await fetchAuth(`/api/users/${id}`, { method: "DELETE" });
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+      setUsers((prev: User[]) => prev.filter((u: User) => u.id !== id));
       setAlertMsg({ type: "info", text: `Konto "${name}" gelöscht.` });
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Löschen fehlgeschlagen", details: err.message });
@@ -155,12 +183,12 @@ export default function AdminPage() {
 
   const handleChangeRole = async (userId: number, newRole: string, userName: string) => {
     try {
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, isUpdatingRole: true } : u)));
+      setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, isUpdatingRole: true } : u)));
       const { data } = await fetchAuth(`/api/users/${userId}/role`, {
         method: "PUT",
         body: JSON.stringify({ role: newRole }),
       });
-      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role: data.user.role, isUpdatingRole: false } : u)));
+      setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, role: data.user.role, isUpdatingRole: false } : u)));
       setAlertMsg({ type: "success", text: `Rolle für ${userName} auf ${newRole} geändert` });
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Rollenänderung fehlgeschlagen", details: err.message });
@@ -177,11 +205,11 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ name: newClass }),
       });
-      setClasses((prev) => [...prev, data]);
+      setClasses((prev: SchoolClass[]) => [...prev, data]);
       setNewClass("");
       setAlertMsg({ type: "success", text: `Klasse "${data.name}" registriert.` });
       if (!newPupil.class_id) {
-        setNewPupil((prev) => ({ ...prev, class_id: String(data.id) }));
+        setNewPupil((prev: any) => ({ ...prev, class_id: String(data.id) }));
       }
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Klassenregistrierung fehlgeschlagen", details: err.message });
@@ -204,7 +232,7 @@ export default function AdminPage() {
         text: `Schülerkonto für "${data.pupil.name}" erstellt!`,
         details: `Login: ${data.username} | Passwort: ${data.tempPassword}`,
       });
-      setNewPupil((prev) => ({ ...prev, full_name: "" }));
+      setNewPupil((prev: any) => ({ ...prev, full_name: "" }));
       loadData();
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Schüleraufnahme gescheitert", details: err.message });
@@ -215,7 +243,7 @@ export default function AdminPage() {
     if (!confirm(`Schüler "${name}" inklusive aller Noten und Zuordnungen löschen?`)) return;
     try {
       await fetchAuth(`/api/pupils/${id}`, { method: "DELETE" });
-      setPupils((prev) => prev.filter((p) => p.id !== id));
+      setPupils((prev: Pupil[]) => prev.filter((p: Pupil) => p.id !== id));
       setAlertMsg({ type: "info", text: `Schüler "${name}" abgemeldet.` });
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Löschen gescheitert", details: err.message });
@@ -230,7 +258,7 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ name: newRoomName }),
       });
-      setRooms((prev) => [...prev, data]);
+      setRooms((prev: Room[]) => [...prev, data]);
       setNewRoomName("");
       setAlertMsg({ type: "success", text: `Raum "${data.name}" erstellt.` });
     } catch (err: any) {
@@ -244,7 +272,7 @@ export default function AdminPage() {
         method: "PUT",
         body: JSON.stringify({ name: editingRoomName }),
       });
-      setRooms((prev) => prev.map((r) => (r.id === id ? data : r)));
+      setRooms((prev: Room[]) => prev.map((r: Room) => (r.id === id ? data : r)));
       setEditingRoomId(null);
       setAlertMsg({ type: "success", text: `Raum umbenannt.` });
     } catch (err: any) {
@@ -256,7 +284,7 @@ export default function AdminPage() {
     if (!confirm(`Raum "${name}" wirklich löschen? Alle Belegungshistorie wird entfernt.`)) return;
     try {
       await fetchAuth(`/api/setup/rooms/${id}`, { method: "DELETE" });
-      setRooms((prev) => prev.filter((r) => r.id !== id));
+      setRooms((prev: Room[]) => prev.filter((r: Room) => r.id !== id));
       setAlertMsg({ type: "info", text: `Raum "${name}" gelöscht.` });
     } catch (err: any) {
       setAlertMsg({ type: "error", text: "Löschen fehlgeschlagen", details: err.message });
@@ -499,7 +527,7 @@ export default function AdminPage() {
                     <input
                       type="text"
                       value={newUser.full_name}
-                      onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewUser({ ...newUser, full_name: e.target.value })}
                       placeholder="z.B. Mag. D. Messner"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                       required
@@ -510,7 +538,7 @@ export default function AdminPage() {
                     <input
                       type="text"
                       value={newUser.username}
-                      onChange={(e) => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, ".") })}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, ".") })}
                       placeholder="z.B. da.messner"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                       required
@@ -520,7 +548,7 @@ export default function AdminPage() {
                     <label className="block text-[11px] font-medium text-slate-400 mb-1">Rolle</label>
                     <select
                       value={newUser.role}
-                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewUser({ ...newUser, role: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                     >
                       <option value="teacher">Lehrer</option>
@@ -560,7 +588,7 @@ export default function AdminPage() {
                             <select
                               value={u.role}
                               disabled={u.isUpdatingRole}
-                              onChange={(e) => handleChangeRole(u.id, e.target.value, u.full_name)}
+                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangeRole(u.id, e.target.value, u.full_name)}
                               className={`bg-slate-950 border rounded p-1 text-[11px] font-semibold transition-colors focus:outline-none ${
                                 u.role === "admin"
                                   ? "text-amber-400 border-amber-500/30 bg-amber-500/5"
@@ -621,7 +649,7 @@ export default function AdminPage() {
                     <input
                       type="text"
                       value={newClass}
-                      onChange={(e) => setNewClass(e.target.value.toUpperCase())}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewClass(e.target.value.toUpperCase())}
                       placeholder="z.B. 3G oder 4G"
                       maxLength={5}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
@@ -667,7 +695,7 @@ export default function AdminPage() {
                     <input
                       type="text"
                       value={newPupil.full_name}
-                      onChange={(e) => setNewPupil({ ...newPupil, full_name: e.target.value })}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPupil({ ...newPupil, full_name: e.target.value })}
                       placeholder="z.B. Anna Müller"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                       required
@@ -677,7 +705,7 @@ export default function AdminPage() {
                     <label className="block text-[11px] font-medium text-slate-400 mb-1">Stammklasse</label>
                     <select
                       value={newPupil.class_id}
-                      onChange={(e) => setNewPupil({ ...newPupil, class_id: e.target.value })}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewPupil({ ...newPupil, class_id: e.target.value })}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
                       required
                     >
@@ -812,7 +840,7 @@ export default function AdminPage() {
                       <input
                         type="file"
                         accept=".json"
-                        onChange={(e) => setSelectedRestoreFile(e.target.files?.[0] || null)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedRestoreFile(e.target.files?.[0] || null)}
                         className="w-full text-xs text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-slate-300 hover:file:bg-slate-700 file:cursor-pointer bg-slate-950 p-1.5 rounded-lg border border-slate-800"
                         required
                       />
@@ -825,7 +853,7 @@ export default function AdminPage() {
                       <input
                         type="text"
                         value={restoreConfirmText}
-                        onChange={(e) => setRestoreConfirmText(e.target.value)}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRestoreConfirmText(e.target.value)}
                         placeholder="RESTORE"
                         className="w-full bg-slate-950 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-300 focus:border-rose-500 focus:outline-none placeholder:text-slate-700 font-mono text-center"
                         required
@@ -899,7 +927,7 @@ export default function AdminPage() {
                         <input
                           type="text"
                           value={serverRestoreConfirm}
-                          onChange={(e) => setServerRestoreConfirm(e.target.value)}
+                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServerRestoreConfirm(e.target.value)}
                           placeholder="RESTORE eingeben"
                           className="w-full bg-slate-950 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-300 focus:border-rose-500 focus:outline-none font-mono text-center"
                         />
@@ -938,7 +966,7 @@ export default function AdminPage() {
                     <input
                       type="text"
                       value={newRoomName}
-                      onChange={(e) => setNewRoomName(e.target.value)}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewRoomName(e.target.value)}
                       placeholder="z.B. Bibliothek"
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
                       required
@@ -967,10 +995,10 @@ export default function AdminPage() {
                           <input
                             type="text"
                             value={editingRoomName}
-                            onChange={(e) => setEditingRoomName(e.target.value)}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingRoomName(e.target.value)}
                             className="flex-1 bg-slate-950 border border-cyan-500/50 rounded-lg p-1.5 text-xs text-white focus:outline-none"
                             autoFocus
-                            onKeyDown={(e) => {
+                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                               if (e.key === "Enter") handleRenameRoom(room.id);
                               if (e.key === "Escape") setEditingRoomId(null);
                             }}
