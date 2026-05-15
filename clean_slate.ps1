@@ -24,10 +24,7 @@ try {
     if (-not $isAdmin) {
         Write-Host "Requesting Administrator privileges via UAC..." -ForegroundColor Yellow
         $skipPause = $true
-        $scriptPath = $PSCommandPath
-        if (-not $scriptPath) {
-            $scriptPath = Join-Path (Get-Location) "clean_slate.ps1"
-        }
+        $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { Join-Path $ScriptDir "clean_slate.ps1" }
         Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs -ErrorAction Stop
         exit 0
     }
@@ -228,7 +225,7 @@ try {
             Write-Log "   ⚠️  Backend did not respond in time. Check logs via 'docker compose logs backend'." -ForegroundColor DarkYellow
         }
     }
-    Write-Log ""
+    Write-Host ""
 
     # Step 7: Restore backup via API if requested
     if ($BackupFile -ne "" -and $backendReady) {
@@ -240,10 +237,14 @@ try {
         Copy-Item -Path $BackupFile -Destination (Join-Path $TargetBackupsDir (Split-Path $BackupFile -Leaf)) -Force
         
         $backupContent = Get-Content -Path $BackupFile -Raw
-        $payloadString = "{`"confirm`":`"RESTORE`",`"data`":$backupContent}"
+        # Safely construct the JSON payload without complex interpolation issues
+        $payload = @{
+            confirm = "RESTORE"
+            data = $backupContent | ConvertFrom-Json
+        } | ConvertTo-Json -Depth 100
         
         try {
-            $restoreResponse = Invoke-WebRequest -Uri "$ApiUrl/api/backup/restore" -Method Post -Body $payloadString -ContentType "application/json" -UseBasicParsing
+            $restoreResponse = Invoke-WebRequest -Uri "$ApiUrl/api/backup/restore" -Method Post -Body $payload -ContentType "application/json" -UseBasicParsing
             $responseContent = $restoreResponse.Content
             if ($responseContent -match "`"success`":true") {
                 Write-Log "   ✅ Backup restored successfully." -ForegroundColor Green
@@ -276,6 +277,6 @@ try {
 } finally {
     if (-not $skipPause) {
         Write-Host "`nPress Enter to exit..." -ForegroundColor Cyan
-        Read-Host
+        Read-Host | Out-Null
     }
 }

@@ -8,16 +8,21 @@ function Write-Header {
     Write-Host "====================================================`n" -ForegroundColor Cyan
 }
 
-# 1. Elevate Privileges
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
-    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    exit
-}
-
 # Ensure we are in the script's directory (elevation resets CWD to System32)
-Set-Location -Path $PSScriptRoot
+$ScriptDir = $PSScriptRoot
+if (-not $ScriptDir) { $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
+
+# Wrap everything in try/finally to ensure the window stays open on error
+try {
+    $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        Write-Host "Requesting Administrator privileges..." -ForegroundColor Yellow
+        $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { Join-Path $ScriptDir "start_system.ps1" }
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+        exit
+    }
+
+    Set-Location -Path $ScriptDir
 
 Clear-Host
 
@@ -75,5 +80,10 @@ Write-Header "CURRENT CONTAINER STATUS"
 docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
 Write-Host "`nKeep this window open to monitor logs (optional), or close it to continue." -ForegroundColor Gray
-Write-Host "Press any key to exit this installer..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+} catch {
+    Write-Host "`n❌ An unexpected error occurred during startup:" -ForegroundColor Red
+    Write-Host $_ -ForegroundColor White
+} finally {
+    Write-Host "`nPress any key to exit this window..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
