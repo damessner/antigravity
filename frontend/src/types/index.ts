@@ -37,10 +37,11 @@ export interface Room {
 export interface Note {
   id: number;
   pupil_id: number;
-  teacher_id: number;
-  category: string;
-  content: string;
+  note_text: string;
+  sentiment: "positive" | "neutral" | "negative";
+  is_visible_to_pupil: boolean;
+  auto_source?: string;
   created_at: string;
+  teacher_id: number;
   teacher_name?: string;
-  pupil_name?: string;
 }

@@ -6,6 +6,7 @@ import {
   Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2
 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
+import { fetchAuth } from "@/utils/fetchAuth";
 import { toast } from "sonner";
 import { UserManagement } from "@/components/admin/UserManagement";
 import { ClassManagement } from "@/components/admin/ClassManagement";
@@ -14,15 +15,16 @@ import { RoomManagement } from "@/components/admin/RoomManagement";
 import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
 
 import { User, SchoolClass, Pupil, Room } from "@/types";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import { useAdminMutations } from "@/hooks/useAdminMutations";
 
 export default function AdminPage() {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms">("users");
   
-  const [users, setUsers] = useState<User[]>([]);
-  const [classes, setClasses] = useState<SchoolClass[]>([]);
-  const [pupils, setPupils] = useState<Pupil[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const { users, classes, pupils, rooms, isLoading: dataLoading, refetch } = useDashboardData(typeof window !== "undefined" ? localStorage.getItem("token") : null);
+  const mutations = useAdminMutations();
+
   const [savedBackups, setSavedBackups] = useState<any[]>([]);
   const [editingRoomId, setEditingRoomId] = useState<number | null>(null);
   const [editingRoomName, setEditingRoomName] = useState("");
@@ -40,48 +42,11 @@ export default function AdminPage() {
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
   const [selectedRestoreFile, setSelectedRestoreFile] = useState<File | null>(null);
 
-  const fetchAuth = async (path: string, options: RequestInit = {}) => {
-    const token = localStorage.getItem("token");
-    const apiUrl = getApiUrl();
-    
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-      ...options.headers,
-    };
-
-    const res = await fetch(`${apiUrl}${path}`, { ...options, headers });
-    const isJson = res.headers.get("content-type")?.includes("application/json");
-    const data = isJson ? await res.json() : null;
-
-    if (!res.ok) {
-      throw new Error(data?.error || `Fehler bei Anfrage: ${res.statusText}`);
+  useEffect(() => {
+    if (classes.length > 0 && !newPupil.class_id) {
+      setNewPupil((prev: any) => ({ ...prev, class_id: String(classes[0].id) }));
     }
-    return { res, data };
-  };
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [{ data: uData }, { data: cData }, { data: pData }, { data: rData }] = await Promise.all([
-        fetchAuth("/api/users"),
-        fetchAuth("/api/classes"),
-        fetchAuth("/api/pupils"),
-        fetchAuth("/api/setup/rooms"),
-      ]);
-      setUsers(uData || []);
-      setClasses(cData || []);
-      setPupils(pData || []);
-      setRooms(rData || []);
-      if (cData?.length > 0 && !newPupil.class_id) {
-        setNewPupil((prev: any) => ({ ...prev, class_id: String(cData[0].id) }));
-      }
-    } catch (err: any) {
-      toast.error("Fehler beim Laden der Admin-Daten", { description: err.message });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [classes]);
 
   const loadSavedBackups = async () => {
     try {
