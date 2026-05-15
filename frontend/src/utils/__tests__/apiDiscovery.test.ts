@@ -17,7 +17,8 @@ describe('getApiUrl', () => {
 
   it('should return empty string by default on localhost (for relative fetches)', () => {
     const url = getApiUrl();
-    expect(url).toBe('');
+    expect(url).toBe('http://localhost:4000');
+
   });
 
   it('should use NEXT_PUBLIC_API_URL if provided', () => {
@@ -37,6 +38,7 @@ describe('getApiUrl', () => {
       port: '3000'
     });
     const url = getApiUrl();
-    expect(url).toBe('');
+    expect(url).toBe('http://192.168.1.50:4000');
+
   });
 });

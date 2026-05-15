@@ -79,7 +79,8 @@ export interface Category {
   subject_id: number;
   name: string;
   weight_percentage: number;
-  scale_type: ScaleType | string;
+  scale_type: ScaleType;
+
   is_self_directed: boolean;
   isLocked?: boolean;
   column_metadata?: ColumnMetadata[];

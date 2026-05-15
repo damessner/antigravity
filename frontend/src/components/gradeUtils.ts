@@ -14,7 +14,8 @@ export function toPercent(valStr: string | null | undefined, scale: ScaleType): 
   const trimmed = valStr.trim();
   if (trimmed === "") return null;
 
-  if (scale === "symbolic" || scale === "symbols") {
+  if (scale === "symbolic") {
+
     if (trimmed === "+") return 1.0;
     if (trimmed === "~") return 0.5;
     if (trimmed === "-") return 0.0;
@@ -57,7 +58,8 @@ export function fromPercent(pct: number | null, scale: ScaleType): string {
 
   const clamped = Math.max(0, Math.min(1, pct));
 
-  if (scale === "symbolic" || scale === "symbols") {
+  if (scale === "symbolic") {
+
     if (clamped >= 0.75) return "+";
     if (clamped >= 0.25) return "~";
     return "-";
@@ -89,7 +91,8 @@ export function fromPercent(pct: number | null, scale: ScaleType): string {
  * Helper to generate valid sample input placeholder guides based on ScaleType
  */
 export function getPlaceholderForScale(scale: ScaleType): string {
-  if (scale === "symbolic" || scale === "symbols") return "+, ~, -";
+  if (scale === "symbolic") return "+, ~, -";
+
   if (scale === "gpa_4_0") return "0.0 - 4.0";
   if (scale === "numeric_0_100") return "0 - 100";
   if (scale === "percentage") return "0 - 100%";

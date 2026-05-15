@@ -92,8 +92,9 @@ describe("useGradebookMutations", () => {
     };
     queryClient.setQueryData(["matrix", 10], matrix);
 
-    const first = createDeferred<{ data: unknown }>();
-    const second = createDeferred<{ data: { grade: { grade_value: string; is_visible: boolean } } }>();
+    const first = createDeferred<{ res: Response; data: any }>();
+    const second = createDeferred<{ res: Response; data: any }>();
+
 
     fetchAuthMock
       .mockImplementationOnce(() => first.promise)
@@ -125,7 +126,8 @@ describe("useGradebookMutations", () => {
 
     act(() => {
       first.reject(new Error("Old request failed"));
-      second.resolve({ data: { grade: { grade_value: "3", is_visible: true } } });
+      second.resolve({ res: { ok: true } as Response, data: { grade: { grade_value: "3", is_visible: true } } });
+
     });
 
     await waitFor(() => {

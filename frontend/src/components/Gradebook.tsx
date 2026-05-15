@@ -69,10 +69,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [newCategory, setNewCategory] = useState({ 
     name: "", 
     weight_percentage: 20, 
-    scale_type: "numeric_1_5",
+    scale_type: "numeric_1_5" as ScaleType,
     is_self_directed: false,
     default_deadline: ""
   });
+
   const [showAddAssessment, setShowAddAssessment] = useState<{ categoryId: number } | null>(null);
   const [newAssessmentName, setNewAssessmentName] = useState("");
   const [showEditMetadataModal, setShowEditMetadataModal] = useState<EditMetadataState | null>(null);
@@ -512,7 +513,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                 <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Skala</label>
                 <select 
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
-                  value={newCategory.scale_type} onChange={e => setNewCategory({...newCategory, scale_type: e.target.value})}
+                  value={newCategory.scale_type} onChange={e => setNewCategory({...newCategory, scale_type: e.target.value as ScaleType})}
+
                 >
                   <option value="numeric_1_5">Noten 1-5</option>
                   <option value="gpa_4_0">4.0 Skala (4.0 = Sehr Gut)</option>

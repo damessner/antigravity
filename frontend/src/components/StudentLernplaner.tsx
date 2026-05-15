@@ -351,6 +351,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
   // Derive target Monday-Friday current calendar block days stably
   const weekDays = useMemo(() => {
     const curr = new Date();
+
     const day = curr.getDay(); // 0 is Sunday, 1 is Monday
     const firstDayDiff = curr.getDate() - day + (day === 0 ? -6 : 1); // target Monday
     
@@ -600,6 +601,7 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
         })
       });
       if (!res.ok) throw new Error("Abgabe fehlgeschlagen");
+
       setTasksPool(prev => prev.filter(t => t.task_id !== submitTaskModal.task.task_id));
       setSubmitTaskModal(null);
       setNotification("Aufgabe abgegeben.");
@@ -751,7 +753,8 @@ export default function StudentLernplaner({ socket }: { socket?: Socket | null }
           {activeDragItem ? (
             <div className="w-56 opacity-95 scale-105 shadow-2xl rotate-2">
               {activeDragItem.type === "source" ? (
-                <SidebarTaskCard task={activeDragItem.task} />
+                <SidebarTaskCard task={activeDragItem.task} onSubmit={() => {}} />
+
               ) : (
                 <div className="p-2.5 bg-slate-900 border border-amber-500 rounded-xl text-white text-xs font-bold shadow-2xl">
                   🔄 Verschiebe: {activeDragItem.item.assessment_name}
