@@ -88,7 +88,20 @@ elif [ "$local_hash" == "$base_hash" ]; then
         echo -e "\n${WHITE}>> Rebuilding Docker containers to apply updates...${NC}"
         docker compose build 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
         
-        echo -e "\n${GREEN} [SUCCESS] Update complete! Run './scripts/restart_system.sh' to start.${NC}"
+        # 6. Finalize
+        echo -e "\n${GREEN} [SUCCESS] Update complete!${NC}"
+        echo -en "${YELLOW}>> Would you like to restart the system now? (y/n): ${NC}"
+        read -r response
+
+        if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+            echo -e "${WHITE}>> Starting system...${NC}"
+            ./scripts/restart_system.sh
+        else
+            echo -e "${GRAY}>> Update finished without restart. Run './scripts/restart_system.sh' manually when ready.${NC}"
+        fi
+
+        echo ""
+        read -p "Press Enter to exit..."
     fi
 elif [ "$remote_hash" == "$base_hash" ]; then
     echo -e "\n${CYAN} [INFO] You are ahead of the official version (Local Commits).${NC}"
