@@ -1,4 +1,7 @@
+import { ScaleType } from "../components/gradeUtils";
+
 export type UserRole = "admin" | "teacher" | "pupil" | "lernwerkstatt";
+
 
 export interface User {
   id: number;
@@ -76,11 +79,12 @@ export interface Category {
   subject_id: number;
   name: string;
   weight_percentage: number;
-  scale_type: string;
+  scale_type: ScaleType | string;
   is_self_directed: boolean;
   isLocked?: boolean;
   column_metadata?: ColumnMetadata[];
 }
+
 
 export interface Grade {
   id?: number;
@@ -95,9 +99,11 @@ export interface Grade {
 export interface PupilTag {
   id: number;
   pupil_id: number;
-  tag: string;
+  subject_id?: number;
+  tier_tag: string;
   color?: string;
 }
+
 
 export interface GradebookMatrix {
   categories: Category[];
