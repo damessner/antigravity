@@ -21,6 +21,25 @@ const getSentimentEmoji = (sentiment: string, noteId: number): string => {
   return pool[noteId % pool.length];
 };
 
+export interface Note {
+  id: number;
+  pupil_id: number;
+  note_text: string;
+  sentiment: "positive" | "neutral" | "negative";
+  is_visible_to_pupil: boolean;
+  auto_source?: string;
+  created_at: string;
+  teacher_id: number;
+  teacher_name?: string;
+}
+
+interface CurrentUser {
+  id: number;
+  username: string;
+  full_name: string;
+  role: "admin" | "teacher" | "pupil" | "lernwerkstatt";
+}
+
 interface DisciplinaryNotesProps {
   classes: { id: number; name: string }[];
   pupils: Pupil[];
@@ -32,10 +51,10 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
   const [selectedPupilId, setSelectedPupilId] = useState<number | "all">("all");
   
   // Note states
-  const [notes, setNotes] = useState<any[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [alertMsg, setAlertMsg] = useState<string | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   // Filters
   const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "neutral" | "negative" | "auto">("all");
@@ -103,13 +122,13 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
   // Integrate live incoming broadcast notes via props socket triggers
   useEffect(() => {
     if (!socket) return;
-    const handleNewNote = (created: any) => {
+    const handleNewNote = (created: Note) => {
       // Append to list if target pupil is within current class subset
       const matchingPupil = classPupils.find((p) => Number(p.id) === Number(created.pupil_id));
       if (matchingPupil) {
-        setNotes((prev) => {
+        setNotes((prev: Note[]) => {
           // Avoid duplicate appends
-          if (prev.some((n) => Number(n.id) === Number(created.id))) return prev;
+          if (prev.some((n: Note) => Number(n.id) === Number(created.id))) return prev;
           return [created, ...prev];
         });
       }
@@ -141,7 +160,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
   // Filter notes subset
   const filteredNotes = useMemo(() => {
-    return notes.filter((n) => {
+    return notes.filter((n: Note) => {
       // Pupil context filter
       if (selectedPupilId !== "all" && Number(n.pupil_id) !== Number(selectedPupilId)) return false;
 
@@ -203,8 +222,8 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
       if (res.ok) {
         const data = await res.json();
-        setNotes((prev) =>
-          prev.map((n) => (Number(n.id) === Number(id) ? { ...n, is_visible_to_pupil: data.is_visible_to_pupil } : n))
+        setNotes((prev: Note[]) =>
+          prev.map((n: Note) => (Number(n.id) === Number(id) ? { ...n, is_visible_to_pupil: data.is_visible_to_pupil } : n))
         );
       } else {
         const errData = await res.json();
@@ -224,7 +243,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
       });
 
       if (res.ok) {
-        setNotes((prev) => prev.filter((n) => Number(n.id) !== Number(id)));
+        setNotes((prev: Note[]) => prev.filter((n: Note) => Number(n.id) !== Number(id)));
         setAlertMsg("Eintrag gelöscht.");
       } else {
         const errData = await res.json();
@@ -243,7 +262,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
           </label>
           <select
             value={selectedClassId}
-            onChange={(e) => setSelectedClassId(Number(e.target.value))}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedClassId(Number(e.target.value))}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2 text-xs font-bold text-amber-400 focus:outline-none focus:border-amber-500"
           >
             {classes.map((c) => (
@@ -395,7 +414,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
               {selectedPupilId === "all" ? (
                 <select
                   defaultValue=""
-                  onChange={(e) => setSelectedPupilId(Number(e.target.value))}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedPupilId(Number(e.target.value))}
                   className="bg-slate-950 border border-slate-800 rounded p-1 text-[11px] font-bold text-amber-400 focus:outline-none"
                 >
                   <option value="" disabled>
@@ -417,7 +436,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
             <textarea
               rows={2}
               value={newNoteText}
-              onChange={(e) => setNewNoteText(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewNoteText(e.target.value)}
               placeholder="Beobachtung oder Vorfall schildern..."
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-amber-500 transition-colors"
               required
@@ -463,7 +482,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
                   <input
                     type="checkbox"
                     checked={newNoteVisible}
-                    onChange={(e) => setNewNoteVisible(e.target.checked)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewNoteVisible(e.target.checked)}
                     className="w-3.5 h-3.5 rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0"
                   />
                   <span>Für Schüler sichtbar</span>
