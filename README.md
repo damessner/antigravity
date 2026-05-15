@@ -44,11 +44,12 @@ Simply double-click the numbered files in order:
 
 The system is organized into five main actions to keep your environment healthy:
 
-- **`00_update_system.bat`**: Check GitHub for the latest version and update automatically.
-- **`01_initiate_system.bat`**: Verify Docker status and project file integrity.
+- **`00_initiate_system.bat`**: Verify Docker status and project file integrity. (Self-installs if files are missing).
+- **`01_update_system.bat`**: Check GitHub for the latest version and update automatically.
 - **`02_launch_system.bat`**: Your main daily tool. Starts/Restarts/Stops the services.
 - **`03_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
 - **`04_system_health_monitor.bat`**: View live logs and resource usage (CPU/RAM) in real-time.
+
 
 ---
 

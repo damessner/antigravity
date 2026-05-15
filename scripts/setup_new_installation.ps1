@@ -31,15 +31,36 @@ try {
     }
 
     # 2. Define Target Directory
-    $targetDir = Join-Path $HOME "Desktop\Antigravity"
-    if (Test-Path $targetDir) {
-        Write-Host " [INFO] Target folder already exists: $targetDir" -ForegroundColor Cyan
+    $currentDir = Get-Location
+    
+    # Check if we are already in an antigravity folder or if we should create one
+    if ($currentDir.Path -match "antigravity" -and -not (Test-Path (Join-Path $currentDir "scripts"))) {
+        # We are in a folder named antigravity already
+        $targetDir = $currentDir.Path
+    } elseif ($currentDir.Path -notmatch "C:\\Windows" -and $currentDir.Path -ne $HOME) {
+        # We are in a generic folder, create a subfolder
+        $targetDir = Join-Path $currentDir.Path "antigravity"
+        if (-not (Test-Path $targetDir)) { New-Item -Path $targetDir -ItemType Directory -Force | Out-Null }
+        Write-Host " [INFO] Creating system folder: $targetDir" -ForegroundColor Cyan
     } else {
-        Write-Host ">> Cloning repository to Desktop..." -ForegroundColor White
+        # Default to Desktop
+        $targetDir = Join-Path $HOME "Desktop\Antigravity"
+        if (-not (Test-Path $targetDir)) { New-Item -Path $targetDir -ItemType Directory -Force | Out-Null }
+        Write-Host " [INFO] Using default location: $targetDir" -ForegroundColor Cyan
+    }
+
+    if (Test-Path (Join-Path $targetDir ".git")) {
+        Write-Host " [OK] Repository already exists. Checking for updates..." -ForegroundColor Green
+        Set-Location $targetDir
+        git pull origin main
+    } else {
+        Write-Host ">> Cloning repository into $targetDir..." -ForegroundColor White
         git clone https://github.com/damessner/antigravity.git $targetDir
         if ($LASTEXITCODE -ne 0) { throw "Clone failed." }
         Write-Host " [OK] Files downloaded." -ForegroundColor Green
     }
+
+
 
     # 3. Enter directory and verify
     Set-Location $targetDir
