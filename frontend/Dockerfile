@@ -1,7 +1,7 @@
 FROM node:20-alpine AS deps
 WORKDIR /usr/src/app
 COPY package*.json ./
-RUN npm ci --legacy-peer-deps
+RUN npm install --legacy-peer-deps
 
 FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
