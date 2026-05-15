@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const { authenticateToken, loginLimiter } = require('../server');
+const { authenticateToken, loginLimiter, stateLimiter } = require('../server');
 
 // POST /api/login
 router.post('/login', loginLimiter, async (req, res) => {
@@ -48,7 +48,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 });
 
 // GET /api/state
-router.get('/state', authenticateToken, async (req, res) => {
+router.get('/state', stateLimiter, authenticateToken, async (req, res) => {
   try {
     // 1. Rooms
     const roomsRes = await req.pool.query('SELECT id, name FROM rooms ORDER BY id');
@@ -93,11 +93,19 @@ router.get('/state', authenticateToken, async (req, res) => {
     // 4. Subject Tags
     const tagsRes = await req.pool.query('SELECT id, pupil_id, subject_id, tier_tag FROM pupil_subject_tags');
 
+    // 5. System settings (school name, lesson schedule) — best-effort, non-fatal
+    let settings = {};
+    try {
+      const settingsRes = await req.pool.query("SELECT key, value FROM system_settings WHERE key IN ('school_name','lesson_schedule')");
+      settingsRes.rows.forEach(r => { settings[r.key] = r.value; });
+    } catch (_) { /* table may not exist yet on very first boot */ }
+
     res.json({
       rooms: roomsRes.rows,
       pupils: pupilsRes.rows,
       subjects: subjectsRes.rows,
-      subject_tags: tagsRes.rows
+      subject_tags: tagsRes.rows,
+      settings
     });
   } catch (err) {
     console.error('State retrieval error:', err);

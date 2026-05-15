@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const fs = require('fs');
 const path = require('path');
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 
 // Helper to check if user is admin
 const isAdmin = (req, res, next) => {
@@ -47,6 +47,45 @@ router.post('/update', authenticateToken, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Update trigger error:', err);
         res.status(500).json({ error: 'Update konnte nicht ausgelöst werden' });
+    }
+});
+
+// GET /api/admin/settings — Retrieve all system settings
+router.get('/settings', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const result = await req.pool.query('SELECT key, value FROM system_settings ORDER BY key');
+        const settings = {};
+        result.rows.forEach(row => { settings[row.key] = row.value; });
+        res.json(settings);
+    } catch (err) {
+        console.error('Settings fetch error:', err);
+        res.status(500).json({ error: 'Einstellungen konnten nicht geladen werden' });
+    }
+});
+
+// PUT /api/admin/settings/:key — Update a specific system setting
+router.put('/settings/:key', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
+    const { key } = req.params;
+    const { value } = req.body;
+    if (value === undefined || value === null) {
+        return res.status(400).json({ error: 'Wert erforderlich' });
+    }
+    // Validate JSON for structured settings
+    const jsonKeys = ['lesson_boundaries', 'lesson_schedule'];
+    if (jsonKeys.includes(key)) {
+        try { JSON.parse(value); } catch (e) {
+            return res.status(400).json({ error: 'Ungültiges JSON-Format' });
+        }
+    }
+    try {
+        await req.pool.query(`
+            INSERT INTO system_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+            ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()
+        `, [key, String(value)]);
+        res.json({ success: true, key, value });
+    } catch (err) {
+        console.error('Settings update error:', err);
+        res.status(500).json({ error: 'Einstellung konnte nicht gespeichert werden' });
     }
 });
 

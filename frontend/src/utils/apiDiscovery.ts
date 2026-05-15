@@ -29,8 +29,12 @@ export const getWsUrl = (): string => {
   const configuredApi = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (configuredApi) return configuredApi.replace(/\/+$/, "");
   if (typeof window !== "undefined") {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${wsProtocol}//${window.location.host}`;
+    // Mirror the same logic as getApiUrl() so the WebSocket always reaches
+    // the backend (port 4000), not the frontend (port 3000).
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:4000";
+    }
+    return `${window.location.protocol}//${window.location.hostname}:4000`;
   }
   return "";
 };
