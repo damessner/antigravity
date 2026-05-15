@@ -1,6 +1,110 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, setupLimiter } = require('../server');
+const ExcelJS = require('exceljs');
+
+// GET /api/gradebook/export/:id
+router.get('/export/:id', authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.id);
+  try {
+    // 1. Fetch Subject & Metadata
+    const subRes = await req.pool.query(`
+      SELECT s.*, c.name as class_name 
+      FROM subjects s
+      JOIN classes c ON s.class_id = c.id
+      WHERE s.id = $1
+    `, [subjectId]);
+    if (subRes.rows.length === 0) return res.status(404).json({ error: 'Subject not found' });
+    const subject = subRes.rows[0];
+
+    // 2. Fetch Categories & Assessments
+    const catsRes = await req.pool.query('SELECT * FROM assessment_categories WHERE subject_id = $1 ORDER BY id', [subjectId]);
+    const categories = catsRes.rows;
+    const catIds = categories.map(c => c.id);
+
+    let assessments = [];
+    if (catIds.length > 0) {
+      const assRes = await req.pool.query('SELECT * FROM assessments WHERE category_id = ANY($1::int[]) ORDER BY category_id, id', [catIds]);
+      assessments = assRes.rows;
+    }
+
+    // 3. Fetch Pupils & Grades
+    const pupilsRes = await req.pool.query(`
+      SELECT p.id, u.full_name as name 
+      FROM pupils p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.class_id = $1
+      ORDER BY u.full_name
+    `, [subject.class_id]);
+    const pupils = pupilsRes.rows;
+
+    let grades = [];
+    if (catIds.length > 0) {
+      const gradesRes = await req.pool.query('SELECT * FROM grades WHERE category_id = ANY($1::int[])', [catIds]);
+      grades = gradesRes.rows;
+    }
+
+    // 4. Create Excel Workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Notenliste');
+
+    // Header Rows
+    const header1 = ['Schüler'];
+    const header2 = ['']; // For assessment names
+    const colMetadata = [{ type: 'pupil', id: 'name' }];
+
+    categories.forEach(cat => {
+      const catAssessments = assessments.filter(a => a.category_id === cat.id);
+      if (catAssessments.length === 0) {
+        header1.push(cat.name);
+        header2.push('');
+        colMetadata.push({ type: 'grade', catId: cat.id, assName: '' });
+      } else {
+        catAssessments.forEach((ass, idx) => {
+          header1.push(idx === 0 ? cat.name : '');
+          header2.push(ass.name);
+          colMetadata.push({ type: 'grade', catId: cat.id, assName: ass.name });
+        });
+      }
+    });
+
+    worksheet.addRow(header1);
+    worksheet.addRow(header2);
+
+    // Styling headers
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(2).font = { italic: true };
+
+    // Fill Data
+    pupils.forEach(pupil => {
+      const rowData = [pupil.name];
+      colMetadata.slice(1).forEach(col => {
+        const grade = grades.find(g => 
+          Number(g.pupil_id) === Number(pupil.id) && 
+          Number(g.category_id) === Number(col.catId) && 
+          (g.assessment_name === col.assName || (!g.assessment_name && !col.assName))
+        );
+        rowData.push(grade ? grade.grade_value : '');
+      });
+      worksheet.addRow(rowData);
+    });
+
+    // Auto-fit columns (basic)
+    worksheet.columns.forEach(column => {
+      column.width = 20;
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Notenliste_${subject.abbreviation}_${subject.class_name}.xlsx`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Excel Export Error:', err);
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 
 // Helper to calculate rank rank priority
 const getRankWeight = (tag) => {
