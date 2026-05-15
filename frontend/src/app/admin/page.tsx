@@ -68,7 +68,7 @@ export default function AdminPage() {
       router.replace("/");
       return;
     }
-    loadData();
+    refetch();
   }, [router]);
 
   // Load backups when backup section is active
@@ -78,22 +78,25 @@ export default function AdminPage() {
     }
   }, [activeSection]);
 
-  // --- Users Handlers ---
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateRole = async (userId: number, userName: string, newRole: string) => {
     try {
-      const { data } = await fetchAuth("/api/users", {
-        method: "POST",
-        body: JSON.stringify(newUser),
+      await fetchAuth(`/api/users/${userId}/role`, {
+        method: "PUT",
+        body: JSON.stringify({ role: newRole }),
       });
-      toast.success(`Benutzer "${data.user.full_name}" erstellt!`, {
-        description: `Temporäres Passwort: ${data.tempPassword}`,
-        duration: 10000,
-      });
-      setNewUser({ username: "", full_name: "", role: "teacher" });
+      toast.success(`Rolle für ${userName} auf ${newRole} geändert`);
+      refetch();
     } catch (err: any) {
-      toast.error("Konnte Benutzer nicht erstellen", { description: err.message });
+      toast.error("Rollenänderung fehlgeschlagen", { description: err.message });
     }
+  };
+
+
+  const handleCreateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    mutations.createUser.mutate(newUser, {
+      onSuccess: () => setNewUser({ username: "", full_name: "", role: "teacher" })
+    });
   };
 
   const handleResetPassword = async (id: number, name: string) => {
@@ -104,105 +107,47 @@ export default function AdminPage() {
         description: `Neues temporäres Passwort: ${data.tempPassword}`,
         duration: 10000,
       });
-      loadData();
+      refetch();
     } catch (err: any) {
       toast.error("Reset fehlgeschlagen", { description: err.message });
     }
   };
 
-  const handleDeleteUser = async (id: number, name: string) => {
+  const handleDeleteUser = (id: number, name: string) => {
     if (!confirm(`Konto von "${name}" unwiderruflich löschen?`)) return;
-    try {
-      await fetchAuth(`/api/users/${id}`, { method: "DELETE" });
-      setUsers((prev: User[]) => prev.filter((u: User) => u.id !== id));
-      toast.info(`Konto "${name}" gelöscht.`);
-    } catch (err: any) {
-      toast.error("Löschen fehlgeschlagen", { description: err.message });
-    }
+    mutations.deleteUser.mutate(id);
   };
-
-  const handleUpdateRole = async (userId: number, userName: string, newRole: string) => {
-    try {
-      setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, isUpdatingRole: true } : u)));
-      const { data } = await fetchAuth(`/api/users/${userId}/role`, {
-        method: "PUT",
-        body: JSON.stringify({ role: newRole }),
-      });
-      setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, role: data.user.role, isUpdatingRole: false } : u)));
-      toast.success(`Rolle für ${userName} auf ${newRole} geändert`);
-    } catch (err: any) {
-      toast.error("Rollenänderung fehlgeschlagen", { description: err.message });
-      loadData();
-    }
-  };
-
 
   // --- Classes Handlers ---
-  const handleCreateClass = async (e: React.FormEvent) => {
+  const handleCreateClass = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const { data } = await fetchAuth("/api/classes", {
-        method: "POST",
-        body: JSON.stringify({ name: newClass }),
-      });
-      setClasses((prev: SchoolClass[]) => [...prev, data]);
-      setNewClass("");
-      toast.success(`Klasse "${data.name}" registriert.`);
-      if (!newPupil.class_id) {
-        setNewPupil((prev: any) => ({ ...prev, class_id: String(data.id) }));
-      }
-    } catch (err: any) {
-      toast.error("Klassenregistrierung fehlgeschlagen", { description: err.message });
-    }
+    mutations.createClass.mutate(newClass, {
+      onSuccess: () => setNewClass("")
+    });
   };
 
   // --- Pupils Handlers ---
-  const handleCreatePupil = async (e: React.FormEvent) => {
+  const handleCreatePupil = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const { data } = await fetchAuth("/api/pupils", {
-        method: "POST",
-        body: JSON.stringify({
-          full_name: newPupil.full_name,
-          class_id: Number(newPupil.class_id),
-        }),
-      });
-      toast.success(`Schülerkonto für "${data.pupil.name}" erstellt!`, {
-        description: `Login: ${data.username} | Passwort: ${data.tempPassword}`,
-        duration: 15000,
-      });
-      setNewPupil((prev: any) => ({ ...prev, full_name: "" }));
-      loadData();
-    } catch (err: any) {
-      toast.error("Schüleraufnahme gescheitert", { description: err.message });
-    }
+    mutations.createPupil.mutate({
+      full_name: newPupil.full_name,
+      class_id: Number(newPupil.class_id),
+    }, {
+      onSuccess: () => setNewPupil((prev: any) => ({ ...prev, full_name: "" }))
+    });
   };
 
-  const handleDeletePupil = async (id: number, name: string) => {
+  const handleDeletePupil = (id: number, name: string) => {
     if (!confirm(`Schüler "${name}" inklusive aller Noten und Zuordnungen löschen?`)) return;
-    try {
-      await fetchAuth(`/api/pupils/${id}`, { method: "DELETE" });
-      setPupils((prev: Pupil[]) => prev.filter((p: Pupil) => p.id !== id));
-      toast.info(`Schüler "${name}" abgemeldet.`);
-    } catch (err: any) {
-      toast.error("Löschen gescheitert", { description: err.message });
-    }
+    mutations.deletePupil.mutate(id);
   };
 
   // --- Rooms Handlers ---
-  const handleCreateRoom = async (e: React.FormEvent) => {
+  const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const { data } = await fetchAuth("/api/setup/rooms", {
-        method: "POST",
-        body: JSON.stringify({ name: newRoomName }),
-      });
-      setRooms((prev: Room[]) => [...prev, data]);
-      setNewRoomName("");
-      toast.success(`Raum "${data.name}" erstellt.`);
-    } catch (err: any) {
-      toast.error("Raum konnte nicht erstellt werden", { description: err.message });
-    }
+    mutations.createRoom.mutate(newRoomName, {
+      onSuccess: () => setNewRoomName("")
+    });
   };
 
   const handleRenameRoom = async (id: number) => {
@@ -211,9 +156,9 @@ export default function AdminPage() {
         method: "PUT",
         body: JSON.stringify({ name: editingRoomName }),
       });
-      setRooms((prev: Room[]) => prev.map((r: Room) => (r.id === id ? data : r)));
-      setEditingRoomId(null);
       toast.success(`Raum umbenannt.`);
+      setEditingRoomId(null);
+      refetch();
     } catch (err: any) {
       toast.error("Umbenennen fehlgeschlagen", { description: err.message });
     }
@@ -223,8 +168,8 @@ export default function AdminPage() {
     if (!confirm(`Raum "${name}" wirklich löschen? Alle Belegungshistorie wird entfernt.`)) return;
     try {
       await fetchAuth(`/api/setup/rooms/${id}`, { method: "DELETE" });
-      setRooms((prev: Room[]) => prev.filter((r: Room) => r.id !== id));
       toast.info(`Raum "${name}" gelöscht.`);
+      refetch();
     } catch (err: any) {
       toast.error("Löschen fehlgeschlagen", { description: err.message });
     }
@@ -250,7 +195,7 @@ export default function AdminPage() {
       toast.success("System wiederhergestellt!", { description: "Bitte Seite neu laden." });
       setServerRestoreFile(null);
       setServerRestoreConfirm("");
-      loadData();
+      refetch();
     } catch (err: any) {
       toast.error("Wiederherstellung fehlgeschlagen", { description: err.message });
     } finally {
@@ -322,7 +267,7 @@ export default function AdminPage() {
       });
       setRestoreConfirmText("");
       setSelectedRestoreFile(null);
-      loadData();
+      refetch();
     } catch (err: any) {
       toast.error("System-Wiederherstellung fehlgeschlagen", { description: err.message });
     } finally {
@@ -350,7 +295,7 @@ export default function AdminPage() {
         </div>
 
         <button
-          onClick={loadData}
+          onClick={() => refetch()}
           disabled={isLoading}
           className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs transition-colors disabled:opacity-50"
         >

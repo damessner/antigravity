@@ -103,13 +103,13 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
   const classPupils = useMemo(() => {
     const targetClassName = classes.find((c) => Number(c.id) === Number(selectedClassId))?.name;
-    return pupils.filter((p) => p.class_name === targetClassName).sort((a, b) => a.name.localeCompare(b.name));
+    return pupils.filter((p: Pupil) => p.class_name === targetClassName).sort((a: Pupil, b: Pupil) => a.name.localeCompare(b.name));
   }, [pupils, classes, selectedClassId]);
 
   useEffect(() => {
     if (!socket) return;
     const handleNewNote = (created: Note) => {
-      const matchingPupil = classPupils.find((p) => Number(p.id) === Number(created.pupil_id));
+      const matchingPupil = classPupils.find((p: Pupil) => Number(p.id) === Number(created.pupil_id));
       if (matchingPupil) {
         queryClient.setQueryData(["notes", selectedClassId], (old: Note[] = []) => {
           if (old.some(n => n.id === created.id)) return old;
@@ -123,7 +123,7 @@ export default function DisciplinaryNotes({ classes, pupils, socket }: Disciplin
 
   const pupilCounters = useMemo(() => {
     const map: Record<number, { pos: number; neu: number; neg: number }> = {};
-    classPupils.forEach((p) => { map[p.id!] = { pos: 0, neu: 0, neg: 0 }; });
+    classPupils.forEach((p: Pupil) => { map[p.id!] = { pos: 0, neu: 0, neg: 0 }; });
     notes.forEach((n: Note) => {
       const pid = Number(n.pupil_id);
       if (map[pid]) {
