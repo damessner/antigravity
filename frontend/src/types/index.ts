@@ -45,3 +45,34 @@ export interface Note {
   teacher_id: number;
   teacher_name?: string;
 }
+
+export interface Subject {
+  id: number;
+  name: string;
+  abbreviation: string;
+  class_id: number;
+  teacher_id: number;
+  second_teacher_id?: number | null;
+  projection_visible?: boolean;
+}
+
+export interface Category {
+  id: number;
+  subject_id: number;
+  name: string;
+  weight_percentage: number;
+  scale_type: string;
+  is_self_directed: boolean;
+  isLocked?: boolean;
+  column_metadata?: any[];
+}
+
+export interface Grade {
+  id?: number;
+  category_id: number;
+  pupil_id: number;
+  assessment_name: string;
+  grade_value: string | number | null;
+  is_visible: boolean;
+  created_at?: string;
+}
