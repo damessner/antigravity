@@ -7,6 +7,22 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
+const logger = require('./utils/logger');
+
+// ── Global process-level safety net ──────────────────────────────────────────
+// Catch any unhandled promise rejection or uncaught exception, log it to the
+// rolling 72-hour error file, then allow Docker's restart policy to recover the
+// container rather than silently hanging in a broken state.
+process.on('uncaughtException', (err) => {
+  logger.error('[Process]', 'uncaughtException — process will exit for container restart', err);
+  process.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logger.error('[Process]', 'unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
+});
+
+// Trim stale log entries from previous runs at startup
+logger.trimNow();
 
 const app = express();
 const server = http.createServer(app);
@@ -90,7 +106,7 @@ pool.query(`
       RETURN NEW;
   END;
   $$ LANGUAGE plpgsql;
-`).catch(err => console.error('[Schema Setup] Dynamic DB columns migration error:', err.message));
+`).catch(err => logger.error('[Schema Setup]', 'Dynamic DB columns migration error', err));
 
 app.use(cors({
   origin: process.env.ALLOWED_ORIGIN || '*'
@@ -169,6 +185,7 @@ app.use('/api/student', require('./routes/student'));
 app.use('/api/assessments', require('./routes/assessments'));
 app.use('/api/help', require('./routes/help'));
 app.use('/api/setup', require('./routes/setup'));
+app.use('/api/admin', require('./routes/admin'));
 const pushModule = require('./routes/push');
 app.use('/api/push', pushModule.router);
 app.use('/api/users/preferences', pushModule.preferencesRouter);
@@ -183,7 +200,7 @@ const triggerLessonBoundaryReset = async (lessonNumber) => {
   if (executedTriggers.has(triggerKey)) return;
   executedTriggers.add(triggerKey);
 
-  console.log(`[Scheduler] Executing lesson boundary reset for Lesson ${lessonNumber}`);
+  logger.info('[Scheduler]', `Executing lesson boundary reset for Lesson ${lessonNumber}`);
   try {
     // 1. Snapshot Lernwerkstatt
     const lwRoomRes = await pool.query("SELECT id FROM rooms WHERE name = 'Lernwerkstatt' LIMIT 1");
@@ -222,7 +239,7 @@ const triggerLessonBoundaryReset = async (lessonNumber) => {
     // 3. Emit reset broadcast
     io.emit('lesson_reset', { resetToRoomId: kzRoomId });
   } catch (err) {
-    console.error('[Scheduler] Error executing lesson boundary reset:', err);
+    logger.error('[Scheduler]', 'Error executing lesson boundary reset', err);
   }
 };
 
@@ -232,7 +249,7 @@ const triggerDailyBackup = async (slot) => {
   if (executedTriggers.has(triggerKey)) return;
   executedTriggers.add(triggerKey);
 
-  console.log(`[Scheduler] Starting backup for slot ${slot}...`);
+  logger.info('[Scheduler]', `Starting backup for slot ${slot}...`);
   try {
     const tables = ['users', 'classes', 'pupils', 'rooms', 'subjects', 'assessment_categories', 'assessments', 'grades', 'pupil_subject_tags', 'disciplinary_notes', 'allocation_logs', 'student_learning_plan', 'help_requests'];
     const backupData = {};
@@ -241,7 +258,7 @@ const triggerDailyBackup = async (slot) => {
         const res = await pool.query(`SELECT * FROM ${t}`);
         backupData[t] = res.rows;
       } catch (tableErr) {
-        console.warn(`[Scheduler] Skipping table ${t}: ${tableErr.message}`);
+        logger.warn('[Scheduler]', `Skipping table ${t}: ${tableErr.message}`);
       }
     }
 
@@ -258,7 +275,7 @@ const triggerDailyBackup = async (slot) => {
     const filename = `auto_backup_${todayStr}_${slot}.json`;
     const filepath = path.join(backupDir, filename);
     fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2));
-    console.log(`[Scheduler] Backup completed: ${filename}`);
+    logger.info('[Scheduler]', `Backup completed: ${filename}`);
 
     // Retention: delete backups older than BACKUP_RETENTION_DAYS days
     const cutoffMs = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -271,12 +288,12 @@ const triggerDailyBackup = async (slot) => {
         const stat = fs.statSync(fpath);
         if (stat.mtimeMs < cutoffMs) {
           fs.unlinkSync(fpath);
-          console.log(`[Scheduler] Deleted old backup: ${fname}`);
+          logger.info('[Scheduler]', `Deleted old backup: ${fname}`);
         }
       } catch (e) { /* ignore */ }
     }
   } catch (err) {
-    console.error('[Scheduler] Error creating backup:', err);
+    logger.error('[Scheduler]', 'Error creating backup', err);
   }
 };
 

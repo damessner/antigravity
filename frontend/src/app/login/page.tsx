@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { KeyRound, User, Loader2, Sparkles } from "lucide-react";
+import { KeyRound, User, Loader2, Sparkles, AlertTriangle, Info } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 
 export default function LoginPage() {
@@ -45,11 +45,6 @@ export default function LoginPage() {
     }
   };
 
-  const autofill = (u: string, p: string) => {
-    setUsername(u);
-    setPassword(p);
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-slate-950">
       {/* Background elegant gradient elements */}
@@ -57,7 +52,7 @@ export default function LoginPage() {
       <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md glass-panel p-8 relative z-10">
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-indigo-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
             <Sparkles className="w-8 h-8 text-white animate-soft" />
           </div>
@@ -66,6 +61,18 @@ export default function LoginPage() {
           <span className="inline-block mt-2 px-2.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[10px] font-mono text-indigo-400">
             v2.1 (Gateway-Proxy)
           </span>
+        </div>
+
+        {/* Experimental Warning Banner */}
+        <div className="mb-6 flex items-start gap-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-xs font-bold text-amber-400">⚠️ Hochexperimentelle Software</p>
+            <p className="text-[11px] text-amber-300/70 mt-0.5 leading-relaxed">
+              Dieses System befindet sich in aktiver Entwicklung. Fehler können auftreten.
+              Bitte Probleme dem Entwicklungsteam melden.
+            </p>
+          </div>
         </div>
 
         {error && (
@@ -87,7 +94,7 @@ export default function LoginPage() {
                 type="text"
                 value={username}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
-                placeholder="z.B. da.messner"
+                placeholder="Benutzername eingeben"
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
                 required
               />
@@ -129,32 +136,11 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Quick Demo Pre-fills */}
-        <div className="mt-8 pt-6 border-t border-slate-800/80">
-          <p className="text-xs font-medium text-slate-500 text-center mb-3">Schnellzugriff für Testzwecke:</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => autofill("da.messner", "admin")}
-              type="button"
-              className="bg-slate-950/40 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] py-1.5 rounded-lg transition-colors"
-            >
-              👑 Admin
-            </button>
-            <button
-              onClick={() => autofill("teacher.one", "teacher")}
-              type="button"
-              className="bg-slate-950/40 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] py-1.5 rounded-lg transition-colors"
-            >
-              👩‍🏫 Lehrer 1
-            </button>
-            <button
-              onClick={() => autofill("pupil_3g_1", "teacher")}
-              type="button"
-              className="bg-slate-950/40 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[11px] py-1.5 rounded-lg transition-colors"
-            >
-              🌱 Schüler
-            </button>
-          </div>
+        <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-1.5 text-slate-600">
+          <Info className="w-3 h-3" />
+          <p className="text-[10px]">
+            Zugangsdaten vom Administrator erhalten? Beim ersten Login Passwort ändern.
+          </p>
         </div>
       </div>
     </div>

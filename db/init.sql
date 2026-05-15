@@ -174,11 +174,10 @@ CREATE TABLE help_requests (
 );
 CREATE INDEX idx_help_requests_status ON help_requests(status);
 
--- Seed admin accounts (password: 'admin', must be changed on first login)
+-- Seed admin account (first login: da.messner / weissenbach — password change required)
 INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
 VALUES
-('da.messner', 'D. Messner', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true),
-('break_glass', 'Emergency Admin', 'admin', '$2b$10$1hMkzW8uZEmR2Pf0IzP0NeCzQ4wWRiwZ7mRGOJeGCqNGcykp69JL.', true);
+('da.messner', 'D. Messner', 'admin', '$2b$10$z6hLG6EQJsAue1Wx7IR9Je604oVrqybrYVG6yK2DNCNYB/t2k0X/W', true);
 
 -- PWA Web Push Notification targeting infrastructure
 CREATE TABLE push_subscriptions (
