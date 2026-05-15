@@ -114,7 +114,7 @@ export default function ChangePasswordPage() {
                 <input
                   type="password"
                   value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCurrentPassword(e.target.value)}
                   placeholder="••••••••"
                   className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-indigo-500"
                   required
@@ -129,7 +129,7 @@ export default function ChangePasswordPage() {
               <input
                 type="password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
                 placeholder="Mindestens 6 Zeichen"
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2 px-4 text-white text-sm focus:outline-none focus:border-indigo-500"
                 required
@@ -143,7 +143,7 @@ export default function ChangePasswordPage() {
               <input
                 type="password"
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPassword(e.target.value)}
                 placeholder="Passwort wiederholen"
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2 px-4 text-white text-sm focus:outline-none focus:border-indigo-500"
                 required
