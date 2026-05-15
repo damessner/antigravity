@@ -1,17 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
+import { Category } from "@/types";
 
-export interface CategoryWeightItem {
-  id: number;
-  name: string;
-  weight_percentage: number;
-  isLocked?: boolean;
-  scale_type?: string;
-  is_self_directed?: boolean;
-  column_metadata?: any[];
-}
-
-export function useWeightBalancer(initialCategories: CategoryWeightItem[], onSaveDebounced: (updated: CategoryWeightItem[]) => void) {
-  const [categories, setCategories] = useState<CategoryWeightItem[]>(() => 
+export function useWeightBalancer(initialCategories: Category[], onSaveDebounced: (updated: Category[]) => void) {
+  const [categories, setCategories] = useState<Category[]>(() => 
     initialCategories.map(c => ({ ...c, weight_percentage: Number(c.weight_percentage) || 0 }))
   );
 
