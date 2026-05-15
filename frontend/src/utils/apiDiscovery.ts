@@ -7,6 +7,7 @@
 export const getApiUrl = (): string => {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
+  // Empty base keeps fetches relative (e.g. "/api/..."), enabling same-origin Next.js rewrites.
   return "";
 };
 
@@ -15,6 +16,9 @@ export const getWsUrl = (): string => {
   if (configuredWs) return configuredWs.replace(/\/+$/, "");
   const configuredApi = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (configuredApi) return configuredApi.replace(/\/+$/, "");
-  if (typeof window !== "undefined") return window.location.origin;
+  if (typeof window !== "undefined") {
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${window.location.host}`;
+  }
   return "";
 };
