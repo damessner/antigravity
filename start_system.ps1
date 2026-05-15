@@ -16,7 +16,11 @@ if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Adm
     exit
 }
 
+# Ensure we are in the script's directory (elevation resets CWD to System32)
+Set-Location -Path $PSScriptRoot
+
 Clear-Host
+
 Write-Header "SCHOOL MANAGEMENT SYSTEM V2 - STARTUP"
 
 # 2. Check Docker Installation
