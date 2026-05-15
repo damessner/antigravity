@@ -1,6 +1,7 @@
 # ============================================================
 # health_monitor.ps1
-# School Management System - Real-Time Dashboard
+# 🏫 Schulmanagement Control Center
+# "Watching over the digital classroom pulse."
 # ============================================================
 
 $ErrorActionPreference = "Continue"
@@ -14,41 +15,42 @@ $ProjectRoot = Split-Path -Parent $ScriptDir
 try {
     if ($ProjectRoot) { Set-Location -LiteralPath $ProjectRoot }
 
-    function Write-Header($text) {
-        Write-Host ""
-        Write-Host "============================================================" -ForegroundColor Cyan
-        Write-Host " $text" -ForegroundColor White
-        Write-Host "============================================================" -ForegroundColor Cyan
+    function Write-Banner($title) {
+        Write-Host "`n  ############################################################" -ForegroundColor Cyan
+        Write-Host "  #                                                          #" -ForegroundColor Cyan
+        Write-Host "  #   $($title.PadRight(50))     #" -ForegroundColor White
+        Write-Host "  #                                                          #" -ForegroundColor Cyan
+        Write-Host "  ############################################################`n" -ForegroundColor Cyan
     }
 
     Clear-Host
-    Write-Header "🏫 System Health Monitor"
-    Write-Host "This window will show live logs and system status." -ForegroundColor Gray
-    Write-Host "Press Ctrl+C to stop monitoring." -ForegroundColor Gray
-    Write-Host ""
+    Write-Banner "SYSTEM HEALTH CONTROL"
+    Write-Host "  Real-time visibility into the platform's vital signs.`n" -ForegroundColor Gray
 
     # Check if anything is running
     $running = docker ps --format "{{.Names}}" 2>&1 | Where-Object { $_ -match "school_|antigravity_" }
     if (-not $running) {
-        Write-Host "   [WARN] No system containers are currently running." -ForegroundColor Yellow
-        Write-Host "   Run '02_launch_system.bat' to start the system." -ForegroundColor Gray
+        Write-Host "  [!] System containers are currently offline." -ForegroundColor Yellow
+        Write-Host "      Please start the platform using '02_launch_system.bat' first." -ForegroundColor Gray
         Write-Host ""
         Pause
         exit 0
     }
 
     # Show static status first
-    Write-Host ">> Current Resource Usage:" -ForegroundColor White
-    docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>&1 | ForEach-Object { Write-Host "   $_" -ForegroundColor Gray }
+    Write-Host "  >> Resource Allocation (Active Consumption):" -ForegroundColor White
+    Write-Host "  ------------------------------------------------------------" -ForegroundColor DarkGray
+    docker stats --no-stream --format "  {{.Name}}\tCPU: {{.CPUPerc}}\tMEM: {{.MemUsage}}\tNET: {{.NetIO}}" 2>&1 | ForEach-Object { Write-Host "  $_" -ForegroundColor Cyan }
     
-    Write-Host "`n>> Streaming live logs (Last 20 lines + new events):" -ForegroundColor White
-    Write-Host "------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "`n  >> Live Classroom Dispatch Activity (Press Ctrl+C to exit):" -ForegroundColor White
+    Write-Host "  ------------------------------------------------------------" -ForegroundColor DarkGray
     
-    # Hand over to docker compose logs
-    docker compose logs -f --tail=20
+    # Hand over to docker compose logs with specific colors for backend/frontend
+    # We use a simple tail but let docker handle the streaming
+    docker compose logs -f --tail=30
 
 } catch {
-    Write-Host "`n[ERROR] Monitor failed: $_" -ForegroundColor Red
+    Write-Host "`n  [ERROR] Monitor failed: $_" -ForegroundColor Red
 } finally {
-    Write-Host "`nMonitoring ended." -ForegroundColor Gray
+    Write-Host "`n  Monitoring session ended." -ForegroundColor Gray
 }
