@@ -2,39 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, 
-  Trash2, Key, Download, Upload, AlertTriangle, CheckCircle2, Building2, Edit2
+import {
+  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2
 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
+import { toast } from "sonner";
+import { UserManagement } from "@/components/admin/UserManagement";
+import { ClassManagement } from "@/components/admin/ClassManagement";
+import { PupilManagement } from "@/components/admin/PupilManagement";
+import { RoomManagement } from "@/components/admin/RoomManagement";
+import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
 
-interface User {
-  id: number;
-  full_name: string;
-  username: string;
-  role: string;
-  requires_password_change?: boolean;
-  isUpdatingRole?: boolean;
-}
-
-interface SchoolClass {
-  id: number;
-  name: string;
-}
-
-interface Pupil {
-  id: number;
-  name: string;
-  username: string;
-  class_id: number;
-  class_name?: string;
-}
-
-interface Room {
-  id: number;
-  name: string;
-  capacity?: number;
-}
+import { User, SchoolClass, Pupil, Room } from "@/types";
 
 export default function AdminPage() {
   const router = useRouter();
@@ -57,7 +36,6 @@ export default function AdminPage() {
   const [newPupil, setNewPupil] = useState({ full_name: "", class_id: "" });
   
   // Modals/Alerts
-  const [alertMsg, setAlertMsg] = useState<{ type: "success" | "error" | "info"; text: string; details?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
   const [selectedRestoreFile, setSelectedRestoreFile] = useState<File | null>(null);
@@ -99,7 +77,7 @@ export default function AdminPage() {
         setNewPupil((prev: any) => ({ ...prev, class_id: String(cData[0].id) }));
       }
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Fehler beim Laden der Admin-Daten", details: err.message });
+      toast.error("Fehler beim Laden der Admin-Daten", { description: err.message });
     } finally {
       setIsLoading(false);
     }
@@ -143,15 +121,13 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify(newUser),
       });
-      setUsers((prev: User[]) => [...prev, data.user]);
-      setAlertMsg({
-        type: "success",
-        text: `Benutzer "${data.user.full_name}" erstellt!`,
-        details: `Temporäres Passwort: ${data.tempPassword}`,
+      toast.success(`Benutzer "${data.user.full_name}" erstellt!`, {
+        description: `Temporäres Passwort: ${data.tempPassword}`,
+        duration: 10000,
       });
       setNewUser({ username: "", full_name: "", role: "teacher" });
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Konnte Benutzer nicht erstellen", details: err.message });
+      toast.error("Konnte Benutzer nicht erstellen", { description: err.message });
     }
   };
 
@@ -159,14 +135,13 @@ export default function AdminPage() {
     if (!confirm(`Passwort für "${name}" wirklich zurücksetzen?`)) return;
     try {
       const { data } = await fetchAuth(`/api/users/${id}/reset-password`, { method: "POST" });
-      setAlertMsg({
-        type: "success",
-        text: `Passwort für "${name}" zurückgesetzt!`,
-        details: `Neues temporäres Passwort: ${data.tempPassword}`,
+      toast.success(`Passwort für "${name}" zurückgesetzt!`, {
+        description: `Neues temporäres Passwort: ${data.tempPassword}`,
+        duration: 10000,
       });
       loadData();
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Reset fehlgeschlagen", details: err.message });
+      toast.error("Reset fehlgeschlagen", { description: err.message });
     }
   };
 
@@ -175,13 +150,13 @@ export default function AdminPage() {
     try {
       await fetchAuth(`/api/users/${id}`, { method: "DELETE" });
       setUsers((prev: User[]) => prev.filter((u: User) => u.id !== id));
-      setAlertMsg({ type: "info", text: `Konto "${name}" gelöscht.` });
+      toast.info(`Konto "${name}" gelöscht.`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Löschen fehlgeschlagen", details: err.message });
+      toast.error("Löschen fehlgeschlagen", { description: err.message });
     }
   };
 
-  const handleChangeRole = async (userId: number, newRole: string, userName: string) => {
+  const handleUpdateRole = async (userId: number, userName: string, newRole: string) => {
     try {
       setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, isUpdatingRole: true } : u)));
       const { data } = await fetchAuth(`/api/users/${userId}/role`, {
@@ -189,9 +164,9 @@ export default function AdminPage() {
         body: JSON.stringify({ role: newRole }),
       });
       setUsers((prev: User[]) => prev.map((u: User) => (u.id === userId ? { ...u, role: data.user.role, isUpdatingRole: false } : u)));
-      setAlertMsg({ type: "success", text: `Rolle für ${userName} auf ${newRole} geändert` });
+      toast.success(`Rolle für ${userName} auf ${newRole} geändert`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Rollenänderung fehlgeschlagen", details: err.message });
+      toast.error("Rollenänderung fehlgeschlagen", { description: err.message });
       loadData();
     }
   };
@@ -207,12 +182,12 @@ export default function AdminPage() {
       });
       setClasses((prev: SchoolClass[]) => [...prev, data]);
       setNewClass("");
-      setAlertMsg({ type: "success", text: `Klasse "${data.name}" registriert.` });
+      toast.success(`Klasse "${data.name}" registriert.`);
       if (!newPupil.class_id) {
         setNewPupil((prev: any) => ({ ...prev, class_id: String(data.id) }));
       }
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Klassenregistrierung fehlgeschlagen", details: err.message });
+      toast.error("Klassenregistrierung fehlgeschlagen", { description: err.message });
     }
   };
 
@@ -227,15 +202,14 @@ export default function AdminPage() {
           class_id: Number(newPupil.class_id),
         }),
       });
-      setAlertMsg({
-        type: "success",
-        text: `Schülerkonto für "${data.pupil.name}" erstellt!`,
-        details: `Login: ${data.username} | Passwort: ${data.tempPassword}`,
+      toast.success(`Schülerkonto für "${data.pupil.name}" erstellt!`, {
+        description: `Login: ${data.username} | Passwort: ${data.tempPassword}`,
+        duration: 15000,
       });
       setNewPupil((prev: any) => ({ ...prev, full_name: "" }));
       loadData();
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Schüleraufnahme gescheitert", details: err.message });
+      toast.error("Schüleraufnahme gescheitert", { description: err.message });
     }
   };
 
@@ -244,9 +218,9 @@ export default function AdminPage() {
     try {
       await fetchAuth(`/api/pupils/${id}`, { method: "DELETE" });
       setPupils((prev: Pupil[]) => prev.filter((p: Pupil) => p.id !== id));
-      setAlertMsg({ type: "info", text: `Schüler "${name}" abgemeldet.` });
+      toast.info(`Schüler "${name}" abgemeldet.`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Löschen gescheitert", details: err.message });
+      toast.error("Löschen gescheitert", { description: err.message });
     }
   };
 
@@ -260,9 +234,9 @@ export default function AdminPage() {
       });
       setRooms((prev: Room[]) => [...prev, data]);
       setNewRoomName("");
-      setAlertMsg({ type: "success", text: `Raum "${data.name}" erstellt.` });
+      toast.success(`Raum "${data.name}" erstellt.`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Raum konnte nicht erstellt werden", details: err.message });
+      toast.error("Raum konnte nicht erstellt werden", { description: err.message });
     }
   };
 
@@ -274,9 +248,9 @@ export default function AdminPage() {
       });
       setRooms((prev: Room[]) => prev.map((r: Room) => (r.id === id ? data : r)));
       setEditingRoomId(null);
-      setAlertMsg({ type: "success", text: `Raum umbenannt.` });
+      toast.success(`Raum umbenannt.`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Umbenennen fehlgeschlagen", details: err.message });
+      toast.error("Umbenennen fehlgeschlagen", { description: err.message });
     }
   };
 
@@ -285,9 +259,9 @@ export default function AdminPage() {
     try {
       await fetchAuth(`/api/setup/rooms/${id}`, { method: "DELETE" });
       setRooms((prev: Room[]) => prev.filter((r: Room) => r.id !== id));
-      setAlertMsg({ type: "info", text: `Raum "${name}" gelöscht.` });
+      toast.info(`Raum "${name}" gelöscht.`);
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Löschen fehlgeschlagen", details: err.message });
+      toast.error("Löschen fehlgeschlagen", { description: err.message });
     }
   };
 
@@ -295,11 +269,11 @@ export default function AdminPage() {
   const handleRestoreServerFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (serverRestoreConfirm !== "RESTORE") {
-      setAlertMsg({ type: "error", text: "Bitte exakt 'RESTORE' zur Bestätigung eingeben." });
+      toast.error("Bitte exakt 'RESTORE' zur Bestätigung eingeben.");
       return;
     }
     if (!serverRestoreFile) {
-      setAlertMsg({ type: "error", text: "Keine Backup-Datei ausgewählt." });
+      toast.error("Keine Backup-Datei ausgewählt.");
       return;
     }
     try {
@@ -308,12 +282,12 @@ export default function AdminPage() {
         method: "POST",
         body: JSON.stringify({ filename: serverRestoreFile, confirm: serverRestoreConfirm }),
       });
-      setAlertMsg({ type: "success", text: "System wiederhergestellt!", details: "Bitte Seite neu laden." });
+      toast.success("System wiederhergestellt!", { description: "Bitte Seite neu laden." });
       setServerRestoreFile(null);
       setServerRestoreConfirm("");
       loadData();
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Wiederherstellung fehlgeschlagen", details: err.message });
+      toast.error("Wiederherstellung fehlgeschlagen", { description: err.message });
     } finally {
       setIsLoading(false);
     }
@@ -348,20 +322,20 @@ export default function AdminPage() {
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
 
-      setAlertMsg({ type: "success", text: "Backup erfolgreich heruntergeladen!" });
+      toast.success("Backup erfolgreich heruntergeladen!");
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "Backup-Download fehlgeschlagen", details: err.message });
+      toast.error("Backup-Download fehlgeschlagen", { description: err.message });
     }
   };
 
   const handleRestoreBackup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (restoreConfirmText !== "RESTORE") {
-      setAlertMsg({ type: "error", text: "Bitte exakt 'RESTORE' zur Bestätigung eingeben." });
+      toast.error("Bitte exakt 'RESTORE' zur Bestätigung eingeben.");
       return;
     }
     if (!selectedRestoreFile) {
-      setAlertMsg({ type: "error", text: "Keine JSON Backup-Datei ausgewählt." });
+      toast.error("Keine JSON Backup-Datei ausgewählt.");
       return;
     }
 
@@ -378,16 +352,14 @@ export default function AdminPage() {
         }),
       });
 
-      setAlertMsg({
-        type: "success",
-        text: "System komplett wiederhergestellt!",
-        details: "Datenbank synchronisiert. Bitte Seite neu laden.",
+      toast.success("System komplett wiederhergestellt!", {
+        description: "Datenbank synchronisiert. Bitte Seite neu laden.",
       });
       setRestoreConfirmText("");
       setSelectedRestoreFile(null);
       loadData();
     } catch (err: any) {
-      setAlertMsg({ type: "error", text: "System-Wiederherstellung fehlgeschlagen", details: err.message });
+      toast.error("System-Wiederherstellung fehlgeschlagen", { description: err.message });
     } finally {
       setIsLoading(false);
     }
@@ -491,565 +463,80 @@ export default function AdminPage() {
 
         {/* Content Container */}
         <main className="flex-1 p-6 overflow-y-auto">
-          {alertMsg && (
-            <div
-              className={`mb-6 p-4 rounded-xl border flex items-start gap-3 transition-all ${
-                alertMsg.type === "success"
-                  ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-300"
-                  : alertMsg.type === "error"
-                  ? "bg-rose-950/40 border-rose-500/30 text-rose-300"
-                  : "bg-slate-900 border-slate-700 text-slate-300"
-              }`}
-            >
-              {alertMsg.type === "success" && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />}
-              {alertMsg.type === "error" && <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />}
-              <div className="flex-1">
-                <p className="text-xs font-semibold">{alertMsg.text}</p>
-                {alertMsg.details && <p className="text-[11px] text-slate-400 mt-1 font-mono">{alertMsg.details}</p>}
-              </div>
-              <button
-                onClick={() => setAlertMsg(null)}
-                className="text-slate-500 hover:text-slate-300 text-xs font-bold"
-              >
-                ✕
-              </button>
-            </div>
-          )}
 
           {/* SECTION 1: USERS */}
           {activeSection === "users" && (
-            <div className="space-y-6">
-              <div className="glass-panel p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Neuen Benutzer anlegen</h2>
-                <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Anzeigename</label>
-                    <input
-                      type="text"
-                      value={newUser.full_name}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewUser({ ...newUser, full_name: e.target.value })}
-                      placeholder="z.B. Mag. D. Messner"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Benutzername (Login)</label>
-                    <input
-                      type="text"
-                      value={newUser.username}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewUser({ ...newUser, username: e.target.value.toLowerCase().replace(/\s+/g, ".") })}
-                      placeholder="z.B. da.messner"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Rolle</label>
-                    <select
-                      value={newUser.role}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewUser({ ...newUser, role: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                    >
-                      <option value="teacher">Lehrer</option>
-                      <option value="admin">Administrator</option>
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 px-4 rounded-lg transition-colors h-[34px]"
-                  >
-                    Konto generieren
-                  </button>
-                </form>
-              </div>
-
-              <div className="glass-panel overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/40">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Registrierte Konten</h3>
-                </div>
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-[11px] text-slate-500 bg-slate-950/30">
-                      <th className="p-3">Name</th>
-                      <th className="p-3">Benutzername</th>
-                      <th className="p-3">Rolle</th>
-                      <th className="p-3">Status</th>
-                      <th className="p-3 text-right">Aktionen</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50 text-xs">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-3 font-medium text-white">{u.full_name}</td>
-                        <td className="p-3 font-mono text-slate-400">{u.username}</td>
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            <select
-                              value={u.role}
-                              disabled={u.isUpdatingRole}
-                              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleChangeRole(u.id, e.target.value, u.full_name)}
-                              className={`bg-slate-950 border rounded p-1 text-[11px] font-semibold transition-colors focus:outline-none ${
-                                u.role === "admin"
-                                  ? "text-amber-400 border-amber-500/30 bg-amber-500/5"
-                                  : u.role === "teacher"
-                                  ? "text-indigo-400 border-indigo-500/30 bg-indigo-500/5"
-                                  : "text-slate-400 border-slate-800"
-                              }`}
-                            >
-                              <option value="admin">admin</option>
-                              <option value="teacher">teacher</option>
-                              <option value="pupil">pupil</option>
-                              <option value="lernwerkstatt">lernwerkstatt</option>
-                            </select>
-                            {u.isUpdatingRole && (
-                              <RefreshCw className="w-3 h-3 text-indigo-400 animate-spin shrink-0" />
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          {u.requires_password_change ? (
-                            <span className="text-rose-400 text-[11px]">Passwortwechsel nötig</span>
-                          ) : (
-                            <span className="text-emerald-400 text-[11px]">Aktiv</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right space-x-2">
-                          <button
-                            onClick={() => handleResetPassword(u.id, u.full_name)}
-                            title="Passwort zurücksetzen"
-                            className="p-1 text-slate-400 hover:text-amber-400 rounded transition-colors"
-                          >
-                            <Key className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(u.id, u.full_name)}
-                            title="Benutzer löschen"
-                            className="p-1 text-slate-400 hover:text-rose-400 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <UserManagement
+              users={users}
+              newUser={newUser}
+              setNewUser={setNewUser}
+              handleCreateUser={handleCreateUser}
+              handleResetPassword={handleResetPassword}
+              handleDeleteUser={handleDeleteUser}
+              handleUpdateRole={handleUpdateRole}
+              isLoading={isLoading}
+            />
           )}
 
           {/* SECTION 2: CLASSES */}
           {activeSection === "classes" && (
-            <div className="space-y-6 max-w-2xl">
-              <div className="glass-panel p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Neue Klasse registrieren</h2>
-                <form onSubmit={handleCreateClass} className="flex gap-3 items-end">
-                  <div className="flex-1">
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Klassenbezeichnung</label>
-                    <input
-                      type="text"
-                      value={newClass}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewClass(e.target.value.toUpperCase())}
-                      placeholder="z.B. 3G oder 4G"
-                      maxLength={5}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 px-4 rounded-lg transition-colors h-[34px]"
-                  >
-                    Klasse anlegen
-                  </button>
-                </form>
-              </div>
-
-              <div className="glass-panel overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/40">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Stammklassen</h3>
-                </div>
-                <div className="p-4 grid grid-cols-3 sm:grid-cols-4 gap-3">
-                  {classes.map((c) => (
-                    <div
-                      key={c.id}
-                      className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-between"
-                    >
-                      <span className="font-bold text-sm text-indigo-400">{c.name}</span>
-                      <span className="text-[10px] text-slate-500">ID: {c.id}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <ClassManagement
+              classes={classes}
+              newClass={newClass}
+              setNewClass={setNewClass}
+              handleCreateClass={handleCreateClass}
+              isLoading={isLoading}
+            />
           )}
 
           {/* SECTION 3: PUPILS */}
           {activeSection === "pupils" && (
-            <div className="space-y-6">
-              <div className="glass-panel p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Schüler aufnehmen</h2>
-                <form onSubmit={handleCreatePupil} className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Vollständiger Name</label>
-                    <input
-                      type="text"
-                      value={newPupil.full_name}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPupil({ ...newPupil, full_name: e.target.value })}
-                      placeholder="z.B. Anna Müller"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Stammklasse</label>
-                    <select
-                      value={newPupil.class_id}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNewPupil({ ...newPupil, class_id: e.target.value })}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
-                      required
-                    >
-                      {classes.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2 px-4 rounded-lg transition-colors h-[34px]"
-                  >
-                    Einschreiben & Zugangsdaten erzeugen
-                  </button>
-                </form>
-              </div>
-
-              <div className="glass-panel overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/40">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Eingeschriebene Schüler</h3>
-                </div>
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-[11px] text-slate-500 bg-slate-950/30">
-                      <th className="p-3">Klasse</th>
-                      <th className="p-3">Name</th>
-                      <th className="p-3">System-Login</th>
-                      <th className="p-3 text-right">Verwaltung</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50 text-xs">
-                    {pupils.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-3">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
-                            {p.class_name || "?"}
-                          </span>
-                        </td>
-                        <td className="p-3 font-medium text-white">{p.name}</td>
-                        <td className="p-3 font-mono text-slate-500 text-[11px]">{p.username}</td>
-                        <td className="p-3 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                const apiUrl = getApiUrl();
-                                window.open(`${apiUrl}/api/notes/export/${p.id}`, "_blank");
-                              }}
-                              title="Verhaltensdokumentation als Word (.doc) exportieren"
-                              className="p-1 text-slate-400 hover:text-indigo-400 rounded transition-colors"
-                            >
-                              <BookOpen className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePupil(p.id, p.name)}
-                              title="Abmelden / Löschen"
-                              className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <PupilManagement
+              pupils={pupils}
+              classes={classes}
+              newPupil={newPupil}
+              setNewPupil={setNewPupil}
+              handleCreatePupil={handleCreatePupil}
+              handleDeletePupil={handleDeletePupil}
+              isLoading={isLoading}
+            />
           )}
 
           {/* SECTION 4: SYSTEM BACKUP */}
           {activeSection === "backup" && (
-            <div className="space-y-6 max-w-3xl">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Export Column */}
-                <div className="glass-panel p-5 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2 text-indigo-400">
-                      <Download className="w-4 h-4" />
-                      <h3 className="text-sm font-bold text-white">System-Sicherung exportieren</h3>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed mb-4">
-                      Lädt den gesamten Systemstatus (Benutzer, Belegungen, Fachbeurteilungen, Notizen) als
-                      verschlüsselte JSON-Datei herunter. Passwörter bleiben als sichere Hashwerte bestehen.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => handleDownloadBackup("full")}
-                      className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium py-2.5 rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Vollständiges Backup (.json)</span>
-                    </button>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleDownloadBackup("gradebooks")}
-                        className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] py-1.5 rounded-lg transition-colors"
-                      >
-                        Nur Notenbücher
-                      </button>
-                      <button
-                        onClick={() => handleDownloadBackup("notes")}
-                        className="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] py-1.5 rounded-lg transition-colors"
-                      >
-                        Nur Verhaltenslogs
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Import Column */}
-                <div className="glass-panel p-5 border-rose-500/20 bg-gradient-to-b from-slate-900/80 to-rose-950/10 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-2 text-rose-400">
-                      <Upload className="w-4 h-4" />
-                      <h3 className="text-sm font-bold text-white">System-Restore durchführen</h3>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed mb-3">
-                      <strong className="text-rose-400 font-semibold">ACHTUNG:</strong> Das Einspielen eines Backups
-                      löscht alle bestehenden Tabelleninhalte und überschreibt sie mit den archivierten Daten.
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleRestoreBackup} className="space-y-3">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                        JSON Sicherungsdatei
-                      </label>
-                      <input
-                        type="file"
-                        accept=".json"
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSelectedRestoreFile(e.target.files?.[0] || null)}
-                        className="w-full text-xs text-slate-400 file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-semibold file:bg-slate-800 file:text-slate-300 hover:file:bg-slate-700 file:cursor-pointer bg-slate-950 p-1.5 rounded-lg border border-slate-800"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-rose-400 mb-1">
-                        Bestätigung (tippen Sie &quot;RESTORE&quot;)
-                      </label>
-                      <input
-                        type="text"
-                        value={restoreConfirmText}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRestoreConfirmText(e.target.value)}
-                        placeholder="RESTORE"
-                        className="w-full bg-slate-950 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-300 focus:border-rose-500 focus:outline-none placeholder:text-slate-700 font-mono text-center"
-                        required
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isLoading || !selectedRestoreFile || restoreConfirmText !== "RESTORE"}
-                      className="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-medium py-2 rounded-xl transition-all shadow-sm disabled:opacity-40 flex items-center justify-center gap-2"
-                    >
-                      {isLoading ? "Wiederherstellung läuft..." : "Gefährliche Wiederherstellung starten"}
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Gespeicherte Automatik-Backups */}
-              <div className="glass-panel p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold text-white">Gespeicherte Automatik-Backups</h3>
-                  <button
-                    onClick={loadSavedBackups}
-                    className="text-slate-500 hover:text-slate-300 transition-colors"
-                    title="Aktualisieren"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {savedBackups.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic text-center py-4">Keine automatischen Backups verfügbar</p>
-                ) : (
-                  <div className="space-y-2">
-                    {savedBackups.map((b) => (
-                      <div
-                        key={b.filename}
-                        className={`flex items-center justify-between bg-slate-950 border rounded-xl px-3 py-2.5 ${
-                          serverRestoreFile === b.filename ? "border-amber-500/50 bg-amber-500/5" : "border-slate-800"
-                        }`}
-                      >
-                        <div>
-                          <p className="text-xs font-mono text-slate-200">{b.filename}</p>
-                          <p className="text-[10px] text-slate-500 mt-0.5">
-                            {new Date(b.created_at).toLocaleDateString("de-DE", {
-                              day: "2-digit", month: "2-digit", year: "numeric",
-                              hour: "2-digit", minute: "2-digit"
-                            })}
-                            {" · "}
-                            {(b.size / 1024).toFixed(1)} KB
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setServerRestoreFile(b.filename);
-                            setServerRestoreConfirm("");
-                          }}
-                          className="text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg transition-colors shrink-0 ml-3"
-                        >
-                          Wiederherstellen
-                        </button>
-                      </div>
-                    ))}
-
-                    {serverRestoreFile && (
-                      <form onSubmit={handleRestoreServerFile} className="mt-3 bg-rose-950/20 border border-rose-500/30 p-3 rounded-xl space-y-2">
-                        <p className="text-[11px] text-rose-300 font-semibold">
-                          Wiederherstellen aus: <span className="font-mono">{serverRestoreFile}</span>
-                        </p>
-                        <input
-                          type="text"
-                          value={serverRestoreConfirm}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setServerRestoreConfirm(e.target.value)}
-                          placeholder="RESTORE eingeben"
-                          className="w-full bg-slate-950 border border-rose-500/30 rounded-lg p-2 text-xs text-rose-300 focus:border-rose-500 focus:outline-none font-mono text-center"
-                        />
-                        <div className="flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => { setServerRestoreFile(null); setServerRestoreConfirm(""); }}
-                            className="flex-1 bg-slate-900 text-slate-400 text-xs py-1.5 rounded-lg hover:bg-slate-800 transition-colors"
-                          >
-                            Abbrechen
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={isLoading || serverRestoreConfirm !== "RESTORE"}
-                            className="flex-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold py-1.5 rounded-lg disabled:opacity-40 transition-colors"
-                          >
-                            {isLoading ? "Läuft..." : "Jetzt wiederherstellen"}
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+            <SystemMaintenance
+              handleDownloadBackup={handleDownloadBackup}
+              selectedRestoreFile={selectedRestoreFile}
+              setSelectedRestoreFile={setSelectedRestoreFile}
+              restoreConfirmText={restoreConfirmText}
+              setRestoreConfirmText={setRestoreConfirmText}
+              handleRestoreBackup={handleRestoreBackup}
+              serverRestoreFile={serverRestoreFile}
+              setServerRestoreFile={setServerRestoreFile}
+              serverRestoreConfirm={serverRestoreConfirm}
+              setServerRestoreConfirm={setServerRestoreConfirm}
+              handleRestoreServerFile={handleRestoreServerFile}
+              isLoading={isLoading}
+              savedBackups={savedBackups}
+              loadSavedBackups={loadSavedBackups}
+            />
           )}
 
           {/* SECTION 5: RAUMVERWALTUNG */}
           {activeSection === "rooms" && (
-            <div className="space-y-6 max-w-2xl">
-              <div className="glass-panel p-5">
-                <h2 className="text-sm font-bold text-white mb-3">Neuen Raum anlegen</h2>
-                <form onSubmit={handleCreateRoom} className="flex gap-3 items-end">
-                  <div className="flex-1">
-                    <label className="block text-[11px] font-medium text-slate-400 mb-1">Raumbezeichnung</label>
-                    <input
-                      type="text"
-                      value={newRoomName}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewRoomName(e.target.value)}
-                      placeholder="z.B. Bibliothek"
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-white focus:border-cyan-500 focus:outline-none"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    className="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium py-2 px-4 rounded-lg transition-colors h-[34px]"
-                  >
-                    Raum erstellen
-                  </button>
-                </form>
-              </div>
-
-              <div className="glass-panel overflow-hidden">
-                <div className="px-5 py-3 border-b border-slate-800/80 bg-slate-900/40">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Konfigurierte Räume ({rooms.length})
-                  </h3>
-                </div>
-                <div className="divide-y divide-slate-800/50">
-                  {rooms.map((room) => (
-                    <div key={room.id} className="flex items-center justify-between p-3 hover:bg-slate-800/20 transition-colors">
-                      {editingRoomId === room.id ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          <input
-                            type="text"
-                            value={editingRoomName}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditingRoomName(e.target.value)}
-                            className="flex-1 bg-slate-950 border border-cyan-500/50 rounded-lg p-1.5 text-xs text-white focus:outline-none"
-                            autoFocus
-                            onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
-                              if (e.key === "Enter") handleRenameRoom(room.id);
-                              if (e.key === "Escape") setEditingRoomId(null);
-                            }}
-                          />
-                          <button
-                            onClick={() => handleRenameRoom(room.id)}
-                            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold px-2 py-1 border border-cyan-500/30 rounded-lg transition-colors"
-                          >
-                            Speichern
-                          </button>
-                          <button
-                            onClick={() => setEditingRoomId(null)}
-                            className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div>
-                            <span className="text-xs font-medium text-white">{room.name}</span>
-                            {room.capacity && (
-                              <span className="text-[10px] text-slate-500 ml-2">Max. {room.capacity}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setEditingRoomId(room.id);
-                                setEditingRoomName(room.name);
-                              }}
-                              title="Umbenennen"
-                              className="p-1 text-slate-500 hover:text-cyan-400 rounded transition-colors"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteRoom(room.id, room.name)}
-                              title="Löschen"
-                              className="p-1 text-slate-500 hover:text-rose-400 rounded transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <RoomManagement
+              rooms={rooms}
+              newRoomName={newRoomName}
+              setNewRoomName={setNewRoomName}
+              handleCreateRoom={handleCreateRoom}
+              handleDeleteRoom={handleDeleteRoom}
+              editingRoomId={editingRoomId}
+              setEditingRoomId={setEditingRoomId}
+              editingRoomName={editingRoomName}
+              setEditingRoomName={setEditingRoomName}
+              handleRenameRoom={handleRenameRoom}
+              isLoading={isLoading}
+            />
           )}
         </main>
       </div>

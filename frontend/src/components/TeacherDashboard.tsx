@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { io, Socket } from "socket.io-client";
 import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDashboardData } from "@/hooks/useDashboardData";
 import {
   DndContext, DragEndEvent, useSensor, useSensors,
   PointerSensor, TouchSensor, closestCenter
@@ -23,30 +25,7 @@ import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
 import HelpFeed from "./HelpFeed";
 
-export interface Pupil {
-  id: number;
-  name: string;
-  class_name: string;
-  room_id: number;
-  arrived_status: boolean; // true='arrived', false='pending'
-  active_comment?: string;
-  timer_minutes?: number;
-  timer_started_at?: string;
-  timer_started_at_ms?: number;
-}
-
-export interface Room {
-  id: number;
-  name: string;
-}
-
-interface User {
-  id: number;
-  username: string;
-  full_name: string;
-  role: "admin" | "teacher" | "pupil" | "lernwerkstatt";
-  requires_password_change?: boolean;
-}
+import { Pupil, Room, User } from "@/types";
 
 const LESSON_SCHEDULE = [
   { nr: 1, start: "07:55", end: "08:45" },
@@ -102,46 +81,43 @@ export default function TeacherDashboard() {
     useSensor(TouchSensor, { activationConstraint: { delay: 50, tolerance: 5 } })
   );
 
-  // Initial State Hydration
-  const hydrateState = async (token: string) => {
-    try {
-      const apiUrl = getApiUrl();
-      const [stateRes, classesRes] = await Promise.all([
-        fetch(`${apiUrl}/api/state`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${apiUrl}/api/classes`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+  const queryClient = useQueryClient();
+  const [token, setToken] = useState<string | null>(null);
 
-      if (stateRes.ok) {
-        const data = await stateRes.json();
-        setRooms(data.rooms || []);
-        // Map arrived_status string to boolean
-        const mappedPupils = (data.pupils || []).map((p: any) => ({
-          ...p,
-          id: Number(p.id),
-          room_id: Number(p.room_id || 1),
-          arrived_status: p.arrived_status === "arrived",
-          active_comment: p.comment || "",
-          timer_minutes: p.timer_minutes ? Number(p.timer_minutes) : undefined,
-          timer_started_at: p.timer_started_at || undefined,
-          timer_started_at_ms: p.timer_started_at_ms !== null && p.timer_started_at_ms !== undefined ? Number(p.timer_started_at_ms) : undefined,
-        }));
-        setPupils(mappedPupils);
-        setSubjects(data.subjects || []);
-        setSubjectTags(data.subject_tags || []);
+  useEffect(() => {
+    setToken(localStorage.getItem("token"));
+  }, []);
 
-        // Derive unique classes list if API didn't return
-        if (classesRes.ok) {
-          const cData = await classesRes.json();
-          setClasses(cData);
-          if (cData.length > 0 && selectedClass === "all") {
-            setSelectedClass(cData[0].name);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Hydration processing error:", err);
+  const { state: dashboardState, classes: classesData, isLoading: isQueryLoading } = useDashboardData(token);
+
+  // Sync Query Data to Local State for Real-Time Updates
+  useEffect(() => {
+    if (dashboardState) {
+      setRooms(dashboardState.rooms || []);
+      const mappedPupils = (dashboardState.pupils || []).map((p: any) => ({
+        ...p,
+        id: Number(p.id),
+        room_id: Number(p.room_id || 1),
+        arrived_status: p.arrived_status === "arrived",
+        active_comment: p.comment || "",
+        timer_minutes: p.timer_minutes ? Number(p.timer_minutes) : undefined,
+        timer_started_at: p.timer_started_at || undefined,
+        timer_started_at_ms: p.timer_started_at_ms !== null && p.timer_started_at_ms !== undefined ? Number(p.timer_started_at_ms) : undefined,
+      }));
+      setPupils(mappedPupils);
+      setSubjects(dashboardState.subjects || []);
+      setSubjectTags(dashboardState.subject_tags || []);
     }
-  };
+  }, [dashboardState]);
+
+  useEffect(() => {
+    if (classesData) {
+      setClasses(classesData);
+      if (classesData.length > 0 && selectedClass === "all") {
+        setSelectedClass(classesData[0].name);
+      }
+    }
+  }, [classesData, selectedClass]);
 
   // Socket Connection Setup
   useEffect(() => {
@@ -157,7 +133,6 @@ export default function TeacherDashboard() {
     if (usr?.role === "pupil") {
       setActiveTab("planner");
     }
-    hydrateState(token);
 
     const wsUrl = getWsUrl();
     const socketInstance = io(wsUrl, {

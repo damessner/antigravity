@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { QueryProvider } from "@/providers/QueryProvider";
+import { Toaster } from "@/components/ui/Toaster";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 export const metadata: Metadata = {
   title: "School Management System | Live Dashboard",
@@ -26,7 +29,12 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body className="bg-slate-950 text-slate-100 font-sans antialiased min-h-screen">
-        {children}
+        <QueryProvider>
+          <ErrorBoundary>
+            {children}
+            <Toaster richColors closeButton position="top-right" />
+          </ErrorBoundary>
+        </QueryProvider>
       </body>
     </html>
   );
