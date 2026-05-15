@@ -15,6 +15,24 @@ A production-ready, highly responsive school administration and real-time classr
 
 ---
 
+## 📸 Visual Overview
+
+| Login & Authentication | Live Raumbelegung |
+| :---: | :---: |
+| ![Login Page](sample_images/Login%20Page.png) | ![Live Raumbelegung](sample_images/Live%20Raumbelegung.png) |
+
+| Evaluationsbereich | Lernplaner & Hilfe |
+| :---: | :---: |
+| ![Evaluationsbereich](sample_images/Evaluationsbereich.png) | ![Lernplaner](sample_images/Lernplaner.png) |
+
+| Notizen & Feedback | Erweitertes Bewertungssystem | Lernplaner & Hilfeanfrage |
+| :---: | :---: | :---: |
+| ![Notizen](sample_images/Notizen.png) | ![Bewertung](sample_images/Evaluationsbereich%20Bewertungsbereich.png) | ![Hilfeanfrage](sample_images/Lernplaner%20mit%20Hilfeanfrage.png) |
+
+
+---
+
+
 ## 🔑 Initial Access
 
 After deploying, log in using the following administrative credentials:
