@@ -48,7 +48,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   // Data Queries
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
   const matrixQuery = useGradebookMatrix(selectedSubject?.id || null);
-  const { categories = [], grades = [] } = matrixQuery.data || {};
+  const { categories = [], grades = [], pupil_tags = [] } = matrixQuery.data || {};
   
   // Mutations
   const mutations = useGradebookMutations(selectedSubject?.id || null);
@@ -187,6 +187,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       is_visible: targetVis
     });
   }, [isOwner, grades, mutations.updateGrade]);
+  
+  const handleTagChange = useCallback((pupilId: number, tier: string | null) => {
+    if (!isOwner) return;
+    mutations.updateTag.mutate({ pupil_id: pupilId, tier_tag: tier });
+  }, [isOwner, mutations.updateTag]);
 
   const handleOpenAddAssessment = useCallback((catId: number) => {
     setShowAddAssessment({ categoryId: catId });
@@ -376,11 +381,13 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         pupils={classPupils}
         categories={balancedCategories}
         grades={grades}
+        pupilTags={pupil_tags}
         columns={allColumns}
         currentUser={currentUser}
         isOwner={isOwner}
         onGradeChange={handleGradeChange}
         onCellContextMenu={handleCellContextMenu}
+        onTagChange={handleTagChange}
         onAddAssessment={handleOpenAddAssessment}
         onRenameColumn={handleOpenRenameColumn}
         onEditMetadata={handleOpenEditMetadata}

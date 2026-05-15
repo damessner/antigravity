@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { Plus, Edit3, Settings2, Trash2 } from "lucide-react";
-import { Category, Grade, Pupil, User, ColumnMetadata } from "@/types";
+import { ChevronDown, Plus, Edit3, Settings2, Trash2, Award } from "lucide-react";
+import { Category, Grade, Pupil, User, ColumnMetadata, PupilTag } from "@/types";
 import { GradeCell } from "./GradeCell";
 import { getPlaceholderForScale } from "../gradeUtils";
 import { ScaleType } from "../gradeUtils";
@@ -18,11 +18,13 @@ interface GradebookTableProps {
   pupils: Pupil[];
   categories: Category[];
   grades: Grade[];
+  pupilTags: PupilTag[];
   columns: GradebookColumn[];
   currentUser: User | null;
   isOwner: boolean;
   onGradeChange: (catId: number, pId: number, assName: string, val: string) => void;
   onCellContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
+  onTagChange: (pupilId: number, tier: string | null) => void;
   onAddAssessment: (catId: number) => void;
   onRenameColumn: (catId: number, oldName: string) => void;
   onEditMetadata: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
@@ -35,11 +37,13 @@ function GradebookTableBase({
   pupils,
   categories,
   grades,
+  pupilTags,
   columns,
   currentUser,
   isOwner,
   onGradeChange,
   onCellContextMenu,
+  onTagChange,
   onAddAssessment,
   onRenameColumn,
   onEditMetadata,
@@ -172,9 +176,48 @@ function GradebookTableBase({
               className={`group/row transition-colors ${pIdx % 2 === 0 ? "bg-transparent" : "bg-slate-900/10"} hover:bg-indigo-500/5`}
             >
               <td className="sticky left-0 z-30 px-4 py-2 h-11 bg-slate-950/80 border-r-2 border-slate-800 text-[11px] font-bold text-slate-300 group-hover/row:text-white backdrop-blur-sm">
-                <div className="flex items-center gap-2 truncate">
-                  <span className="text-[9px] text-slate-600 font-mono w-4">{pIdx + 1}</span>
-                  {p.name}
+                <div className="flex items-center justify-between gap-2 overflow-visible">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="text-[9px] text-slate-600 font-mono w-4">{pIdx + 1}</span>
+                    {p.name}
+                  </div>
+                  
+                  {/* Mastery Tag */}
+                  <div className="relative group/tag shrink-0">
+                    {(() => {
+                      const tag = pupilTags.find(t => t.pupil_id === p.id);
+                      const tier = tag?.tier_tag || null;
+                      
+                      const colors: Record<string, string> = {
+                        "Meister": "bg-amber-400/20 text-amber-400 border-amber-400/30",
+                        "Geselle": "bg-slate-300/20 text-slate-300 border-slate-300/30",
+                        "Lehrling": "bg-orange-500/20 text-orange-400 border-orange-500/30",
+                        "Anwärter": "bg-indigo-400/20 text-indigo-400 border-indigo-400/30"
+                      };
+                      
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tighter border ${tier ? colors[tier] || "bg-slate-800 text-slate-500 border-slate-700" : "bg-transparent text-slate-700 border-transparent group-hover/tag:border-slate-800 group-hover/tag:text-slate-500"}`}>
+                            {tier || "Kein Rang"}
+                          </span>
+                          
+                          {isOwner && (
+                            <select
+                              value={tier || "none"}
+                              onChange={(e) => onTagChange(p.id, e.target.value === "none" ? null : e.target.value)}
+                              className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                            >
+                              <option value="none">Kein Rang</option>
+                              <option value="Meister">Meister</option>
+                              <option value="Geselle">Geselle</option>
+                              <option value="Lehrling">Lehrling</option>
+                              <option value="Anwärter">Anwärter</option>
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
               </td>
               {columns.map((col, cIdx) => {

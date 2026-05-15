@@ -93,8 +93,8 @@ export interface Grade {
 export interface PupilTag {
   id: number;
   pupil_id: number;
-  tag: string;
-  color?: string;
+  subject_id: number;
+  tier_tag: string | null;
 }
 
 export interface GradebookMatrix {

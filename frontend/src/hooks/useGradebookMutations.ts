@@ -153,9 +153,50 @@ export function useGradebookMutations(subjectId: number | null) {
     }
   });
 
+  const updateTag = useMutation({
+    mutationFn: async (input: { pupil_id: number; tier_tag: string | null }) => {
+      await fetchAuth("/api/gradebook/tag", {
+        method: "POST",
+        body: JSON.stringify({ ...input, subject_id: subjectId }),
+      });
+    },
+    onMutate: async (newTag) => {
+      await queryClient.cancelQueries({ queryKey: ["matrix", subjectId] });
+      const previousMatrix = queryClient.getQueryData<GradebookMatrix>(["matrix", subjectId]);
+
+      if (previousMatrix) {
+        const nextTags = previousMatrix.pupil_tags.filter(t => t.pupil_id !== newTag.pupil_id);
+        if (newTag.tier_tag) {
+          nextTags.push({
+            id: Date.now(), // temporary
+            pupil_id: newTag.pupil_id,
+            subject_id: Number(subjectId),
+            tier_tag: newTag.tier_tag
+          });
+        }
+        queryClient.setQueryData<GradebookMatrix>(["matrix", subjectId], {
+          ...previousMatrix,
+          pupil_tags: nextTags
+        });
+      }
+
+      return { previousMatrix };
+    },
+    onError: (err, newTag, context) => {
+      if (context?.previousMatrix) {
+        queryClient.setQueryData(["matrix", subjectId], context.previousMatrix);
+      }
+      toast.error("Rang konnte nicht gespeichert werden");
+    },
+    onSettled: () => {
+      scheduleMatrixInvalidation();
+    },
+  });
+
   return {
     updateGrade,
     updateWeights,
     createCategory,
+    updateTag,
   };
 }
