@@ -44,7 +44,32 @@ echo -e "   ${GREEN}✅ Docker Ready${NC}"
 # 4. Clone and Prepare
 echo -e "${WHITE}>> Downloading Antigravity...${NC}"
 if [ -d "$INSTALL_DIR" ]; then
-    cd "$INSTALL_DIR" && git pull origin main
+    echo -e "${YELLOW} [INFO] Existing installation found at $INSTALL_DIR.${NC}"
+    echo -e "${RED} 🔥 DANGER ZONE: Do you want to trigger a FULL CLEAN SLATE?${NC}"
+    echo -e "    This will wipe ALL data and reset the system to factory defaults."
+    echo -en "${WHITE} >> Trigger Clean Slate? (y/N): ${NC}"
+    read -r do_clean_slate
+    
+    if [[ "$do_clean_slate" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+        echo -en "${RED}    Enter confirmation code to proceed: ${NC}"
+        read -r confirm_code
+        if [ "$confirm_code" == "weissenbach" ]; then
+            echo -e "${RED} >> CLEAN SLATE INITIATED...${NC}"
+            # Stop containers if they are running
+            cd "$INSTALL_DIR" && docker compose down -v --remove-orphans 2>/dev/null || true
+            # Wipe and Re-clone
+            cd ..
+            rm -rf "$INSTALL_DIR"
+            git clone $REPO_URL "$INSTALL_DIR"
+            cd "$INSTALL_DIR"
+        else
+            echo -e "${YELLOW} [INFO] Confirmation code incorrect. Proceeding with standard update.${NC}"
+            cd "$INSTALL_DIR" && git pull origin main
+        fi
+    else
+        echo -e "${WHITE}>> Updating existing installation...${NC}"
+        cd "$INSTALL_DIR" && git pull origin main
+    fi
 else
     git clone $REPO_URL "$INSTALL_DIR"
     cd "$INSTALL_DIR"
