@@ -337,9 +337,27 @@ router.post('/import/roster', authenticateToken, isAdmin, upload.single('file'),
 
 // POST /api/admin/pupils/:id/assign — Manually assign a pupil to a class
 router.post('/pupils/:id/assign', authenticateToken, isAdmin, async (req, res) => {
-    const pupilId = Number(req.params.id);
+    const rawId = Number(req.params.id);
     const { class_id } = req.body;
     try {
+        if (!Number.isFinite(rawId) || rawId <= 0) {
+            return res.status(400).json({ error: 'Ungültige Schüler-ID' });
+        }
+
+        // Accept both pupils.id and users.id to support admin screens using user IDs
+        let pupilId = null;
+        const byPupilId = await req.pool.query('SELECT id FROM pupils WHERE id = $1 LIMIT 1', [rawId]);
+        if (byPupilId.rows.length > 0) {
+            pupilId = byPupilId.rows[0].id;
+        } else {
+            const byUserId = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1 LIMIT 1', [rawId]);
+            if (byUserId.rows.length > 0) pupilId = byUserId.rows[0].id;
+        }
+
+        if (!pupilId) {
+            return res.status(404).json({ error: 'Schülerprofil nicht gefunden' });
+        }
+
         await req.pool.query('UPDATE pupils SET class_id = $1 WHERE id = $2', [class_id || null, pupilId]);
         res.json({ success: true });
     } catch (err) {

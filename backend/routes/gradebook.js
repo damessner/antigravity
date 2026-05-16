@@ -984,9 +984,24 @@ router.post('/tag', authenticateToken, async (req, res) => {
   const { subject_id, pupil_id, tier_tag } = req.body;
   if (!subject_id || !pupil_id) return res.status(400).json({ error: 'Missing IDs' });
 
+  const access = await assertSubjectAccess(req, Number(subject_id), { allowPupilRead: false });
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
   const client = await req.pool.connect();
   try {
     await client.query('BEGIN');
+
+    const membershipRes = await client.query(`
+      SELECT 1
+      FROM pupils p
+      JOIN subjects s ON s.id = $2
+      WHERE p.id = $1 AND p.class_id = s.class_id
+      LIMIT 1
+    `, [Number(pupil_id), Number(subject_id)]);
+    if (membershipRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Pupil does not belong to subject class' });
+    }
 
     // Fetch subject name for audit note text
     const subRes = await client.query('SELECT name FROM subjects WHERE id = $1', [Number(subject_id)]);
@@ -1192,9 +1207,24 @@ router.put('/subjects/:subject_id/pupils/:pupil_id/tag', authenticateToken, asyn
   const pupilId = Number(req.params.pupil_id);
   const { tier_tag } = req.body;
 
+  const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+  if (!access.ok) return res.status(access.status).json({ error: access.error });
+
   const client = await req.pool.connect();
   try {
     await client.query('BEGIN');
+
+    const membershipRes = await client.query(`
+      SELECT 1
+      FROM pupils p
+      JOIN subjects s ON s.id = $2
+      WHERE p.id = $1 AND p.class_id = s.class_id
+      LIMIT 1
+    `, [pupilId, subjectId]);
+    if (membershipRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Pupil does not belong to subject class' });
+    }
 
     // Fetch Subject Details
     const subRes = await client.query('SELECT name FROM subjects WHERE id = $1', [subjectId]);
@@ -1583,6 +1613,9 @@ router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.subject_id);
 
   try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: true });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     const configRes = await req.pool.query(`
       SELECT rank_level, rank_name, rank_symbol
       FROM subject_rank_config
