@@ -3,6 +3,7 @@ const router = express.Router();
 const fs = require('fs');
 const path = require('path');
 const { authenticateToken, setupLimiter } = require('../server');
+const logger = require('../utils/logger');
 
 // Helper to check if user is admin
 const isAdmin = (req, res, next) => {
@@ -17,6 +18,20 @@ const isAdmin = (req, res, next) => {
 const DATA_DIR = '/opt/school-management/school_data';
 const TRIGGER_FILE = path.join(DATA_DIR, 'UPDATE_PENDING');
 const LOG_FILE = path.join(DATA_DIR, 'logs/auto_update.log');
+
+const normalizeLevels = (raw) => {
+    if (!raw) return null;
+    return String(raw)
+        .split(',')
+        .map(l => l.trim().toLowerCase())
+        .filter(l => ['error', 'warn', 'info'].includes(l));
+};
+
+const csvEscape = (val) => {
+    const str = val === null || val === undefined ? '' : String(val);
+    if (/[",\n]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+    return str;
+};
 
 // GET /api/admin/system/status — Check system update status
 router.get('/status', authenticateToken, isAdmin, async (req, res) => {
@@ -47,6 +62,50 @@ router.post('/update', authenticateToken, isAdmin, async (req, res) => {
     } catch (err) {
         console.error('Update trigger error:', err);
         res.status(500).json({ error: 'Update konnte nicht ausgelöst werden' });
+    }
+});
+
+// GET /api/admin/logs — Read rolling app logs
+// Query params:
+//   levels=error,warn,info
+//   limit=500
+//   format=json|csv
+router.get('/logs', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const levels = normalizeLevels(req.query.levels);
+        const limit = Math.max(1, Math.min(5000, Number(req.query.limit) || 500));
+        const format = String(req.query.format || 'json').toLowerCase();
+
+        let entries = logger.readEntries();
+        if (levels && levels.length > 0) {
+            entries = entries.filter((e) => levels.includes(String(e.level || '').toLowerCase()));
+        }
+        entries = entries.slice(0, limit);
+
+        if (format === 'csv') {
+            const header = ['iso', 'level', 'context', 'message', 'error', 'stack'];
+            const rows = entries.map((e) => [
+                csvEscape(e.iso),
+                csvEscape(e.level),
+                csvEscape(e.context),
+                csvEscape(e.message),
+                csvEscape(e.error),
+                csvEscape(e.stack),
+            ].join(','));
+            const csv = [header.join(','), ...rows].join('\n');
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="admin_logs_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv"`);
+            return res.send(csv);
+        }
+
+        res.json({
+            logPath: logger.getPath(),
+            count: entries.length,
+            entries,
+        });
+    } catch (err) {
+        console.error('Admin logs fetch error:', err);
+        res.status(500).json({ error: 'Logs konnten nicht geladen werden' });
     }
 });
 

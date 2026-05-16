@@ -63,6 +63,17 @@ interface PupilDraggableProps {
   socket: Socket | null;
   onOpenTimer: () => void;
   onOpenComment: () => void;
+  helpRequest?: {
+    id: number;
+    subject: string;
+    message: string;
+    status: "open" | "claimed" | "resolved";
+    claimed_by_teacher_id?: number | null;
+  };
+  helpVisualClass?: string;
+  onClaimHelp?: (requestId: number) => void;
+  canClaimHelp?: boolean;
+  currentUserId?: number;
 }
 
 export default function PupilDraggable({
@@ -71,6 +82,11 @@ export default function PupilDraggable({
   socket,
   onOpenTimer,
   onOpenComment,
+  helpRequest,
+  helpVisualClass,
+  onClaimHelp,
+  canClaimHelp,
+  currentUserId,
 }: PupilDraggableProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: pupil.id,
@@ -106,6 +122,8 @@ export default function PupilDraggable({
       : undefined;
 
   const hasActiveTimer = !!resolvedStartedAtMs && Number(pupil.timer_minutes) > 0;
+  const hasOpenHelp = helpRequest && helpRequest.status !== "resolved";
+  const isClaimedByCurrentUser = Number(helpRequest?.claimed_by_teacher_id || 0) === Number(currentUserId || 0);
 
   return (
     <div
@@ -114,7 +132,7 @@ export default function PupilDraggable({
       {...attributes}
       {...listeners}
       onClick={onOpenComment}
-      className={`group relative flex items-center justify-between p-2.5 rounded-xl border transition-all duration-150 select-none cursor-grab active:cursor-grabbing ${
+      className={`group relative flex items-center justify-between p-2.5 rounded-xl border transition-all duration-150 select-none cursor-grab active:cursor-grabbing ${hasOpenHelp ? `animate-pulse shadow-md ${helpVisualClass || "border-indigo-400/70 shadow-indigo-500/30"}` : ""} ${
         isDragging
           ? "opacity-60 scale-95 border-indigo-500 bg-indigo-950/30 shadow-md"
           : pupil.arrived_status
@@ -122,6 +140,14 @@ export default function PupilDraggable({
           : "bg-slate-900 border-slate-700/60 text-white hover:border-slate-600 shadow-xs"
       }`}
     >
+      {hasOpenHelp && (
+        <div className="absolute left-2 right-2 -top-2.5 overflow-hidden rounded bg-slate-950/95 border border-slate-700">
+          <div className="whitespace-nowrap text-[9px] text-indigo-200 px-2 py-0.5 animate-[marquee_8s_linear_infinite]">
+            🙋 {helpRequest?.subject}: {helpRequest?.message || "Braucht Hilfe"}
+          </div>
+        </div>
+      )}
+
       {/* Left section: Checkbox + Identifiers */}
       <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
         <button
@@ -172,6 +198,24 @@ export default function PupilDraggable({
 
       {/* Right section: Trigger action icons */}
       <div className="shrink-0 pl-1 z-10 flex items-center gap-1">
+        {hasOpenHelp && onClaimHelp && canClaimHelp && helpRequest?.status === "open" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClaimHelp(helpRequest.id);
+            }}
+            className="p-1 rounded text-indigo-300 hover:text-white hover:bg-indigo-500/20 transition-colors text-[10px] font-bold"
+            title="Hilferuf übernehmen"
+          >
+            CLAIM
+          </button>
+        )}
+        {hasOpenHelp && helpRequest?.status === "claimed" && (
+          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${isClaimedByCurrentUser ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700 text-slate-200"}`}>
+            {isClaimedByCurrentUser ? "MEINS" : "BESETZT"}
+          </span>
+        )}
         <button
           type="button"
           onClick={handleTimerTrigger}

@@ -11,10 +11,12 @@
 
 const fs = require('fs');
 const path = require('path');
+const { EventEmitter } = require('events');
 
 const RETENTION_MS = 72 * 60 * 60 * 1000; // 72 hours
 
 let _logFilePath = null;
+const logStream = new EventEmitter();
 
 function getLogFilePath() {
   if (_logFilePath) return _logFilePath;
@@ -99,6 +101,9 @@ function log(level, context, message, err) {
     console.log(prefix);
   }
 
+  // Broadcast to in-process subscribers (e.g., admin live debug stream)
+  logStream.emit('entry', entry);
+
   // Persist to file
   const filePath = getLogFilePath();
   if (!filePath) return;
@@ -161,4 +166,8 @@ module.exports = {
   trimNow,
   getPath,
   readEntries,
+  onEntry: (listener) => {
+    logStream.on('entry', listener);
+    return () => logStream.off('entry', listener);
+  },
 };

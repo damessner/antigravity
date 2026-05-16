@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2
+  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2, Bug
 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 import { fetchAuth } from "@/utils/fetchAuth";
@@ -13,6 +13,7 @@ import { ClassManagement } from "@/components/admin/ClassManagement";
 import { PupilManagement } from "@/components/admin/PupilManagement";
 import { RoomManagement } from "@/components/admin/RoomManagement";
 import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
+import { AdminDebugConsole } from "@/components/admin/AdminDebugConsole";
 import { OnboardingTip } from "@/components/OnboardingTip";
 
 import { User, SchoolClass, Pupil, Room } from "@/types";
@@ -27,7 +28,7 @@ interface SavedBackupFile {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms">("users");
+  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms" | "debugging">("users");
   
   const { users, classes, pupils, rooms, isLoading: dataLoading, refetch } = useDashboardData(typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const mutations = useAdminMutations();
@@ -419,6 +420,18 @@ export default function AdminPage() {
             <Building2 className="w-4 h-4" />
             <span>Raumverwaltung</span>
           </button>
+
+          <button
+            onClick={() => setActiveSection("debugging")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+              activeSection === "debugging"
+                ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            }`}
+          >
+            <Bug className="w-4 h-4" />
+            <span>Debugging</span>
+          </button>
         </aside>
 
         {/* Content Container */}
@@ -500,6 +513,11 @@ export default function AdminPage() {
               handleRenameRoom={handleRenameRoom}
               isLoading={isLoading}
             />
+          )}
+
+          {/* SECTION 6: DEBUGGING */}
+          {activeSection === "debugging" && (
+            <AdminDebugConsole />
           )}
         </main>
       </div>
