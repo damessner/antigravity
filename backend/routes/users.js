@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 // Middleware to check if user is admin
@@ -25,7 +25,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/users (Admin only)
-router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const { username, full_name, role } = req.body;
   if (!username || !full_name || !role) {
     return res.status(400).json({ error: 'Username, full name, and role are required' });
@@ -56,7 +56,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // POST /api/users/:id/reset-password (Admin only)
-router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/:id/reset-password', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
 
   try {
@@ -98,7 +98,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // POST /api/users/change-password (Any authenticated)
-router.post('/change-password', authenticateToken, async (req, res) => {
+router.post('/change-password', setupLimiter, authenticateToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Current and new passwords required' });

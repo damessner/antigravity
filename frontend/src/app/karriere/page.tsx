@@ -106,7 +106,7 @@ export default function KarriereDashboard() {
                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
                 SYSTEM ONLINE
               </span>
-              <p className="text-slate-500 text-xs font-mono tracking-widest uppercase opacity-80">Sector: Karriere-Matrix v2.8</p>
+               <p className="text-slate-500 text-xs font-mono tracking-widest uppercase opacity-80">Sector: Karriere-Matrix v3.0</p>
             </div>
           </div>
         </div>

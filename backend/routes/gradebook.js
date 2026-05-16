@@ -689,7 +689,7 @@ router.put('/subjects/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/gradebook/matrix/:id
-router.get('/matrix/:id', authenticateToken, async (req, res) => {
+router.get('/matrix/:id', stateLimiter, authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.id);
   try {
     const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: true });

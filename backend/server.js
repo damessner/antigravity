@@ -227,14 +227,12 @@ async function bootstrapDatabase() {
         ON CONFLICT (key) DO NOTHING;
 
         -- Seed initial Fun Insights
-        await pool.query(`
-          INSERT INTO fun_insights (title, content, category)
-          VALUES 
-            ('Intergalaktische Pünktlichkeit', '98% aller Schüler sind heute pünktlich gelandet. Die Triebwerke laufen stabil!', 'status'),
-            ('Die Aufsteiger der Woche', 'Die 3b hat ihren Notenschnitt um 0.4 Punkte verbessert. Warp-Antrieb aktiviert!', 'achievement'),
-            ('Hausübungs-Helden', 'In der letzten Woche wurden 1.200 Hausübungen digital eingereicht. Ein neuer Rekord!', 'stat')
-          ON CONFLICT DO NOTHING;
-        `);
+        INSERT INTO fun_insights (title, content, category)
+        VALUES 
+          ('Intergalaktische Pünktlichkeit', '98% aller Schüler sind heute pünktlich gelandet. Die Triebwerke laufen stabil!', 'status'),
+          ('Die Aufsteiger der Woche', 'Die 3b hat ihren Notenschnitt um 0.4 Punkte verbessert. Warp-Antrieb aktiviert!', 'achievement'),
+          ('Hausübungs-Helden', 'In der letzten Woche wurden 1.200 Hausübungen digital eingereicht. Ein neuer Rekord!', 'stat')
+        ON CONFLICT DO NOTHING;
         CREATE OR REPLACE FUNCTION create_default_preferences()
         RETURNS TRIGGER AS $$
         BEGIN
