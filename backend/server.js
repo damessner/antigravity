@@ -191,8 +191,19 @@ async function bootstrapDatabase() {
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS last_factsheet_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+        ALTER TABLE users    ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
+        ALTER TABLE users    ADD COLUMN IF NOT EXISTS erasure_due_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
         ALTER TABLE classes  ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE pupils   ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+
+        CREATE TABLE IF NOT EXISTS user_erasure_audit (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          deleted_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          deleted_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          reason TEXT,
+          export_snapshot JSONB NOT NULL
+        );
 
         -- Karriere-Dashboard & Fun Insights
         CREATE TABLE IF NOT EXISTS achievements (
@@ -223,7 +234,8 @@ async function bootstrapDatabase() {
           ('webuntis_last_sync', ''),
           ('webuntis_sync_status', 'never'),
           ('webuntis_sync_result', '{}'),
-          ('webuntis_sync_interval', '1')
+          ('webuntis_sync_interval', '1'),
+          ('data_retention_days', '90')
         ON CONFLICT (key) DO NOTHING;
 
         -- Seed initial Fun Insights
@@ -338,6 +350,18 @@ const stateLimiter = rateLimit({
   legacyHeaders: false
 });
 
+const authenticatedApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  message: { error: 'Zu viele Anfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const authHeader = req.headers['authorization'];
+    return !authHeader;
+  }
+});
+
 // Export middleware for route files
 module.exports = { authenticateToken, pool, io, loginLimiter, setupLimiter, stateLimiter };
 
@@ -384,6 +408,7 @@ logger.onEntry((entry) => {
 });
 
 // Mount Routes
+app.use('/api', authenticatedApiLimiter);
 app.use('/api', require('./routes/api'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/classes', require('./routes/classes'));

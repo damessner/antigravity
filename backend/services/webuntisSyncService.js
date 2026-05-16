@@ -164,7 +164,7 @@ async function runSync(pool, settings) {
       if (existing.rows.length > 0) {
         // Update name only — never touch password or role
         await pool.query(
-          'UPDATE users SET full_name = $1, is_active = true WHERE id = $2',
+          'UPDATE users SET full_name = $1, is_active = true, deactivated_at = NULL, erasure_due_at = NULL WHERE id = $2',
           [fullName, existing.rows[0].id]
         );
       } else {
@@ -217,7 +217,7 @@ async function runSync(pool, settings) {
       if (existing.rows.length > 0) {
         userId = existing.rows[0].id;
         await pool.query(
-          'UPDATE users SET full_name = $1, is_active = true WHERE id = $2',
+          'UPDATE users SET full_name = $1, is_active = true, deactivated_at = NULL, erasure_due_at = NULL WHERE id = $2',
           [fullName, userId]
         );
         // Update pupil class if changed
@@ -404,24 +404,36 @@ async function runSync(pool, settings) {
     }
 
     // ── 6. Soft-Delete Users Removed from WebUntis ────────────────────────────
+    const retentionRes = await pool.query(
+      "SELECT value FROM system_settings WHERE key = 'data_retention_days' LIMIT 1"
+    );
+    const retentionDaysRaw = Number(retentionRes.rows[0]?.value || 90);
+    const retentionDays = Number.isFinite(retentionDaysRaw) && retentionDaysRaw > 0 ? retentionDaysRaw : 90;
+
     if (activeTeacherWebuntisIds.length > 0) {
       const deactivated = await pool.query(`
-        UPDATE users SET is_active = false
+        UPDATE users
+        SET is_active = false,
+            deactivated_at = COALESCE(deactivated_at, NOW()),
+            erasure_due_at = COALESCE(erasure_due_at, NOW() + ($2 || ' days')::interval)
         WHERE role = 'teacher'
           AND webuntis_id IS NOT NULL
           AND webuntis_id != ALL($1::int[])
         RETURNING id
-      `, [activeTeacherWebuntisIds]);
+      `, [activeTeacherWebuntisIds, String(retentionDays)]);
       counts.deactivated += deactivated.rowCount;
     }
     if (activeStudentWebuntisIds.length > 0) {
       const deactivated = await pool.query(`
-        UPDATE users SET is_active = false
+        UPDATE users
+        SET is_active = false,
+            deactivated_at = COALESCE(deactivated_at, NOW()),
+            erasure_due_at = COALESCE(erasure_due_at, NOW() + ($2 || ' days')::interval)
         WHERE role = 'pupil'
           AND webuntis_id IS NOT NULL
           AND webuntis_id != ALL($1::int[])
         RETURNING id
-      `, [activeStudentWebuntisIds]);
+      `, [activeStudentWebuntisIds, String(retentionDays)]);
       counts.deactivated += deactivated.rowCount;
     }
 

@@ -16,6 +16,30 @@ function Write-Log($text) {
     $msg | Out-File -FilePath $logFile -Append
 }
 
+function Invoke-Rollback($reason) {
+    Write-Log "❌ Update failed: $reason"
+    Write-Log "Initiating automatic rollback..."
+
+    if ($script:preUpdateCommit) {
+        git reset --hard $script:preUpdateCommit 2>&1 | Out-File -FilePath $logFile -Append
+    }
+
+    if (Test-Path "$script:backupPath\db_dump.sql") {
+        docker exec -i antigravity_db psql -U postgres school_management < "$script:backupPath\db_dump.sql" 2>&1 | Out-File -FilePath $logFile -Append
+    }
+
+    if (Test-Path "$script:backupPath\school_data_files") {
+        if (Test-Path "$installPath\school_data") { Remove-Item -Path "$installPath\school_data" -Recurse -Force -ErrorAction SilentlyContinue }
+        Copy-Item -Path "$script:backupPath\school_data_files" -Destination "$installPath\school_data" -Recurse -Force
+    }
+
+    docker compose build 2>&1 | Out-File -FilePath $logFile -Append
+    docker compose up -d 2>&1 | Out-File -FilePath $logFile -Append
+
+    Write-Log "Rollback process finished."
+    exit 1
+}
+
 Set-Location $installPath
 
 # 1. Check for updates
@@ -23,6 +47,7 @@ Write-Log "Checking for updates..."
 git fetch origin main | Out-Null
 $local = git rev-parse HEAD
 $remote = git rev-parse origin/main
+$script:preUpdateCommit = $local
 
 if ($local -eq $remote) {
     Write-Log "System is up to date. No action needed."
@@ -48,14 +73,29 @@ Write-Log "Backup complete."
 
 # 3. Pull Changes
 Write-Log "Pulling latest changes from GitHub..."
-git pull origin main 2>&1 | Out-File -FilePath $logFile -Append
+try {
+    git pull origin main 2>&1 | Out-File -FilePath $logFile -Append
+    if ($LASTEXITCODE -ne 0) { throw "git pull failed" }
+} catch {
+    Invoke-Rollback "git pull failed"
+}
 
 # 4. Rebuild & Restart
 Write-Log "Rebuilding containers..."
-docker compose build 2>&1 | Out-File -FilePath $logFile -Append
+try {
+    docker compose build 2>&1 | Out-File -FilePath $logFile -Append
+    if ($LASTEXITCODE -ne 0) { throw "docker compose build failed" }
+} catch {
+    Invoke-Rollback "docker compose build failed"
+}
 
 Write-Log "Restarting system..."
-docker compose up -d 2>&1 | Out-File -FilePath $logFile -Append
+try {
+    docker compose up -d 2>&1 | Out-File -FilePath $logFile -Append
+    if ($LASTEXITCODE -ne 0) { throw "docker compose up failed" }
+} catch {
+    Invoke-Rollback "docker compose up failed"
+}
 
 Write-Log "🎉 SUCCESS: System updated to version $remote"
 Write-Log "------------------------------------------------------------"

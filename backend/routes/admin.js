@@ -115,7 +115,9 @@ router.get('/settings', setupLimiter, authenticateToken, isAdmin, async (req, re
     try {
         const result = await req.pool.query('SELECT key, value FROM system_settings ORDER BY key');
         const settings = {};
-        result.rows.forEach(row => { settings[row.key] = row.value; });
+        result.rows.forEach(row => {
+            settings[row.key] = row.key === 'webuntis_password' ? (row.value ? '••••••••' : '') : row.value;
+        });
         res.json(settings);
     } catch (err) {
         console.error('Settings fetch error:', err);

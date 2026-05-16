@@ -20,6 +20,7 @@ const { authenticateToken, setupLimiter, stateLimiter } = require('../server');
 const { syncFromWebUntis, isSyncRunning } = require('../services/webuntisSyncService');
 const WebUntisClient       = require('../services/webuntisClient');
 const logger               = require('../utils/logger');
+const { encryptSecret, decryptSecret } = require('../utils/secretStore');
 
 const CTX = '[WebUntis API]';
 
@@ -46,6 +47,19 @@ async function loadSettings(pool) {
   `);
   const s = {};
   res.rows.forEach(row => { s[row.key] = row.value; });
+
+  if (s.webuntis_password) {
+    const decoded = decryptSecret(s.webuntis_password);
+    s.webuntis_password = decoded.value;
+    if (decoded.wasPlaintext) {
+      await pool.query(`
+        INSERT INTO system_settings (key, value, updated_at)
+        VALUES ('webuntis_password', $1, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()
+      `, [encryptSecret(decoded.value)]);
+    }
+  }
+
   return s;
 }
 
@@ -123,7 +137,7 @@ router.put('/settings', setupLimiter, authenticateToken, isAdmin, async (req, re
 
     // Only overwrite password if the user provided a real value (not the mask)
     if (webuntis_password && webuntis_password !== '••••••••') {
-      await upsert('webuntis_password', webuntis_password);
+      await upsert('webuntis_password', encryptSecret(webuntis_password));
     }
 
     logger.info(CTX, `Einstellungen aktualisiert von ${req.user.username}`);
