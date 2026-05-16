@@ -187,6 +187,15 @@ async function bootstrapDatabase() {
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS subject_rank_config (
+          id SERIAL PRIMARY KEY,
+          subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
+          rank_level INTEGER NOT NULL CHECK (rank_level IN (1, 2, 3)),
+          rank_name VARCHAR(50) NOT NULL,
+          rank_symbol VARCHAR(10) NOT NULL,
+          CONSTRAINT uq_subject_rank_level UNIQUE (subject_id, rank_level)
+        );
+
         -- WebUntis integration columns (added in v2.5)
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;

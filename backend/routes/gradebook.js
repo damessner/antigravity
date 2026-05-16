@@ -285,13 +285,29 @@ router.get('/export/:id', stateLimiter, authenticateToken, async (req, res) => {
 });
 
 
-// Helper to calculate rank rank priority
-const getRankWeight = (tag) => {
+// Helper to calculate rank priority
+const getRankWeight = (tag, rankLevelMap = null) => {
+  if (rankLevelMap && tag && rankLevelMap.has(tag)) {
+    return Number(rankLevelMap.get(tag)) || 0;
+  }
   if (tag === 'Meister') return 3;
   if (tag === 'Geselle') return 2;
   if (tag === 'Lehrling') return 1;
   return 0;
 };
+
+async function getSubjectRankLevelMap(client, subjectId) {
+  const rankRes = await client.query(`
+    SELECT rank_level, rank_name
+    FROM subject_rank_config
+    WHERE subject_id = $1
+  `, [Number(subjectId)]);
+  const map = new Map();
+  rankRes.rows.forEach((row) => {
+    map.set(row.rank_name, Number(row.rank_level));
+  });
+  return map;
+}
 
 /**
  * Calculates predicted rank for a pupil based on grades and SDL completions.
@@ -301,7 +317,51 @@ const getRankWeight = (tag) => {
  *
  * Returns: 'Meister' | 'Geselle' | 'Lehrling' | null
  */
-function computePredictedRank(grades, sdlCompletedCount) {
+function normalizeRankRules(input) {
+  const meisterDefault = 1.5;
+  const geselleDefault = 3;
+  const meisterParsed = Number(input?.meister_max_average);
+  const geselleParsed = Number(input?.geselle_min_sdl);
+  const meister_max_average = Number.isFinite(meisterParsed) && meisterParsed >= 1 && meisterParsed <= 5
+    ? meisterParsed
+    : meisterDefault;
+  const geselle_min_sdl = Number.isFinite(geselleParsed) && geselleParsed >= 0
+    ? Math.round(geselleParsed)
+    : geselleDefault;
+  return { meister_max_average, geselle_min_sdl };
+}
+
+async function loadRankRules(pool, subjectId) {
+  const key = `rank_rules_subject_${Number(subjectId)}`;
+  const settingsRes = await pool.query('SELECT value FROM system_settings WHERE key = $1 LIMIT 1', [key]);
+  if (settingsRes.rows.length === 0) {
+    return normalizeRankRules(null);
+  }
+  try {
+    const parsed = JSON.parse(settingsRes.rows[0].value);
+    return normalizeRankRules(parsed);
+  } catch (_) {
+    return normalizeRankRules(null);
+  }
+}
+
+async function loadRankNamesByLevel(pool, subjectId) {
+  const defaults = { 1: 'Lehrling', 2: 'Geselle', 3: 'Meister' };
+  const rankRes = await pool.query(`
+    SELECT rank_level, rank_name
+    FROM subject_rank_config
+    WHERE subject_id = $1
+  `, [Number(subjectId)]);
+  if (rankRes.rows.length === 0) return defaults;
+  const map = { ...defaults };
+  rankRes.rows.forEach((row) => {
+    map[Number(row.rank_level)] = row.rank_name;
+  });
+  return map;
+}
+
+function computePredictedRank(grades, sdlCompletedCount, rankRules) {
+  const normalizedRules = normalizeRankRules(rankRules);
   const numericGrades = grades
     .map(g => parseFloat(g.grade_value))
     .filter(v => !isNaN(v) && v >= 1 && v <= 5);
@@ -312,11 +372,11 @@ function computePredictedRank(grades, sdlCompletedCount) {
     ? numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length
     : null;
 
-  // Rule A: average grade ≤ 1.5 → Master
-  if (avg !== null && avg <= 1.5) return 'Meister';
+  // Rule A: average grade <= configured threshold -> Master
+  if (avg !== null && avg <= normalizedRules.meister_max_average) return 'Meister';
 
-  // Rule B: 3 or more SDL tasks graded → Journeyman
-  if (sdlCompletedCount >= 3) return 'Geselle';
+  // Rule B: configured SDL threshold -> Journeyman
+  if (sdlCompletedCount >= normalizedRules.geselle_min_sdl) return 'Geselle';
 
   // Fallback: any grade exists → Apprentice
   if (numericGrades.length > 0 || sdlCompletedCount > 0) return 'Lehrling';
@@ -333,6 +393,8 @@ router.get('/rank-preview/:subject_id', stateLimiter, authenticateToken, async (
   try {
     const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
+    const rankRules = await loadRankRules(req.pool, subjectId);
+    const rankNamesByLevel = await loadRankNamesByLevel(req.pool, subjectId);
 
     // Fetch all categories and grades for this subject
     const catsRes = await req.pool.query(`
@@ -377,7 +439,14 @@ router.get('/rank-preview/:subject_id', stateLimiter, authenticateToken, async (
         : null;
 
       const currentTag = tagsRes.rows.find(t => Number(t.pupil_id) === Number(pupil.id))?.tier_tag || null;
-      const predictedRank = computePredictedRank(pupilGrades, sdlDone);
+      const predictedDefault = computePredictedRank(pupilGrades, sdlDone, rankRules);
+      const predictedRank = predictedDefault === 'Meister'
+        ? rankNamesByLevel[3]
+        : predictedDefault === 'Geselle'
+          ? rankNamesByLevel[2]
+          : predictedDefault === 'Lehrling'
+            ? rankNamesByLevel[1]
+            : null;
 
       return {
         pupil_id: pupil.id,
@@ -1013,8 +1082,9 @@ router.post('/tag', authenticateToken, async (req, res) => {
       [Number(pupil_id), Number(subject_id)]
     );
     const oldTag = oldRes.rows.length > 0 ? oldRes.rows[0].tier_tag : null;
-    const oldWeight = getRankWeight(oldTag);
-    const newWeight = tier_tag && tier_tag !== 'none' ? getRankWeight(tier_tag) : 0;
+    const rankLevelMap = await getSubjectRankLevelMap(client, Number(subject_id));
+    const oldWeight = getRankWeight(oldTag, rankLevelMap);
+    const newWeight = tier_tag && tier_tag !== 'none' ? getRankWeight(tier_tag, rankLevelMap) : 0;
     const cleanNewTag = tier_tag && tier_tag !== 'none' ? tier_tag : 'Keiner';
     const cleanOldTag = oldTag || 'Keiner';
 
@@ -1233,8 +1303,9 @@ router.put('/subjects/:subject_id/pupils/:pupil_id/tag', authenticateToken, asyn
     // Fetch existing tag row to detect upgrades vs downgrades
     const oldRes = await client.query('SELECT tier_tag FROM pupil_subject_tags WHERE pupil_id = $1 AND subject_id = $2', [pupilId, subjectId]);
     const oldTag = oldRes.rows.length > 0 ? oldRes.rows[0].tier_tag : 'Keiner';
-    const oldWeight = getRankWeight(oldTag);
-    const newWeight = tier_tag && tier_tag !== 'none' ? getRankWeight(tier_tag) : 0;
+    const rankLevelMap = await getSubjectRankLevelMap(client, subjectId);
+    const oldWeight = getRankWeight(oldTag, rankLevelMap);
+    const newWeight = tier_tag && tier_tag !== 'none' ? getRankWeight(tier_tag, rankLevelMap) : 0;
     const cleanNewTag = tier_tag && tier_tag !== 'none' ? tier_tag : 'Keiner';
 
     if (!tier_tag || tier_tag === 'none') {
@@ -1615,6 +1686,7 @@ router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
   try {
     const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: true });
     if (!access.ok) return res.status(access.status).json({ error: access.error });
+    const rankRules = await loadRankRules(req.pool, subjectId);
 
     const configRes = await req.pool.query(`
       SELECT rank_level, rank_name, rank_symbol
@@ -1630,7 +1702,8 @@ router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
           { level: 1, name: 'Lehrling', symbol: '🌱' },
           { level: 2, name: 'Geselle', symbol: '🛠️' },
           { level: 3, name: 'Meister', symbol: '👑' }
-        ]
+        ],
+        rules: rankRules
       });
     }
 
@@ -1639,7 +1712,8 @@ router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
         level: r.rank_level,
         name: r.rank_name,
         symbol: r.rank_symbol
-      }))
+      })),
+      rules: rankRules
     });
   } catch (err) {
     console.error('Fetch rank config error:', err);
@@ -1651,11 +1725,12 @@ router.get('/rank-config/:subject_id', authenticateToken, async (req, res) => {
 // Update custom rank configuration for a subject
 router.put('/rank-config/:subject_id', authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.subject_id);
-  const { ranks } = req.body; // Array of {level, name, symbol}
+  const { ranks, rules } = req.body; // ranks: Array<{level, name, symbol}>, rules: thresholds
 
   if (!ranks || !Array.isArray(ranks) || ranks.length !== 3) {
     return res.status(400).json({ error: 'Must provide exactly 3 ranks' });
   }
+  const normalizedRules = normalizeRankRules(rules);
 
   const client = await req.pool.connect();
   try {
@@ -1687,8 +1762,14 @@ router.put('/rank-config/:subject_id', authenticateToken, async (req, res) => {
       `, [subjectId, rank.level, rank.name, rank.symbol]);
     }
 
+    await client.query(`
+      INSERT INTO system_settings (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [`rank_rules_subject_${subjectId}`, JSON.stringify(normalizedRules)]);
+
     await client.query('COMMIT');
-    res.json({ success: true, ranks });
+    res.json({ success: true, ranks, rules: normalizedRules });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Update rank config error:', err);

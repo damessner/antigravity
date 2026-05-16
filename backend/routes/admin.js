@@ -339,19 +339,37 @@ router.post('/import/roster', authenticateToken, isAdmin, upload.single('file'),
 router.post('/pupils/:id/assign', authenticateToken, isAdmin, async (req, res) => {
     const rawId = Number(req.params.id);
     const { class_id } = req.body;
+    const idTypeRaw = (req.body?.id_type || req.query?.id_type || 'auto').toString().toLowerCase();
     try {
         if (!Number.isFinite(rawId) || rawId <= 0) {
             return res.status(400).json({ error: 'Ungültige Schüler-ID' });
         }
 
-        // Accept both pupils.id and users.id to support admin screens using user IDs
+        // Accept both pupils.id and users.id; resolve deterministically to avoid ID collisions.
         let pupilId = null;
-        const byPupilId = await req.pool.query('SELECT id FROM pupils WHERE id = $1 LIMIT 1', [rawId]);
-        if (byPupilId.rows.length > 0) {
-            pupilId = byPupilId.rows[0].id;
+        const resolveByUserId = async () => {
+            const byUserId = await req.pool.query(`
+                SELECT p.id
+                FROM pupils p
+                JOIN users u ON u.id = p.user_id
+                WHERE p.user_id = $1 AND u.role = 'pupil'
+                LIMIT 1
+            `, [rawId]);
+            return byUserId.rows.length > 0 ? byUserId.rows[0].id : null;
+        };
+        const resolveByPupilId = async () => {
+            const byPupilId = await req.pool.query('SELECT id FROM pupils WHERE id = $1 LIMIT 1', [rawId]);
+            return byPupilId.rows.length > 0 ? byPupilId.rows[0].id : null;
+        };
+
+        if (idTypeRaw === 'user') {
+            pupilId = await resolveByUserId();
+        } else if (idTypeRaw === 'pupil') {
+            pupilId = await resolveByPupilId();
         } else {
-            const byUserId = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1 LIMIT 1', [rawId]);
-            if (byUserId.rows.length > 0) pupilId = byUserId.rows[0].id;
+            // Auto mode prefers user_id first to match admin class assignment UI.
+            pupilId = await resolveByUserId();
+            if (!pupilId) pupilId = await resolveByPupilId();
         }
 
         if (!pupilId) {
