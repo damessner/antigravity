@@ -198,18 +198,17 @@ export function WebUntisSettings() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[11px] text-slate-400 font-medium mb-1">
-                Schul-ID / Schulname *
+                Schul-ID / Schulname (Optional)
               </label>
               <input
                 type="text"
                 value={settings.webuntis_school}
                 onChange={(e) => setSettings((p) => ({ ...p, webuntis_school: e.target.value }))}
                 placeholder="z.B. ms-telfs"
-                required
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
               />
               <p className="text-[10px] text-slate-600 mt-1">
-                Der Schulname aus der WebUntis-URL (z.B. ms-telfs in https://ms-telfs.webuntis.com)
+                Wird automatisch extrahiert, wenn Sie eine vollständige WebUntis-URL rechts einfügen.
               </p>
             </div>
 
@@ -308,7 +307,7 @@ export function WebUntisSettings() {
             </div>
             <button
               onClick={handleSync}
-              disabled={isSyncing || !settings.webuntis_school || !settings.webuntis_url}
+              disabled={isSyncing || !settings.webuntis_url}
               className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold py-2.5 rounded-xl transition-all text-sm"
             >
               {isSyncing

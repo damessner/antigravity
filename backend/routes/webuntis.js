@@ -95,8 +95,8 @@ router.get('/settings', setupLimiter, authenticateToken, isAdmin, async (req, re
 router.put('/settings', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
   const { webuntis_school, webuntis_url, webuntis_username, webuntis_password } = req.body;
 
-  if (!webuntis_school || !webuntis_url || !webuntis_username) {
-    return res.status(400).json({ error: 'school, url und username sind erforderlich' });
+  if (!webuntis_url || !webuntis_username) {
+    return res.status(400).json({ error: 'URL und Benutzername sind erforderlich' });
   }
 
   const upsert = async (key, value) => {
@@ -107,7 +107,7 @@ router.put('/settings', setupLimiter, authenticateToken, isAdmin, async (req, re
   };
 
   try {
-    await upsert('webuntis_school',   webuntis_school.trim());
+    await upsert('webuntis_school',   (webuntis_school || '').trim());
     await upsert('webuntis_url',      webuntis_url.trim());
     await upsert('webuntis_username', webuntis_username.trim());
 
