@@ -76,17 +76,30 @@ async function bootstrapDatabase() {
 
       if (!tableCheck.rows[0].exists) {
         console.warn('[Database] EMPTY DATABASE DETECTED! Running init.sql bootstrap...');
-        const initSqlPath = path.join(__dirname, 'db', 'init.sql');
-        const altPath = path.join(__dirname, '..', 'db', 'init.sql');
         
-        let finalPath = fs.existsSync(initSqlPath) ? initSqlPath : (fs.existsSync(altPath) ? altPath : null);
+        // Search multiple candidates for init.sql
+        const candidates = [
+          path.join(__dirname, 'db', 'init.sql'),
+          path.join(__dirname, '..', 'db', 'init.sql'),
+          '/usr/src/app/db/init.sql',
+          '/opt/school-management/db/init.sql'
+        ];
         
-        if (finalPath) {
-          const initSql = fs.readFileSync(finalPath, 'utf8');
+        let foundPath = null;
+        for (const p of candidates) {
+          if (fs.existsSync(p)) {
+            foundPath = p;
+            break;
+          }
+        }
+        
+        if (foundPath) {
+          console.log(`[Database] Found init.sql at: ${foundPath}`);
+          const initSql = fs.readFileSync(foundPath, 'utf8');
           await pool.query(initSql);
           console.log('[Database] init.sql executed successfully.');
         } else {
-          throw new Error('init.sql not found in /db or ../db');
+          throw new Error('init.sql not found in any expected location (/db, ../db, etc.)');
         }
       }
 
