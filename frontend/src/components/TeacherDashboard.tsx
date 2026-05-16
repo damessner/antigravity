@@ -15,7 +15,7 @@ import {
 } from "@dnd-kit/core";
 import {
   LayoutDashboard, GraduationCap, ClipboardList, LogOut,
-  Settings, Clock, Calendar, AlertCircle, RefreshCw, Bell
+  Settings, Clock, Calendar, AlertCircle, RefreshCw, Bell, Globe
 } from "lucide-react";
 
 import RoomDroppable from "./RoomDroppable";
@@ -27,11 +27,12 @@ import Gradebook from "./Gradebook";
 import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
 import ParticipationTracker from "./ParticipationTracker";
+import WebUntisDashboard from "./WebUntisDashboard";
 import { OnboardingTip } from "./OnboardingTip";
 
 import { Pupil, Room, User } from "@/types";
 
-type UnlockableTab = "gradebook" | "notes" | "karriere";
+type UnlockableTab = "gradebook" | "notes" | "karriere" | "webuntis";
 interface DeskHelpRequest {
   id: number;
   pupil_id: number;
@@ -64,13 +65,14 @@ export default function TeacherDashboard() {
 
   // Primary States
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "karriere">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "karriere" | "webuntis">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
   const [unlockConfirmTab, setUnlockConfirmTab] = useState<UnlockableTab | null>(null);
   const [unlockedTabs, setUnlockedTabs] = useState<Record<UnlockableTab, boolean>>({
     gradebook: false,
     notes: false,
     karriere: false,
+    webuntis: false,
   });
 
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -629,6 +631,17 @@ export default function TeacherDashboard() {
             </button>
           )}
 
+          {user?.role !== "pupil" && (
+            <button
+              onClick={() => promptUnlock("webuntis")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${user?.role === "teacher" && !unlockedTabs.webuntis ? "opacity-50" : ""} ${activeTab === "webuntis" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span>WebUntis</span>
+            </button>
+          )}
+
           {user?.role === "pupil" && (
             <button
               onClick={() => setActiveTab("planner")}
@@ -941,6 +954,24 @@ export default function TeacherDashboard() {
             </div>
           </div>
         )}
+
+        {/* TAB 6: WEBUNTIS — Vertretungsplan & Wochenplan */}
+        {activeTab === "webuntis" && user?.role !== "pupil" && (
+          <div className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full h-full flex flex-col">
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                <Globe className="w-5 h-5 text-blue-400" />
+                <span>WebUntis Live-Daten</span>
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Vertretungsplan und Wochenplan direkt aus WebUntis (nur Lesezugriff)
+              </p>
+            </div>
+            <div className="flex-1 min-h-0">
+              <WebUntisDashboard classes={classes} />
+            </div>
+          </div>
+        )}
       </main>
 
       {/* Popovers / Overlays */}
@@ -984,7 +1015,7 @@ export default function TeacherDashboard() {
             <p className="text-sm text-slate-300 leading-relaxed mb-4">
               Dieser Bereich ist für Lehrkräfte zunächst gesperrt. Möchten Sie den Zugriff auf{" "}
               <strong>
-                {unlockConfirmTab === "gradebook" ? "Evaluationsbereich" : unlockConfirmTab === "notes" ? "Notizen" : "Karriere"}
+                {unlockConfirmTab === "gradebook" ? "Evaluationsbereich" : unlockConfirmTab === "notes" ? "Notizen" : unlockConfirmTab === "webuntis" ? "WebUntis" : "Karriere"}
               </strong>{" "}
               jetzt freischalten?
             </p>

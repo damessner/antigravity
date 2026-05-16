@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2, Bug
+  Users, BookOpen, UserPlus, Database, ArrowLeft, RefreshCw, Building2, Bug, Globe
 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 import { fetchAuth } from "@/utils/fetchAuth";
@@ -14,6 +14,7 @@ import { PupilManagement } from "@/components/admin/PupilManagement";
 import { RoomManagement } from "@/components/admin/RoomManagement";
 import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
 import { AdminDebugConsole } from "@/components/admin/AdminDebugConsole";
+import { WebUntisSettings } from "@/components/admin/WebUntisSettings";
 import { OnboardingTip } from "@/components/OnboardingTip";
 
 import { User, SchoolClass, Pupil, Room } from "@/types";
@@ -28,7 +29,7 @@ interface SavedBackupFile {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms" | "debugging">("users");
+  const [activeSection, setActiveSection] = useState<"users" | "classes" | "pupils" | "backup" | "rooms" | "debugging" | "integrations">("users");
   
   const { users, classes, pupils, rooms, isLoading: dataLoading, refetch } = useDashboardData(typeof window !== "undefined" ? localStorage.getItem("token") : null);
   const mutations = useAdminMutations();
@@ -432,6 +433,20 @@ export default function AdminPage() {
             <Bug className="w-4 h-4" />
             <span>Debugging</span>
           </button>
+
+          <div className="h-px bg-slate-800 my-2" />
+
+          <button
+            onClick={() => setActiveSection("integrations")}
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+              activeSection === "integrations"
+                ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-slate-200"
+            }`}
+          >
+            <Globe className="w-4 h-4" />
+            <span>Externe Integrationen</span>
+          </button>
         </aside>
 
         {/* Content Container */}
@@ -518,6 +533,11 @@ export default function AdminPage() {
           {/* SECTION 6: DEBUGGING */}
           {activeSection === "debugging" && (
             <AdminDebugConsole />
+          )}
+
+          {/* SECTION 7: EXTERNE INTEGRATIONEN (WebUntis) */}
+          {activeSection === "integrations" && (
+            <WebUntisSettings />
           )}
         </main>
       </div>

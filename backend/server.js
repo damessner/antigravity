@@ -130,10 +130,23 @@ pool.query(`
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
 
+  -- WebUntis integration columns (added in v2.5)
+  ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+  ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;
+  ALTER TABLE classes  ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+  ALTER TABLE pupils   ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+
   INSERT INTO system_settings (key, value) VALUES
     ('school_name', 'MS Weissenbach Telfs'),
     ('lesson_boundaries', '{"07:55":1,"08:50":2,"09:45":3,"10:50":4,"11:45":5,"12:40":6,"13:35":7,"14:30":8,"15:25":9,"16:20":10,"18:00":10}'),
-    ('lesson_schedule', '[{"nr":1,"start":"07:55","end":"08:45"},{"nr":2,"start":"08:50","end":"09:40"},{"nr":3,"start":"09:45","end":"10:35"},{"nr":4,"start":"10:50","end":"11:40"},{"nr":5,"start":"11:45","end":"12:35"},{"nr":6,"start":"12:40","end":"13:30"},{"nr":7,"start":"13:35","end":"14:25"},{"nr":8,"start":"14:30","end":"15:20"},{"nr":9,"start":"15:25","end":"16:15"},{"nr":10,"start":"16:20","end":"17:10"}]')
+    ('lesson_schedule', '[{"nr":1,"start":"07:55","end":"08:45"},{"nr":2,"start":"08:50","end":"09:40"},{"nr":3,"start":"09:45","end":"10:35"},{"nr":4,"start":"10:50","end":"11:40"},{"nr":5,"start":"11:45","end":"12:35"},{"nr":6,"start":"12:40","end":"13:30"},{"nr":7,"start":"13:35","end":"14:25"},{"nr":8,"start":"14:30","end":"15:20"},{"nr":9,"start":"15:25","end":"16:15"},{"nr":10,"start":"16:20","end":"17:10"}]'),
+    ('webuntis_school', ''),
+    ('webuntis_url', ''),
+    ('webuntis_username', ''),
+    ('webuntis_password', ''),
+    ('webuntis_last_sync', ''),
+    ('webuntis_sync_status', 'never'),
+    ('webuntis_sync_result', '{}')
   ON CONFLICT (key) DO NOTHING;
 
   -- Seed base trigger function dynamically if not present
@@ -259,6 +272,7 @@ app.use('/api/help', require('./routes/help'));
 app.use('/api/setup', require('./routes/setup'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/participation', require('./routes/participation'));
+app.use('/api/webuntis', require('./routes/webuntis'));
 const pushModule = require('./routes/push');
 
 app.use('/api/push', pushModule.router);
