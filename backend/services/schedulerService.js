@@ -102,7 +102,11 @@ class SchedulerService {
       await syncFromWebUntis(this.pool, settings);
       logger.info(CTX, '✨ Scheduled Sync completed successfully.');
     } catch (err) {
-      logger.error(CTX, '❌ Scheduled Sync failed', err);
+      if (err?.code === 'SYNC_IN_PROGRESS') {
+        logger.info(CTX, 'Scheduled sync skipped: another sync is already running.');
+      } else {
+        logger.error(CTX, '❌ Scheduled Sync failed', err);
+      }
     } finally {
       this.isSyncing = false;
     }

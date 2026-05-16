@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { authenticateToken, setupLimiter } = require('../server');
 const logger = require('../utils/logger');
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 // Helper to check if user is admin
 const isAdmin = (req, res, next) => {
@@ -223,7 +224,7 @@ router.post('/factsheets/teachers', authenticateToken, isAdmin, async (req, res)
         const results = [];
 
         for (const t of teachersRes.rows) {
-            const tempPw = `Antigravity_${Math.random().toString(36).substring(2, 8)}!`;
+            const tempPw = generateSecurePassword('Antigravity');
             const hash = await bcrypt.hash(tempPw, 10);
             
             await req.pool.query(`

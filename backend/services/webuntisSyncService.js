@@ -22,6 +22,7 @@
 
 const WebUntisClient = require('./webuntisClient');
 const logger         = require('../utils/logger');
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 const CTX = '[WebUntis Sync]';
 
@@ -64,7 +65,7 @@ function buildFullName(person) {
  * @returns {string}
  */
 function generateTempPassword() {
-  return `Wu_${Math.random().toString(36).substring(2, 9)}!`;
+  return generateSecurePassword('Wu');
 }
 
 const bcrypt = require('bcrypt');
@@ -466,6 +467,13 @@ async function saveSyncStatus(pool, status, result) {
  * @returns {Promise<{success: boolean, counts?: object, error?: string}>}
  */
 async function syncFromWebUntis(pool, settings) {
+  if (syncLockActive) {
+    const err = new Error('Synchronisation läuft bereits');
+    err.code = 'SYNC_IN_PROGRESS';
+    throw err;
+  }
+  syncLockActive = true;
+
   await saveSyncStatus(pool, 'running', null).catch(() => {});
   try {
     const result = await runSync(pool, settings);
@@ -475,7 +483,14 @@ async function syncFromWebUntis(pool, settings) {
     logger.error(CTX, 'Sync fehlgeschlagen', err);
     await saveSyncStatus(pool, 'error', { error: err.message }).catch(() => {});
     throw err;
+  } finally {
+    syncLockActive = false;
   }
 }
 
-module.exports = { syncFromWebUntis, saveSyncStatus };
+let syncLockActive = false;
+function isSyncRunning() {
+  return syncLockActive;
+}
+
+module.exports = { syncFromWebUntis, saveSyncStatus, isSyncRunning };

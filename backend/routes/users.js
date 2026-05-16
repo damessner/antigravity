@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 const { authenticateToken } = require('../server');
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
@@ -32,7 +33,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
   try {
     // Generate temporary password
-    const tempPassword = `Pass_${Math.random().toString(36).substring(2, 8)}!`;
+    const tempPassword = generateSecurePassword('Pass');
     const password_hash = await bcrypt.hash(tempPassword, 10);
 
     const insertRes = await req.pool.query(`
@@ -59,7 +60,7 @@ router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, 
   const userId = Number(req.params.id);
 
   try {
-    const tempPassword = `Reset_${Math.random().toString(36).substring(2, 8)}!`;
+    const tempPassword = generateSecurePassword('Reset');
     const password_hash = await bcrypt.hash(tempPassword, 10);
 
     const updateRes = await req.pool.query(`
