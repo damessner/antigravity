@@ -49,138 +49,24 @@ const pool = new Pool({
 });
 
 // Ensure SDL Schema fields exist seamlessly
-pool.query(`
-  ALTER TABLE subjects DROP CONSTRAINT IF EXISTS uq_subject_class;
-  ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_self_directed BOOLEAN DEFAULT false;
-  ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_hidden_from_pupils BOOLEAN DEFAULT false;
-  ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
-  ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
-  ALTER TABLE rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT NULL;
-
-  CREATE TABLE IF NOT EXISTS assessments (
-    id SERIAL PRIMARY KEY,
-    category_id INTEGER REFERENCES assessment_categories(id) ON DELETE CASCADE,
-    name VARCHAR(100) NOT NULL,
-    info_text TEXT,
-    deadline TIMESTAMP WITH TIME ZONE,
-    is_visible BOOLEAN DEFAULT true,
-    CONSTRAINT uq_assessment_category UNIQUE (category_id, name)
-  );
-
-  CREATE TABLE IF NOT EXISTS student_learning_plan (
-    id SERIAL PRIMARY KEY,
-    pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
-    category_id INTEGER REFERENCES assessment_categories(id) ON DELETE CASCADE,
-    assessment_name VARCHAR(100) NOT NULL,
-    planned_date DATE NOT NULL,
-    slot_number INTEGER CHECK (slot_number IN (1, 2)),
-    completed BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS help_requests (
-    id SERIAL PRIMARY KEY,
-    pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
-    subject VARCHAR(100) NOT NULL,
-    message TEXT NOT NULL,
-    status VARCHAR(20) DEFAULT 'open',
-    claimed_by_teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    teacher_comment TEXT DEFAULT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-  );
-
-  CREATE TABLE IF NOT EXISTS participation_logs (
-    id SERIAL PRIMARY KEY,
-    pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
-    teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
-    lesson_date DATE NOT NULL DEFAULT CURRENT_DATE,
-    rating VARCHAR(20) NOT NULL DEFAULT 'engaged',
-    applied_to_grade BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS seating_positions (
-    id SERIAL PRIMARY KEY,
-    pupil_id INTEGER UNIQUE REFERENCES pupils(id) ON DELETE CASCADE,
-    desk_row INTEGER NOT NULL DEFAULT 1,
-    desk_col INTEGER NOT NULL DEFAULT 1,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS push_subscriptions (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    endpoint TEXT UNIQUE NOT NULL,
-    p256dh TEXT NOT NULL,
-    auth TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS user_preferences (
-    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    notify_help_requests BOOLEAN DEFAULT TRUE,
-    notify_timers BOOLEAN DEFAULT TRUE,
-    notify_system BOOLEAN DEFAULT TRUE
-  );
-
-  CREATE TABLE IF NOT EXISTS system_settings (
-    key VARCHAR(100) PRIMARY KEY,
-    value TEXT NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
-
-  -- WebUntis integration columns (added in v2.5)
-  ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
-  ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;
-  ALTER TABLE classes  ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
-  ALTER TABLE pupils   ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
-
-  INSERT INTO system_settings (key, value) VALUES
-    ('school_name', 'MS Weissenbach Telfs'),
-    ('lesson_boundaries', '{"07:55":1,"08:50":2,"09:45":3,"10:50":4,"11:45":5,"12:40":6,"13:35":7,"14:30":8,"15:25":9,"16:20":10,"18:00":10}'),
-    ('lesson_schedule', '[{"nr":1,"start":"07:55","end":"08:45"},{"nr":2,"start":"08:50","end":"09:40"},{"nr":3,"start":"09:45","end":"10:35"},{"nr":4,"start":"10:50","end":"11:40"},{"nr":5,"start":"11:45","end":"12:35"},{"nr":6,"start":"12:40","end":"13:30"},{"nr":7,"start":"13:35","end":"14:25"},{"nr":8,"start":"14:30","end":"15:20"},{"nr":9,"start":"15:25","end":"16:15"},{"nr":10,"start":"16:20","end":"17:10"}]'),
-    ('webuntis_school', ''),
-    ('webuntis_url', ''),
-    ('webuntis_username', ''),
-    ('webuntis_password', ''),
-    ('webuntis_last_sync', ''),
-    ('webuntis_sync_status', 'never'),
-    ('webuntis_sync_result', '{}')
-  ON CONFLICT (key) DO NOTHING;
-
-  -- Seed base trigger function dynamically if not present
-  CREATE OR REPLACE FUNCTION create_default_preferences()
-  RETURNS TRIGGER AS $$
-  BEGIN
-      INSERT INTO user_preferences (user_id) VALUES (NEW.id) ON CONFLICT DO NOTHING;
-      RETURN NEW;
-  END;
-  $$ LANGUAGE plpgsql;
-`).catch(err => logger.error('[Schema Setup]', 'Dynamic DB columns migration error', err));
-
 app.use(cors({
   origin: process.env.ALLOWED_ORIGIN || '*'
 }));
 app.use(express.json({ limit: '50mb' }));
 
-// Middleware to inject pool and io
-const fs = require('fs');
-const path = require('path');
-
 // ─── Database Health & Initialization ────────────────────────────────────────
 
 /**
- * Ensures the database schema is present. If tables are missing (e.g. after a wipe),
- * it executes init.sql to bootstrap the system.
+ * Ensures the database schema is present and applies dynamic migrations.
+ * This function handles the full lifecycle of the DB schema from empty to updated.
  */
-async function ensureDatabaseSchema() {
-  const maxRetries = 5;
+async function bootstrapDatabase() {
+  const maxRetries = 10;
   let retries = 0;
 
   while (retries < maxRetries) {
     try {
-      // Check if 'users' table exists
+      // 1. Basic Connectivity & Schema Check
       const tableCheck = await pool.query(`
         SELECT EXISTS (
           SELECT FROM information_schema.tables 
@@ -188,34 +74,150 @@ async function ensureDatabaseSchema() {
         );
       `);
 
-      if (tableCheck.rows[0].exists) {
-        console.log('[Database] Schema detected, system ready.');
-        return;
+      if (!tableCheck.rows[0].exists) {
+        console.warn('[Database] EMPTY DATABASE DETECTED! Running init.sql bootstrap...');
+        const initSqlPath = path.join(__dirname, 'db', 'init.sql');
+        const altPath = path.join(__dirname, '..', 'db', 'init.sql');
+        
+        let finalPath = fs.existsSync(initSqlPath) ? initSqlPath : (fs.existsSync(altPath) ? altPath : null);
+        
+        if (finalPath) {
+          const initSql = fs.readFileSync(finalPath, 'utf8');
+          await pool.query(initSql);
+          console.log('[Database] init.sql executed successfully.');
+        } else {
+          throw new Error('init.sql not found in /db or ../db');
+        }
       }
 
-      console.warn('[Database] EMPTY DATABASE DETECTED! Running init.sql bootstrap...');
-      const initSqlPath = path.join(__dirname, '..', 'db', 'init.sql');
-      if (fs.existsSync(initSqlPath)) {
-        const initSql = fs.readFileSync(initSqlPath, 'utf8');
-        await pool.query(initSql);
-        console.log('[Database] init.sql executed successfully. Schema restored.');
-        return;
-      } else {
-        throw new Error(`init.sql not found at ${initSqlPath}`);
-      }
+      // 2. Dynamic Migrations (Run only after base schema is guaranteed to exist)
+      console.log('[Database] Running dynamic migrations...');
+      await pool.query(`
+        ALTER TABLE subjects DROP CONSTRAINT IF EXISTS uq_subject_class;
+        ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_self_directed BOOLEAN DEFAULT false;
+        ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS is_hidden_from_pupils BOOLEAN DEFAULT false;
+        ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
+        ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
+        ALTER TABLE rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT NULL;
+
+        CREATE TABLE IF NOT EXISTS assessments (
+          id SERIAL PRIMARY KEY,
+          category_id INTEGER REFERENCES assessment_categories(id) ON DELETE CASCADE,
+          name VARCHAR(100) NOT NULL,
+          info_text TEXT,
+          deadline TIMESTAMP WITH TIME ZONE,
+          is_visible BOOLEAN DEFAULT true,
+          CONSTRAINT uq_assessment_category UNIQUE (category_id, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS student_learning_plan (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+          category_id INTEGER REFERENCES assessment_categories(id) ON DELETE CASCADE,
+          assessment_name VARCHAR(100) NOT NULL,
+          planned_date DATE NOT NULL,
+          slot_number INTEGER CHECK (slot_number IN (1, 2)),
+          completed BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS help_requests (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+          subject VARCHAR(100) NOT NULL,
+          message TEXT NOT NULL,
+          status VARCHAR(20) DEFAULT 'open',
+          claimed_by_teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          teacher_comment TEXT DEFAULT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS participation_logs (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+          teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
+          lesson_date DATE NOT NULL DEFAULT CURRENT_DATE,
+          rating VARCHAR(20) NOT NULL DEFAULT 'engaged',
+          applied_to_grade BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS seating_positions (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER UNIQUE REFERENCES pupils(id) ON DELETE CASCADE,
+          desk_row INTEGER NOT NULL DEFAULT 1,
+          desk_col INTEGER NOT NULL DEFAULT 1,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+          id SERIAL PRIMARY KEY,
+          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          endpoint TEXT UNIQUE NOT NULL,
+          p256dh TEXT NOT NULL,
+          auth TEXT NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          notify_help_requests BOOLEAN DEFAULT TRUE,
+          notify_timers BOOLEAN DEFAULT TRUE,
+          notify_system BOOLEAN DEFAULT TRUE
+        );
+
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key VARCHAR(100) PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- WebUntis integration columns (added in v2.5)
+        ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+        ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;
+        ALTER TABLE classes  ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+        ALTER TABLE pupils   ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+
+        INSERT INTO system_settings (key, value) VALUES
+          ('school_name', 'MS Weissenbach Telfs'),
+          ('lesson_boundaries', '{"07:55":1,"08:50":2,"09:45":3,"10:50":4,"11:45":5,"12:40":6,"13:35":7,"14:30":8,"15:25":9,"16:20":10,"18:00":10}'),
+          ('lesson_schedule', '[{"nr":1,"start":"07:55","end":"08:45"},{"nr":2,"start":"08:50","end":"09:40"},{"nr":3,"start":"09:45","end":"10:35"},{"nr":4,"start":"10:50","end":"11:40"},{"nr":5,"start":"11:45","end":"12:35"},{"nr":6,"start":"12:40","end":"13:30"},{"nr":7,"start":"13:35","end":"14:25"},{"nr":8,"start":"14:30","end":"15:20"},{"nr":9,"start":"15:25","end":"16:15"},{"nr":10,"start":"16:20","end":"17:10"}]'),
+          ('webuntis_school', ''),
+          ('webuntis_url', ''),
+          ('webuntis_username', ''),
+          ('webuntis_password', ''),
+          ('webuntis_last_sync', ''),
+          ('webuntis_sync_status', 'never'),
+          ('webuntis_sync_result', '{}')
+        ON CONFLICT (key) DO NOTHING;
+
+        -- Seed base trigger function dynamically if not present
+        CREATE OR REPLACE FUNCTION create_default_preferences()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            INSERT INTO user_preferences (user_id) VALUES (NEW.id) ON CONFLICT DO NOTHING;
+            RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+
+      console.log('[Database] Bootstrap complete.');
+      return;
     } catch (err) {
       retries++;
-      console.error(`[Database] Connection/Init error (Attempt ${retries}/${maxRetries}):`, err.message);
-      if (retries >= maxRetries) throw err;
-      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait before retry
+      console.error(`[Database] Bootstrap error (Attempt ${retries}/${maxRetries}):`, err.message);
+      if (retries >= maxRetries) {
+         console.error('[Database] FATAL: Could not bootstrap database schema.');
+         process.exit(1);
+      }
+      await new Promise(resolve => setTimeout(resolve, 3000));
     }
   }
 }
 
-// Call the self-healing check
-ensureDatabaseSchema().catch(err => {
-  console.error('[Database] FATAL: Could not initialize database schema:', err);
-});
+// Start the sequential bootstrap
+bootstrapDatabase();
 
 app.use((req, res, next) => {
   req.pool = pool;
