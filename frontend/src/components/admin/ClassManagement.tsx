@@ -37,15 +37,32 @@ export function ClassManagement({
   };
 
   const handleResetTeachers = async () => {
-    if (!confirm("🚨 KRITISCHE AKTION: Alle Lehrer-Passwörter werden zurückgesetzt und neue Factsheets generiert. Bestehende Logins werden ungültig. Fortfahren?")) return;
-    
     try {
-      const { data } = await fetchAuth("/api/admin/factsheets/teachers", { method: "POST" });
+      // 1. Check status
+      const { data: status } = await fetchAuth("/api/admin/factsheets/teachers/status");
+      
+      let confirmMsg = "Möchten Sie Factsheets für alle Lehrer generieren und deren Passwörter zurücksetzen?";
+      if (status.has_run_before) {
+        confirmMsg = "⚠️ WARNUNG: Factsheets wurden bereits einmal generiert! Ein erneuter Reset macht ALLE bestehenden Lehrer-Logins sofort ungültig. Wirklich fortfahren?";
+      }
+
+      if (!confirm(confirmMsg)) return;
+
+      const { data } = await fetchAuth("/api/admin/factsheets/teachers", { 
+        method: "POST",
+        body: JSON.stringify({ force: true })
+      });
+      
       toast.success(`${data.count} Lehrer-Konten wurden zurückgesetzt.`);
-      // In a real app, we'd trigger a download of the factsheets here
       console.log("Teacher Factsheets:", data.teachers);
-    } catch (err) {
-      toast.error("Mass-Reset fehlgeschlagen");
+      
+      // Trigger a download or display results in a modal here
+    } catch (err: any) {
+      if (err.status === 409) {
+        toast.error("Aktion blockiert", { description: err.message });
+      } else {
+        toast.error("Mass-Reset fehlgeschlagen", { description: err.message });
+      }
     }
   };
 

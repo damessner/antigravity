@@ -21,6 +21,7 @@ interface GradebookTableProps {
   columns: GradebookColumn[];
   pupilTags?: PupilTag[];
   rankPreview?: RankPreviewEntry[];
+  rankConfig?: { level: number; name: string; symbol: string }[];
   currentUser: User | null;
   isOwner: boolean;
   onGradeChange: (catId: number, pId: number, assName: string, val: string) => void;
@@ -36,14 +37,6 @@ interface GradebookTableProps {
   onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
 }
 
-/** Returns the rank insignia emoji and a colour class for a given tier tag */
-function getRankBadge(rank: string | null | undefined): { icon: string; className: string } | null {
-  if (rank === "Meister") return { icon: "🥇", className: "text-amber-400" };
-  if (rank === "Geselle") return { icon: "🥈", className: "text-slate-300" };
-  if (rank === "Lehrling") return { icon: "🥉", className: "text-amber-700" };
-  return null;
-}
-
 function GradebookTableBase({
   pupils,
   categories,
@@ -51,6 +44,7 @@ function GradebookTableBase({
   columns,
   pupilTags = [],
   rankPreview = [],
+  rankConfig = [],
   currentUser,
   isOwner,
   onGradeChange,
@@ -65,8 +59,19 @@ function GradebookTableBase({
   onEditCategory,
   onToggleCellVisibility
 }: GradebookTableProps) {
-  // Extract subject_id from first category to look up per-subject tags
   const subjectId = categories.length > 0 ? categories[0].subject_id : null;
+
+  const getRankBadge = (rankName: string | null | undefined): string | null => {
+    if (!rankName) return null;
+    const config = rankConfig.find(rc => rc.name === rankName);
+    if (config) return config.symbol;
+    
+    // Fallbacks if not in config
+    if (rankName === "Meister") return "👑";
+    if (rankName === "Geselle") return "🛠️";
+    if (rankName === "Lehrling") return "🌱";
+    return null;
+  };
 
   const columnsByCategory = React.useMemo(() => {
     const map = new Map<number, GradebookColumn[]>();
@@ -247,7 +252,7 @@ function GradebookTableBase({
                         title={`Rang: ${currentRank}${predicted && predicted.predicted_rank !== currentRank ? ` → Voraussage: ${predicted.predicted_rank}` : ""}`}
                         className="shrink-0 text-sm leading-none"
                       >
-                        {badge.icon}
+                        {badge}
                       </span>
                     )}
                     <span className="truncate">{p.name}</span>
@@ -263,7 +268,7 @@ function GradebookTableBase({
                         title={`Voraussage: ${predicted?.predicted_rank}`}
                         className="shrink-0 text-[10px] opacity-50"
                       >
-                        →{predictedBadge.icon}
+                        →{predictedBadge}
                       </span>
                     )}
                   </div>

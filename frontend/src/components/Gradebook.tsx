@@ -604,6 +604,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
           columns={allColumns}
           pupilTags={matrixPupilTags}
           rankPreview={rankPreview}
+          rankConfig={rankConfig}
           currentUser={currentUser}
           isOwner={isOwner}
           onGradeChange={handleGradeChange}

@@ -26,6 +26,8 @@ interface WebUntisSettingsData {
   webuntis_url: string;
   webuntis_username: string;
   webuntis_password: string;
+  webuntis_sync_interval?: string;
+  webuntis_mission_windows?: boolean;
   webuntis_last_sync: string | null;
   webuntis_sync_status: string;
   webuntis_sync_result: SyncResult | null;
@@ -37,6 +39,8 @@ export function WebUntisSettings() {
     webuntis_url: "",
     webuntis_username: "",
     webuntis_password: "",
+    webuntis_sync_interval: "0",
+    webuntis_mission_windows: false,
     webuntis_last_sync: null,
     webuntis_sync_status: "never",
     webuntis_sync_result: null,
@@ -95,6 +99,8 @@ export function WebUntisSettings() {
           webuntis_url:      settings.webuntis_url,
           webuntis_username: settings.webuntis_username,
           webuntis_password: settings.webuntis_password,
+          webuntis_sync_interval: settings.webuntis_sync_interval,
+          webuntis_mission_windows: settings.webuntis_mission_windows,
         }),
       });
       toast.success("WebUntis-Einstellungen gespeichert");
@@ -247,6 +253,48 @@ export function WebUntisSettings() {
             </div>
           </div>
 
+          {/* Automation Section */}
+          <div className="pt-4 border-t border-slate-800/50 space-y-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Automatisierung & Sync-Intervalle
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-[11px] text-slate-400 font-medium mb-1">
+                  Sync-Intervall (Heartbeat)
+                </label>
+                <select
+                  value={settings.webuntis_sync_interval || "0"}
+                  onChange={(e) => setSettings((p) => ({ ...p, webuntis_sync_interval: e.target.value }))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
+                >
+                  <option value="0">Deaktiviert (Nur Manuell)</option>
+                  <option value="1">Stündlich</option>
+                  <option value="4">Alle 4 Stunden</option>
+                  <option value="12">Alle 12 Stunden</option>
+                  <option value="24">Täglich</option>
+                </select>
+                <p className="text-[10px] text-slate-600 mt-1.5">
+                  Regelmäßige Hintergrund-Aktualisierung der Basisdaten.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 bg-slate-950/40 p-4 rounded-2xl border border-slate-800/40">
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-slate-300">Fixe Mission-Windows</p>
+                  <p className="text-[10px] text-slate-500">Sync um 07:00, 11:00 und 16:00 Uhr erzwingen.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSettings(p => ({ ...p, webuntis_mission_windows: !(p as any).webuntis_mission_windows }))}
+                  className={`w-10 h-5 rounded-full transition-colors relative ${(settings as any).webuntis_mission_windows ? "bg-indigo-600" : "bg-slate-800"}`}
+                >
+                  <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${(settings as any).webuntis_mission_windows ? "left-6" : "left-1"}`} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Advanced Toggle */}
           <div className="pt-2 border-t border-slate-800/50">
             <button
@@ -269,9 +317,6 @@ export function WebUntisSettings() {
                   placeholder="Wird normalerweise automatisch extrahiert"
                   className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder-slate-700"
                 />
-                <p className="text-[10px] text-slate-600 mt-2 italic">
-                  Hinweis: Dieses Feld wird nur benötigt, wenn die URL keine Schul-Parameter enthält.
-                </p>
               </div>
             )}
           </div>

@@ -195,9 +195,30 @@ router.get('/classes/:id/roster', authenticateToken, isAdmin, async (req, res) =
 
 const bcrypt = require('bcrypt');
 
+// GET /api/admin/factsheets/teachers/status — Check if mass reset was already performed
+router.get('/factsheets/teachers/status', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const result = await req.pool.query("SELECT COUNT(*) FROM users WHERE role = 'teacher' AND last_factsheet_at IS NOT NULL");
+        res.json({ has_run_before: parseInt(result.rows[0].count, 10) > 0 });
+    } catch (err) {
+        res.status(500).json({ error: 'Status konnte nicht geladen werden' });
+    }
+});
+
 // POST /api/admin/factsheets/teachers — Reset all teacher passwords and return credentials
 router.post('/factsheets/teachers', authenticateToken, isAdmin, async (req, res) => {
+    const { force } = req.body;
     try {
+        const statusRes = await req.pool.query("SELECT COUNT(*) FROM users WHERE role = 'teacher' AND last_factsheet_at IS NOT NULL");
+        const hasRunBefore = parseInt(statusRes.rows[0].count, 10) > 0;
+
+        if (hasRunBefore && !force) {
+            return res.status(409).json({ 
+                error: 'WARNUNG: Factsheets wurden bereits einmal generiert.',
+                details: 'Ein erneuter Reset macht alle bestehenden Lehrer-Passwörter ungültig.'
+            });
+        }
+
         const teachersRes = await req.pool.query("SELECT id, username, full_name FROM users WHERE role = 'teacher' AND is_active = true");
         const results = [];
 

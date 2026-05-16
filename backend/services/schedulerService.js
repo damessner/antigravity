@@ -1,6 +1,7 @@
 'use strict';
 
 const { syncFromWebUntis, saveSyncStatus } = require('./webuntisSyncService');
+const InsightGenerator = require('./insightGenerator');
 const logger = require('../utils/logger');
 
 const CTX = '[Scheduler]';
@@ -14,6 +15,7 @@ class SchedulerService {
     this.pool = pool;
     this.intervalId = null;
     this.isSyncing = false;
+    this.insightGenerator = new InsightGenerator(pool);
   }
 
   /**
@@ -45,12 +47,15 @@ class SchedulerService {
   async heartbeat() {
     if (this.isSyncing) return;
 
+    // Run Insight Generation (independent of sync)
+    await this.insightGenerator.generate().catch(err => logger.error(CTX, 'Insight Gen failed', err));
+
     try {
       // 1. Load WebUntis settings
       const settingsRes = await this.pool.query(`
         SELECT key, value FROM system_settings 
         WHERE key IN ('webuntis_url', 'webuntis_username', 'webuntis_password', 'webuntis_school', 
-                      'webuntis_sync_interval', 'webuntis_last_sync')
+                      'webuntis_sync_interval', 'webuntis_last_sync', 'webuntis_mission_windows')
       `);
       
       const s = {};
@@ -58,20 +63,22 @@ class SchedulerService {
 
       if (!s.webuntis_url || !s.webuntis_username || !s.webuntis_password) return;
 
-      const intervalHours = parseInt(s.webuntis_sync_interval || '1', 10);
-      if (intervalHours <= 0) return; // Automatic sync disabled
+      const intervalHours = parseInt(s.webuntis_sync_interval || '0', 10);
+      const missionWindowsActive = s.webuntis_mission_windows === 'true';
 
       const lastSync = s.webuntis_last_sync ? new Date(s.webuntis_last_sync) : new Date(0);
       const now = new Date();
       const diffMs = now - lastSync;
-      const intervalMs = intervalHours * 60 * 60 * 1000;
+      const intervalMs = intervalHours > 0 ? intervalHours * 60 * 60 * 1000 : Infinity;
 
-      // Also support fixed "Mission Windows" (e.g., 07:00, 11:00, 16:00)
+      // Fixed "Mission Windows" (e.g., 07:00, 11:00, 16:00)
       const currentHour = now.getHours();
       const currentMin = now.getMinutes();
-      const isMissionWindow = (currentHour === 7 || currentHour === 11 || currentHour === 16) && currentMin < 5;
+      const isMissionWindow = missionWindowsActive && 
+                              (currentHour === 7 || currentHour === 11 || currentHour === 16) && 
+                              currentMin < 5;
 
-      if (diffMs >= intervalMs || isMissionWindow) {
+      if ((intervalHours > 0 && diffMs >= intervalMs) || isMissionWindow) {
         await this.triggerSync({
           url: s.webuntis_url,
           username: s.webuntis_username,

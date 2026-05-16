@@ -90,7 +90,36 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
       LIMIT 10
     `);
 
-    // 5. Fun Insights (Pulling from our new table)
+    // 5. Active Participators (Top 5 pupils with most 'excellent' or 'engaged' ratings)
+    const activeParticipators = await req.pool.query(`
+      SELECT 
+        u.full_name,
+        c.name as class_name,
+        COUNT(l.id) as active_count
+      FROM participation_logs l
+      JOIN pupils p ON l.pupil_id = p.id
+      JOIN users u ON p.user_id = u.id
+      JOIN classes c ON p.class_id = c.id
+      WHERE l.rating IN ('excellent', 'engaged')
+      GROUP BY u.full_name, c.name
+      ORDER BY active_count DESC
+      LIMIT 5
+    `);
+
+    // 6. Recent Achievements
+    const recentAchievements = await req.pool.query(`
+      SELECT 
+        u.full_name,
+        a.title,
+        a.created_at
+      FROM achievements a
+      JOIN pupils p ON a.pupil_id = p.id
+      JOIN users u ON p.user_id = u.id
+      ORDER BY a.created_at DESC
+      LIMIT 5
+    `);
+
+    // 7. Fun Insights (Pulling from our new table)
     const insights = await req.pool.query('SELECT title, content, category FROM fun_insights ORDER BY created_at DESC LIMIT 5');
 
     res.json({
@@ -98,6 +127,8 @@ router.get('/dashboard', authenticateToken, async (req, res) => {
       topPupils: topPupils.rows,
       risingStars: risingStars.rows,
       supportNeeded: supportNeeded.rows,
+      activeParticipators: activeParticipators.rows,
+      recentAchievements: recentAchievements.rows,
       insights: insights.rows
     });
 
