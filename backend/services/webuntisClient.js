@@ -221,13 +221,23 @@ class WebUntisClient {
 
   /**
    * Get the Monday of the current week.
+   * If today is Saturday or Sunday, pivot to next Monday.
    *
    * @returns {Date}
    */
   static getWeekStart() {
     const now  = new Date();
-    const day  = now.getDay(); // 0 = Sunday
-    const diff = (day === 0 ? -6 : 1 - day);
+    const day  = now.getDay(); // 0 = Sunday, 6 = Saturday
+    
+    let diff;
+    if (day === 0) { // Sunday -> Next Monday
+      diff = 1;
+    } else if (day === 6) { // Saturday -> Next Monday
+      diff = 2;
+    } else { // Mon-Fri -> Current Monday
+      diff = 1 - day;
+    }
+    
     const mon  = new Date(now);
     mon.setDate(now.getDate() + diff);
     mon.setHours(0, 0, 0, 0);
@@ -235,7 +245,7 @@ class WebUntisClient {
   }
 
   /**
-   * Get the Friday of the current week.
+   * Get the Friday of the current week (or next Friday if pivoted).
    *
    * @returns {Date}
    */

@@ -203,6 +203,11 @@ router.get('/substitutions', stateLimiter, authenticateToken, isTeacherOrAdmin, 
 
     res.json({ date: today, substitutions: subs || [] });
   } catch (err) {
+    const errMsg = err.message || '';
+    if (errMsg.includes('-8509') || errMsg.includes('no right')) {
+      logger.warn(CTX, 'Zugriff auf Vertretungen verweigert (Rechte fehlen in WebUntis)');
+      return res.json({ date: WebUntisClient.toUntisDate(new Date()), substitutions: [], restricted: true });
+    }
     logger.error(CTX, 'Fehler beim Laden der Vertretungen', err);
     res.status(502).json({ error: err.message || 'WebUntis nicht erreichbar' });
   } finally {
@@ -251,6 +256,16 @@ router.get('/timetable/:classId', stateLimiter, authenticateToken, isTeacherOrAd
       timetable:  timetable || [],
     });
   } catch (err) {
+    const errMsg = err.message || '';
+    if (errMsg.includes('-8509') || errMsg.includes('no right') || errMsg.includes('-7004')) {
+      logger.warn(CTX, `Zugriff auf Stundenplan für Klasse ${dbClassId} eingeschränkt: ${errMsg}`);
+      return res.json({
+        classId: dbClassId,
+        className: 'Eingeschränkt',
+        timetable: [],
+        restricted: true
+      });
+    }
     logger.error(CTX, `Fehler beim Laden des Stundenplans für Klasse ${dbClassId}`, err);
     res.status(502).json({ error: err.message || 'WebUntis nicht erreichbar' });
   } finally {
