@@ -18,5 +18,10 @@
     "pg": "^8.13.1",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7"
+  },
+  "overrides": {
+    "glob": "^10.3.10",
+    "rimraf": "^5.0.5",
+    "inflight": "npm:@isaacs/cliui@^8.0.2"
   }
 }
