@@ -1,23 +1,34 @@
-# 🏫 Schulmanagement V2.3 — Real-Time Platform
+# 🏫 Antigravity V3.0 — Die ultimative Plattform für moderne Schulen 🚀
 
-A production-ready, highly responsive school administration and real-time classroom management platform built for modern educational environments. Fully optimized for zero-config deployments across home environments, Proxmox hypervisors, and school subnets.
-
----
-
-## ✨ Key Features
-
-- **🌐 100% Network-Agnostic Architecture**: Works out-of-the-box on local networks (`192.168.X.X`), multi-VLAN school hardware (`10.X.X.X`), or custom unraid domains without editing `.env` files.
-- **📱 Responsive iPad Drag-and-Drop**: Snappy, tactile layout switching customized with responsive pointer/touch activation sensors for frictionless classroom oversight.
-- **⚡ Live WebSockets Dispatch**: Real-time room movement synchronizations and automated lesson boundary countdowns powered by `Socket.io`.
-- **📊 Curricular Gradebook**: Integrated subject grade tracking with live peer co-teacher editing visibility.
-- **🛡️ Integrated Disciplinary Control**: Infraction severity weights and dynamic pupil rank recalculations.
-- **📅 Self-Directed Learning Matrix**: Dedicated assignment planner where pupils project study slots and flag active assistance requirements.
+Willkommen bei **Antigravity**, der hochmodernen, reaktionsschnellen Plattform für das Schulmanagement und die Echtzeit-Unterrichtssteuerung. Entwickelt für die Anforderungen des 21. Jahrhunderts, bietet Antigravity eine nahtlose Verbindung zwischen Verwaltung, Pädagogik und Gamification.
 
 ---
 
-## 📸 Visual Overview
+## 🌟 Funktionen im Überblick
 
-| Login & Authentication | Live Raumbelegung |
+### 🏫 Für Schulen & Administratoren
+- **🔄 WebUntis Deep Sync**: Vollautomatische Synchronisation von Klassen, Lehrern und Schülern. WebUntis dient als "Source of Truth" – einmal einrichten, den Rest erledigt das System.
+- **🏢 Intelligente Raumverwaltung**: Jede Klasse erhält automatisch ihren eigenen digitalen Raum. 1:1 Mapping sorgt für absolute Übersichtlichkeit im Schulalltag.
+- **🛡️ Maximale Stabilität**: Optimiert für den Betrieb auf Unraid, Proxmox oder lokalen Servern. Integrierte Watchdogs und automatisierte Wartungsfenster garantieren 24/7 Verfügbarkeit.
+- **📊 Admin-Analytics**: Detaillierte Berichte über TimeOut-Frequenzen, System-Logs in Echtzeit und automatisierte Sicherheits-Backups.
+
+### 👩‍🏫 Für Lehrpersonen
+- **🖱️ Intuitive Raumbelegung**: Verschieben Sie Schüler per Drag-and-Drop in Echtzeit (optimiert für iPad & Touch).
+- **📝 Digitales Notenbuch & Notizen**: Erfassen Sie Noten, Mitarbeit und Verhaltensnotizen direkt im Unterricht. Live-Synchronisation mit Co-Lehrern.
+- **🙋 Live-Hilfe-System**: Sehen Sie sofort, welcher Schüler Hilfe benötigt. Farblich kodierte Fächer und blinkende Status-Icons sorgen dafür, dass kein Hilferuf übersehen wird.
+- **🏆 Gamification-Control**: Vergeben Sie Badges und Level-Ups in 10 verschiedenen Kategorien, um die Motivation Ihrer Schüler zu steigern.
+
+### 🎓 Für Schülerinnen & Schüler
+- **📅 Innovativer Lernplaner**: Planen Sie Ihre Lernslots eigenständig und behalten Sie Ihre Ziele im Blick.
+- **🚀 Karriere-Dashboard**: Verfolgen Sie Ihren Fortschritt in Echtzeit. Sehen Sie Ihre Badges, Level und "Success Stories" in einem motivierenden Dashboard.
+- **💎 Belohnungssystem**: Sammeln Sie Badges für Mitarbeit, Pünktlichkeit und soziale Kompetenz. Steigen Sie im Level auf und werden Sie zum "Meister".
+- **📲 Mobile First**: Volle Funktionalität auf dem iPad – dein digitaler Begleiter für jeden Schultag.
+
+---
+
+## 📸 Visuelle Eindrücke
+
+| Login & Authentifizierung | Live Raumbelegung |
 | :---: | :---: |
 | ![Login Page](sample_images/Login%20Page.png) | ![Live Raumbelegung](sample_images/Live%20Raumbelegung.png) |
 
@@ -25,138 +36,62 @@ A production-ready, highly responsive school administration and real-time classr
 | :---: | :---: |
 | ![Evaluationsbereich](sample_images/Evaluationsbereich.png) | ![Lernplaner](sample_images/Lernplaner.png) |
 
-| Notizen & Feedback | Erweitertes Bewertungssystem | Lernplaner & Hilfeanfrage |
-| :---: | :---: | :---: |
-| ![Notizen](sample_images/Notizen.png) | ![Bewertung](sample_images/Evaluationsbereich%20Bewertungsbereich.png) | ![Hilfeanfrage](sample_images/Lernplaner%20mit%20Hilfeanfrage.png) |
+---
 
+## 🔑 Erster Zugriff
+
+Nach der Installation können Sie sich mit folgenden Standard-Daten anmelden:
+- **Benutzername**: `da.messner`
+- **Passwort**: `weissenbach`
+- *Hinweis: Sie werden beim ersten Login aufgefordert, Ihr Passwort zu ändern.*
 
 ---
 
+## 🚀 Quickstart & Deployment (Windows)
 
-## 🔑 Initial Access
-
-After deploying, log in using the following administrative credentials:
-- **Username**: `da.messner`
-- **Password**: `weissenbach`
-- *Security Note: You will be prompted to change your password upon your first successful login.*
-
----
-
-## 🚀 Quickstart & Deployment
-
-### For New Users (One-Click Installation)
-Open PowerShell on your Windows computer and paste the following command to download and set up the system automatically:
+### Automatische Installation (Ein-Klick)
+Öffnen Sie die PowerShell und kopieren Sie diesen Befehl:
 
 ```powershell
 irm https://raw.githubusercontent.com/damessner/antigravity/main/scripts/setup_new_installation.ps1 | iex
 ```
 
-### Manual Installation (Windows)
-Simply double-click the numbered files in order:
-1. **`01_initiate_system.bat`**: Verify system requirements and Docker status.
-2. **`02_launch_system.bat`**: Start the platform.
+### Manuelle Installation
+Starten Sie die nummerierten Batch-Dateien in der richtigen Reihenfolge:
+1. **`01_initiate_system.bat`**: Systemcheck & Vorbereitung.
+2. **`02_launch_system.bat`**: Startet die gesamte Plattform.
 
 ---
 
-## 🛠️ Management Tools
+## 🛠️ Management & Wartung
 
-The system is organized into five main actions to keep your environment healthy:
-
-- **`00_initiate_system.bat`**: Verify Docker status and project file integrity. (Self-installs if files are missing).
-- **`01_update_system.bat`**: Check GitHub for the latest version and update automatically.
-- **`02_launch_system.bat`**: Your main daily tool. Starts/Restarts/Stops the services.
-- **`03_clean_slate.bat`**: Reset the system to a clean state (with automatic safety backup).
-- **`04_system_health_monitor.bat`**: View live logs and resource usage (CPU/RAM) in real-time.
-
+- **`00_initiate_system.bat`**: Überprüft Docker und Datei-Integrität.
+- **`01_update_system.bat`**: Prüft auf GitHub-Updates und installiert diese automatisch.
+- **`02_launch_system.bat`**: Das Hauptwerkzeug für den täglichen Start/Stopp.
+- **`03_clean_slate.bat`**: Setzt das System zurück (inkl. Sicherheits-Backup).
+- **`04_system_health_monitor.bat`**: Live-Logs und Ressourcenverbrauch (CPU/RAM).
 
 ---
 
-## 🐧 Linux / Unraid / Proxmox Support
+## 🌌 Technical Architecture & Enterprise Specifications
 
-For users running on Linux environments, use the included shell scripts in the `scripts/` directory:
+Antigravity is engineered as a high-availability, containerized microservices ecosystem, specifically designed for low-latency educational environments.
 
-### Deployment
-1.  **Clone the repository**: `git clone https://github.com/damessner/antigravity.git`
-2.  **Start the system**: `./scripts/restart_system.sh`
+### 🏗️ Core Infrastructure Stack
+- **Frontend Framework**: **Next.js 15 (React 19)** utilizing App Router for optimized server-side rendering and client-side hydration. Built with **TypeScript** for absolute type safety.
+- **Real-Time Engine**: **Socket.io (WebSockets)** orchestration for sub-100ms latency in student movement and live help broadcasting.
+- **Backend Services**: **Node.js / Express.js** high-throughput API layer with JWT-based stateful authentication and rate-limiting protection.
+- **Data Persistence**: **PostgreSQL 15 (Alpine)** relational database engine with advanced indexing for complex ranking queries and automated schema migration handling.
 
-### Proxmox One-Click (LXC)
-For Proxmox VE users, you can deploy the entire platform into a dedicated, optimized LXC container with a single command on your Proxmox Host Shell:
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/proxmox_install.sh)"
-```
+### ⚙️ Enterprise Integration Layer
+- **WebUntis JSON-RPC Integration**: A sophisticated read-only synchronization engine that maps external educational structures into local relational entities with 1:1 room/class parity.
+- **Automated Lifecycle Management**: Integrated health-check watchdogs and container-level restart policies (`unless-stopped`) ensure operational continuity on Unraid/Proxmox environments.
+- **Asynchronous Processing**: Background job scheduling for automated system backups, log rotation, and maintenance windows.
 
-### Unraid One-Click
-For Unraid users, run this command in your Unraid Terminal to automatically set up the appdata folders and register the project in your Docker tab:
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/unraid_install.sh)"
-```
-
-### Universal Linux / Raspberry Pi
-For Ubuntu, Debian, or Raspberry Pi OS, use this one-liner to install Docker and the platform automatically:
-```bash
-curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/linux_install.sh | sudo bash
-```
-
-### Android Pocket Server (Termux)
-
-You can even host the entire platform on an Android phone using **Termux**. Run this command inside the Termux app:
-```bash
-pkg install curl -y && bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/android_termux_setup.sh)"
-```
-
-### 🚀 Maintenance & Updates
-To keep your school system up to date, run the command for your platform:
-
-**Windows**
-Double-click `01_update_system.bat` in your folder.
-
-**Proxmox / Universal Linux**
-```bash
-cd /opt/antigravity && sudo ./scripts/update_system.sh
-```
-
-**Unraid**
-```bash
-cd /mnt/user/appdata/antigravity && ./scripts/update_system.sh
-```
-
-**Android (Termux)**
-```bash
-cd ~/antigravity && ./scripts/update_android.sh
-```
+### 🔒 Security & Performance
+- **Network-Agnostic Networking**: Dynamic API discovery logic allows the system to resolve its own environment (LAN, VLAN, or WAN) without manual configuration.
+- **Encrypted Communication**: Support for SSL termination and secure JWT payloads for cross-service communication.
+- **Rolling Log Architecture**: A 72-hour rolling logging system with automated trimming to preserve storage integrity on constrained hardware.
 
 ---
-
----
-
-### 🤖 Unattended Auto-Updates
-For total automation, you can schedule the system to check for updates and backup itself every night.
-
-**Linux / Proxmox / Unraid (Cron)**
-Run `crontab -e` and add this line to update every night at 2:00 AM:
-```bash
-0 2 * * * /bin/bash /opt/antigravity/scripts/auto_updater.sh
-```
-
-**Windows (Task Scheduler)**
-1. Open **Task Scheduler** and create a new task.
-2. Trigger: **Daily at 02:00**.
-3. Action: `powershell.exe`
-4. Arguments: `-ExecutionPolicy Bypass -File "C:\Path\To\antigravity\scripts\auto_updater.ps1"`
-
----
-
-- **Reset**: Run `./scripts/clean_slate.sh` to clear the environment.
-- **Permissions**: Ensure scripts are executable with `chmod +x scripts/*.sh`.
-
-
-
----
-
-## 🛠️ Technology Stack
-
-
-- **Frontend**: Next.js 15 (React 19), Tailwind CSS.
-- **Backend**: Node.js, Express.js, Socket.IO.
-- **Database**: PostgreSQL 15-alpine with automated startup seeding (`init.sql`).
-- **Orchestration**: Docker Compose & Unraid Compose Manager.
+© 2026 Antigravity System — Built for the future of education. 🇦🇹
