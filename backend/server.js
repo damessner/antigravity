@@ -165,6 +165,58 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 
 // Middleware to inject pool and io
+const fs = require('fs');
+const path = require('path');
+
+// ─── Database Health & Initialization ────────────────────────────────────────
+
+/**
+ * Ensures the database schema is present. If tables are missing (e.g. after a wipe),
+ * it executes init.sql to bootstrap the system.
+ */
+async function ensureDatabaseSchema() {
+  const maxRetries = 5;
+  let retries = 0;
+
+  while (retries < maxRetries) {
+    try {
+      // Check if 'users' table exists
+      const tableCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' AND table_name = 'users'
+        );
+      `);
+
+      if (tableCheck.rows[0].exists) {
+        console.log('[Database] Schema detected, system ready.');
+        return;
+      }
+
+      console.warn('[Database] EMPTY DATABASE DETECTED! Running init.sql bootstrap...');
+      const initSqlPath = path.join(__dirname, '..', 'db', 'init.sql');
+      if (fs.existsSync(initSqlPath)) {
+        const initSql = fs.readFileSync(initSqlPath, 'utf8');
+        await pool.query(initSql);
+        console.log('[Database] init.sql executed successfully. Schema restored.');
+        return;
+      } else {
+        throw new Error(`init.sql not found at ${initSqlPath}`);
+      }
+    } catch (err) {
+      retries++;
+      console.error(`[Database] Connection/Init error (Attempt ${retries}/${maxRetries}):`, err.message);
+      if (retries >= maxRetries) throw err;
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait before retry
+    }
+  }
+}
+
+// Call the self-healing check
+ensureDatabaseSchema().catch(err => {
+  console.error('[Database] FATAL: Could not initialize database schema:', err);
+});
+
 app.use((req, res, next) => {
   req.pool = pool;
   req.io = io;
