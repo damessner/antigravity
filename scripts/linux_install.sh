@@ -66,6 +66,10 @@ if [ -d "$INSTALL_DIR" ]; then
                 cd /tmp
             fi
 
+            # Brute force removal of any remaining containers with "antigravity" in the name
+            echo -e "${YELLOW} >> Force-removing any zombie Antigravity containers...${NC}"
+            docker ps -a --format '{{.Names}}' | grep "antigravity" | xargs -I {} docker rm -f {} 2>/dev/null || true
+
             echo -e "${YELLOW} >> Wiping all data...${NC}"
             rm -rf "$OLDPWD/$INSTALL_DIR" 2>/dev/null || true
             sleep 1
