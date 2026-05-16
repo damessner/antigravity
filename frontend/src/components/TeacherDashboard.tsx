@@ -782,7 +782,14 @@ export default function TeacherDashboard() {
           {/* DndKit Orchestration Grid */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 flex-1">
-              {rooms.map((room) => {
+              {rooms
+                .filter((room) => {
+                  const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut", "Klassenzimmer"].includes(room.name);
+                  // Show if it's a shared room OR the room specifically for the selected class
+                  const isSelectedClassRoom = room.name === selectedClass || room.name === `Klassenzimmer - ${selectedClass}`;
+                  return isShared || isSelectedClassRoom;
+                })
+                .map((room) => {
                 const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut"].includes(room.name);
 
                 // Filter mapping logic Section 8

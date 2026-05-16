@@ -128,7 +128,7 @@ async function runSync(pool, settings) {
       await pool.query(`
         INSERT INTO rooms (name) VALUES ($1)
         ON CONFLICT (name) DO NOTHING
-      `, [className]);
+      `, [`Klassenzimmer - ${className}`]);
       counts.rooms++;
 
       // Store the DB class_id mapping for later use when linking pupils
@@ -249,6 +249,30 @@ async function runSync(pool, settings) {
         VALUES ($1, $2)
         ON CONFLICT (user_id) DO UPDATE SET class_id = EXCLUDED.class_id
       `, [userId, dbClassId]);
+
+      // --- AUTO-ALLOCATION: Place pupil in their classroom if no active log exists ---
+      if (dbClassId && studentClassName) {
+        try {
+          // Find the specific room ID for this class
+          const roomRes = await pool.query('SELECT id FROM rooms WHERE name = $1', [`Klassenzimmer - ${studentClassName}`]);
+          if (roomRes.rows.length > 0) {
+            const roomId = roomRes.rows[0].id;
+            const pIdRes = await pool.query('SELECT id FROM pupils WHERE user_id = $1', [userId]);
+            const pupilId = pIdRes.rows[0].id;
+
+            // Check if pupil already has an active allocation (don't overwrite if they are already moved)
+            const activeRes = await pool.query('SELECT id FROM allocation_logs WHERE pupil_id = $1 AND is_active = true', [pupilId]);
+            if (activeRes.rows.length === 0) {
+              await pool.query(`
+                INSERT INTO allocation_logs (pupil_id, to_room_id, lesson_number, is_active)
+                VALUES ($1, $2, 1, true)
+              `, [pupilId, roomId]);
+            }
+          }
+        } catch (err) {
+          logger.warn(CTX, `Auto-allocation failed for ${fullName}: ${err.message}`);
+        }
+      }
 
       counts.pupils++;
     }
