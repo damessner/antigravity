@@ -5,6 +5,9 @@ const path = require('path');
 const { authenticateToken, setupLimiter } = require('../server');
 const logger = require('../utils/logger');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
+const ExcelJS = require('exceljs');
+const multer = require('multer');
+const upload = multer({ dest: 'uploads/' });
 
 // Helper to check if user is admin
 const isAdmin = (req, res, next) => {
@@ -250,6 +253,179 @@ router.post('/factsheets/teachers', setupLimiter, authenticateToken, isAdmin, as
     } catch (err) {
         logger.error('[Admin]', 'Mass password reset failed', err);
         res.status(500).json({ error: 'Zurücksetzen der Passwörter fehlgeschlagen' });
+    }
+});
+
+// --- Roster Management (Manual Class Assignment & Excel Import) ---
+
+// GET /api/admin/import/template — Download Excel template for roster import
+router.get('/import/template', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Schülerliste');
+        
+        worksheet.columns = [
+            { header: 'Name des Schülers', key: 'name', width: 30 },
+            { header: 'Klasse', key: 'class', width: 15 }
+        ];
+
+        // Add some example data (optional)
+        worksheet.addRow({ name: 'Max Mustermann', class: '2a' });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="roster_template.xlsx"');
+        
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (err) {
+        logger.error('[Admin]', 'Template generation failed', err);
+        res.status(500).json({ error: 'Template konnte nicht generiert werden' });
+    }
+});
+
+// POST /api/admin/import/roster — Import roster from Excel
+router.post('/import/roster', authenticateToken, isAdmin, upload.single('file'), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Keine Datei hochgeladen' });
+
+    try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.readFile(req.file.path);
+        const worksheet = workbook.getWorksheet(1);
+
+        const results = { updated: 0, created: 0, errors: [] };
+        const classesMap = {}; // Cache for class names -> IDs
+
+        // Get all classes
+        const classesRes = await req.pool.query('SELECT id, name FROM classes');
+        classesRes.rows.forEach(c => { classesMap[c.name.toLowerCase()] = c.id; });
+
+        // Iterate over rows (skip header)
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
+            const name = row.getCell(1).text?.trim();
+            const className = row.getCell(2).text?.trim();
+
+            if (!name) continue;
+
+            const classId = classesMap[className?.toLowerCase()] || null;
+
+            // Find pupil by full_name (fuzzy match or exact match)
+            const pupilRes = await req.pool.query(
+                "SELECT u.id, p.id AS pupil_id FROM users u JOIN pupils p ON p.user_id = u.id WHERE LOWER(u.full_name) = LOWER($1) AND u.role = 'pupil'",
+                [name]
+            );
+
+            if (pupilRes.rows.length > 0) {
+                // Update existing pupil
+                await req.pool.query('UPDATE pupils SET class_id = $1 WHERE id = $2', [classId, pupilRes.rows[0].pupil_id]);
+                results.updated++;
+            } else {
+                results.errors.push(`Schüler "${name}" nicht in der Datenbank gefunden (muss erst via WebUntis importiert werden).`);
+            }
+        }
+
+        // Clean up temp file
+        fs.unlinkSync(req.file.path);
+
+        res.json(results);
+    } catch (err) {
+        if (req.file) fs.unlinkSync(req.file.path);
+        logger.error('[Admin]', 'Excel import failed', err);
+        res.status(500).json({ error: 'Excel-Import fehlgeschlagen: ' + err.message });
+    }
+});
+
+// POST /api/admin/pupils/:id/assign — Manually assign a pupil to a class
+router.post('/pupils/:id/assign', authenticateToken, isAdmin, async (req, res) => {
+    const pupilId = Number(req.params.id);
+    const { class_id } = req.body;
+    try {
+        await req.pool.query('UPDATE pupils SET class_id = $1 WHERE id = $2', [class_id || null, pupilId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Zuordnung fehlgeschlagen' });
+    }
+});
+
+// --- Subject Management (Manual Teacher Assignment) ---
+
+// GET /api/admin/classes/:id/subjects — List all subjects for a class
+router.get('/classes/:id/subjects', authenticateToken, isAdmin, async (req, res) => {
+    const classId = Number(req.params.id);
+    try {
+        const result = await req.pool.query(`
+            SELECT s.*, u1.full_name as teacher_name, u2.full_name as second_teacher_name
+            FROM subjects s
+            LEFT JOIN users u1 ON s.teacher_id = u1.id
+            LEFT JOIN users u2 ON s.second_teacher_id = u2.id
+            WHERE s.class_id = $1
+            ORDER BY s.name
+        `, [classId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Fächer konnten nicht geladen werden' });
+    }
+});
+
+// POST /api/admin/subjects — Create a new subject and assign teacher(s)
+router.post('/subjects', authenticateToken, isAdmin, async (req, res) => {
+    const { name, abbreviation, class_id, teacher_id, second_teacher_id } = req.body;
+    if (!name || !class_id || !teacher_id) {
+        return res.status(400).json({ error: 'Name, Klasse und Hauptlehrer sind erforderlich' });
+    }
+
+    const client = await req.pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        const abbr = abbreviation || name.substring(0, 2).toUpperCase();
+        
+        const subRes = await client.query(`
+            INSERT INTO subjects (name, abbreviation, class_id, teacher_id, second_teacher_id)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (name, class_id) DO UPDATE SET 
+                abbreviation = EXCLUDED.abbreviation,
+                teacher_id = EXCLUDED.teacher_id,
+                second_teacher_id = EXCLUDED.second_teacher_id
+            RETURNING id, (xmax = 0) AS is_new
+        `, [name, abbr, class_id, teacher_id, second_teacher_id || null]);
+
+        const subjectId = subRes.rows[0].id;
+
+        // Auto-seed default categories if it's a new subject
+        if (subRes.rows[0].is_new) {
+            const defaultCategories = [
+                { name: 'Mitarbeit', weight: 40 },
+                { name: 'Hausübungen', weight: 20 },
+                { name: 'Leistungsfeststellungen', weight: 40 }
+            ];
+            for (const cat of defaultCategories) {
+                await client.query(`
+                    INSERT INTO assessment_categories (subject_id, name, weight_percentage)
+                    VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
+                `, [subjectId, cat.name, cat.weight]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, id: subjectId });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        logger.error('[Admin]', 'Subject creation failed', err);
+        res.status(500).json({ error: 'Fach konnte nicht erstellt werden' });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE /api/admin/subjects/:id — Delete a subject
+router.delete('/subjects/:id', authenticateToken, isAdmin, async (req, res) => {
+    const subjectId = Number(req.params.id);
+    try {
+        await req.pool.query('DELETE FROM subjects WHERE id = $1', [subjectId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Fach konnte nicht gelöscht werden' });
     }
 });
 

@@ -487,6 +487,7 @@ export default function AdminPage() {
               handleCreatePupil={handleCreatePupil}
               handleDeletePupil={handleDeletePupil}
               isLoading={isLoading}
+              refetch={refetch}
             />
           )}
 
