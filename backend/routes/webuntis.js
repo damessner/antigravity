@@ -51,10 +51,23 @@ async function loadSettings(pool) {
 
 /** Create a temporary authenticated WebUntis client using stored settings. */
 async function buildAuthClient(settings) {
-  const { webuntis_school, webuntis_url, webuntis_username, webuntis_password } = settings;
-  if (!webuntis_school || !webuntis_url || !webuntis_username || !webuntis_password) {
-    throw new Error('WebUntis-Integration nicht konfiguriert');
+  let { webuntis_school, webuntis_url, webuntis_username, webuntis_password } = settings;
+  
+  if (!webuntis_url || !webuntis_username || !webuntis_password) {
+    throw new Error('WebUntis-Integration unvollständig (URL, Benutzername, Passwort erforderlich)');
   }
+
+  // If school is missing, attempt auto-extraction from URL (Zero-Config support)
+  if (!webuntis_school) {
+    const schoolMatch = webuntis_url.match(/school=([^&]+)/i);
+    if (schoolMatch && schoolMatch[1]) {
+      webuntis_school = decodeURIComponent(schoolMatch[1]);
+      logger.info(CTX, `Auto-extracted School ID for live session: ${webuntis_school}`);
+    } else {
+      throw new Error('WebUntis-Integration unvollständig (Schul-ID konnte nicht aus URL extrahiert werden)');
+    }
+  }
+
   const client = new WebUntisClient(webuntis_school, webuntis_url);
   await client.authenticate(webuntis_username, webuntis_password);
   return client;

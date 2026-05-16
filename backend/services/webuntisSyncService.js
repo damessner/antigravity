@@ -250,19 +250,29 @@ async function runSync(pool, settings) {
         ON CONFLICT (user_id) DO UPDATE SET class_id = EXCLUDED.class_id
       `, [userId, dbClassId]);
 
-      // --- AUTO-ALLOCATION: Place pupil in their classroom if no active log exists ---
+      // --- AUTO-ALLOCATION: Place pupil in their class-specific room ---
       if (dbClassId && studentClassName) {
         try {
-          // Find the specific room ID for this class
           const roomRes = await pool.query('SELECT id FROM rooms WHERE name = $1', [`Klassenzimmer - ${studentClassName}`]);
           if (roomRes.rows.length > 0) {
             const roomId = roomRes.rows[0].id;
             const pIdRes = await pool.query('SELECT id FROM pupils WHERE user_id = $1', [userId]);
             const pupilId = pIdRes.rows[0].id;
 
-            // Check if pupil already has an active allocation (don't overwrite if they are already moved)
-            const activeRes = await pool.query('SELECT id FROM allocation_logs WHERE pupil_id = $1 AND is_active = true', [pupilId]);
-            if (activeRes.rows.length === 0) {
+            // Force update: If pupil is in a generic room or no room, move them to their class-specific room
+            const currentRes = await pool.query(`
+              SELECT r.name 
+              FROM allocation_logs a 
+              JOIN rooms r ON a.to_room_id = r.id 
+              WHERE a.pupil_id = $1 AND a.is_active = true 
+              LIMIT 1
+            `, [pupilId]);
+
+            const currentRoomName = currentRes.rows.length > 0 ? currentRes.rows[0].name : null;
+
+            if (!currentRoomName || currentRoomName === 'Klassenzimmer') {
+              // Deactivate old and insert new
+              await pool.query('UPDATE allocation_logs SET is_active = false WHERE pupil_id = $1', [pupilId]);
               await pool.query(`
                 INSERT INTO allocation_logs (pupil_id, to_room_id, lesson_number, is_active)
                 VALUES ($1, $2, 1, true)
@@ -277,57 +287,102 @@ async function runSync(pool, settings) {
       counts.pupils++;
     }
 
-    // ── 5. Sync Subjects & Assignments (Teacher-Class-Subject mapping) ────────
+    // ── 5. Sync Subjects & Pupil-Subject Assignments ──────────────────────────
     const wuSubjects = await client.getSubjects();
     logger.info(CTX, `${wuSubjects.length} Fächer von WebUntis empfangen`);
 
-    // Build subject lookup: WebUntis Subject ID -> { name, longName }
     const subjectMap = {};
     for (const ws of wuSubjects) {
       subjectMap[ws.id] = { name: ws.name, longName: ws.longName };
     }
 
-    // Build teacher lookup: WebUntis Teacher ID -> DB User ID
     const teacherIdMap = {};
     const tr = await pool.query("SELECT id, webuntis_id FROM users WHERE role = 'teacher' AND webuntis_id IS NOT NULL");
     tr.rows.forEach(row => { teacherIdMap[row.webuntis_id] = row.id; });
 
-    logger.info(CTX, 'Synchronisiere Fach-Lehrer-Klassen Zuordnungen via Stundenplan...');
+    const pupilIdMap = {};
+    const pr = await pool.query("SELECT id, webuntis_id FROM users WHERE role = 'pupil' AND webuntis_id IS NOT NULL");
+    pr.rows.forEach(row => { pupilIdMap[row.webuntis_id] = row.id; });
+
+    logger.info(CTX, 'Synchronisiere Fach-Gruppen via Stundenplan...');
     const startDate = WebUntisClient.toUntisDate(WebUntisClient.getWeekStart());
     const endDate   = WebUntisClient.toUntisDate(WebUntisClient.getWeekEnd());
 
-    // Iterate through active classes to find their subjects and teachers
     for (const wc of wuClasses) {
       if (!wc._dbClassId) continue;
       
       try {
-        // Fetch timetable for this class for the current week
         const timetable = await client.getTimetable(wc.id, 1, startDate, endDate);
-        const uniqueAssignments = new Set(); // To avoid duplicate subjects per class
+        const processedLessons = new Set();
 
         for (const entry of timetable) {
-          if (!entry.su || entry.su.length === 0) continue; // No subject
-          if (!entry.te || entry.te.length === 0) continue; // No teacher
+          if (!entry.su || entry.su.length === 0) continue;
+          if (!entry.te || entry.te.length === 0) continue;
 
           const wuSubjectId = entry.su[0].id;
           const wuTeacherId = entry.te[0].id;
-          const assignmentKey = `${wuSubjectId}-${wuTeacherId}`;
-
-          if (uniqueAssignments.has(assignmentKey)) continue;
-          uniqueAssignments.add(assignmentKey);
+          const lessonId    = entry.lsid || entry.id; // Lesson ID (Kopplung)
+          
+          if (processedLessons.has(lessonId)) continue;
+          processedLessons.add(lessonId);
 
           const subjectInfo = subjectMap[wuSubjectId];
           const dbTeacherId = teacherIdMap[wuTeacherId];
 
           if (subjectInfo && dbTeacherId) {
-            // Upsert into subjects table
-            await pool.query(`
+            // Upsert subject
+            const sRes = await pool.query(`
               INSERT INTO subjects (name, abbreviation, class_id, teacher_id)
               VALUES ($1, $2, $3, $4)
               ON CONFLICT (name, class_id) DO UPDATE SET 
                 teacher_id = EXCLUDED.teacher_id,
                 abbreviation = EXCLUDED.abbreviation
+              RETURNING id, (xmax = 0) AS is_new
             `, [subjectInfo.longName || subjectInfo.name, subjectInfo.name, wc._dbClassId, dbTeacherId]);
+
+            const subjectId = sRes.rows[0].id;
+            const isNewSubject = sRes.rows[0].is_new;
+
+            // --- AUTO-GRADEBOOK SETUP: Seed default categories for new subjects ---
+            if (isNewSubject) {
+              const defaultCategories = [
+                { name: 'Mitarbeit', weight: 40 },
+                { name: 'Hausübungen', weight: 20 },
+                { name: 'Leistungsfeststellungen', weight: 40 }
+              ];
+              for (const cat of defaultCategories) {
+                await pool.query(`
+                  INSERT INTO assessment_categories (subject_id, name, weight)
+                  VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
+                `, [subjectId, cat.name, cat.weight]);
+              }
+            }
+
+            // FETCH PUPIL LIST FOR THIS LESSON (The "Deep Sync")
+            try {
+              const studentsInLesson = await client.getStudentsForLesson(lessonId);
+              if (studentsInLesson && studentsInLesson.length > 0) {
+                // Clear existing assignments for this specific subject to ensure list is fresh
+                await pool.query('DELETE FROM pupil_subject_tags WHERE subject_id = $1', [subjectId]);
+                
+                for (const ws of studentsInLesson) {
+                  const dbUserId = pupilIdMap[ws.id];
+                  if (dbUserId) {
+                    const pIdRes = await pool.query('SELECT id FROM pupils WHERE user_id = $1', [dbUserId]);
+                    if (pIdRes.rows.length > 0) {
+                      await pool.query(`
+                        INSERT INTO pupil_subject_tags (pupil_id, subject_id)
+                        VALUES ($1, $2) ON CONFLICT DO NOTHING
+                      `, [pIdRes.rows[0].id, subjectId]);
+                    }
+                  }
+                }
+              }
+            } catch (lessonErr) {
+               // Many WebUntis setups don't support getStudentsForLesson on all plans; 
+               // we log but continue so the whole sync doesn't fail.
+               logger.warn(CTX, `Konnte Schülerliste für Lesson ${lessonId} nicht laden: ${lessonErr.message}`);
+            }
           }
         }
       } catch (err) {

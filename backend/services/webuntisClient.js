@@ -192,6 +192,18 @@ class WebUntisClient {
     });
   }
 
+  /**
+   * Fetch students assigned to a specific lesson (Kopplung).
+   * 
+   * @param {number} lessonId - The LSID or lesson ID from the timetable
+   * @returns {Promise<Array>}
+   */
+  getStudentsForLesson(lessonId) {
+    return this._request('getStudentsForLesson', {
+      lessonId
+    });
+  }
+
   // ─── Utility ──────────────────────────────────────────────────────────────
 
   /**

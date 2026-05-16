@@ -88,21 +88,35 @@ elif [ "$local_hash" == "$base_hash" ]; then
     read -p " Download and install update now? (y/N): " do_pull
     if [[ "$do_pull" =~ ^[Yy]$ ]]; then
         echo -e "${WHITE}>> Pulling changes...${NC}"
+        echo -e "${WHITE}>> Pulling latest changes from GitHub...${NC}"
         git pull origin main 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
         
-        echo -e "\n${WHITE}>> Rebuilding Docker containers to apply updates...${NC}"
-        docker compose build 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
+        # 6. Apply Unraid/Linux Permission Fixes
+        echo -e "${WHITE}>> Re-applying Unraid permissions (nobody:users)...${NC}"
+        if [ -d "/mnt/user/appdata/antigravity" ]; then
+            chown -R nobody:users .
+        fi
+        chmod +x scripts/*.sh
+
+        echo -e "\n${WHITE}>> Rebuilding Docker containers (Aggressive Dependency Update)...${NC}"
+        echo -e "${GRAY} [INFO] This will fetch latest security patches for all libraries.${NC}"
+        docker compose build --no-cache 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
         
-        # 6. Finalize
-        echo -e "\n${GREEN} [SUCCESS] Update complete!${NC}"
-        echo -en "${YELLOW}>> Would you like to restart the system now? (y/n): ${NC}"
+        # 7. Cleanup old images to save Unraid Cache space
+        echo -e "\n${WHITE}>> Cleaning up old Docker images to save space...${NC}"
+        docker image prune -f
+        
+        # 8. Finalize
+        echo -e "\n${GREEN} [SUCCESS] Update and Maintenance complete!${NC}"
+        echo -en "${YELLOW}>> Restart system now to apply new versions? (y/n): ${NC}"
         read -r response
 
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-            echo -e "${WHITE}>> Starting system...${NC}"
-            ./scripts/restart_system.sh
+            echo -e "${WHITE}>> Restarting Antigravity stack...${NC}"
+            docker compose up -d
+            echo -e "${GREEN} [OK] System is back online.${NC}"
         else
-            echo -e "${GRAY}>> Update finished without restart. Run './scripts/restart_system.sh' manually when ready.${NC}"
+            echo -e "${GRAY}>> Maintenance finished. Run 'docker compose up -d' manually when ready.${NC}"
         fi
 
         echo ""
