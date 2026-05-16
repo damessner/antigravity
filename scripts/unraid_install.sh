@@ -46,25 +46,25 @@ if [ -d "$INSTALL_PATH" ]; then
         read -r confirm_code
         if [ "$confirm_code" == "weissenbach" ]; then
             echo -e "${RED} >> CLEAN SLATE INITIATED...${NC}"
-            # Force stop everything in this path first
+            
+            # Step out of the directory to prevent "No such file or directory" errors during wipe
+            cd /tmp
+            
+            # Force stop everything first if compose file exists
             if [ -f "$INSTALL_PATH/docker-compose.yml" ]; then
               echo -e "${YELLOW} >> Stopping and removing existing containers...${NC}"
-              cd "$INSTALL_PATH" && docker compose down -v --remove-orphans 2>/dev/null || true
-              cd - > /dev/null
+              docker compose -f "$INSTALL_PATH/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
             fi
             
-            # Use aggressive recursive delete
             echo -e "${YELLOW} >> Wiping all data at $INSTALL_PATH...${NC}"
             rm -rf "$INSTALL_PATH" 2>/dev/null || true
             
-            # Small delay and check (Unraid filesystem can be slow with locks)
             sleep 2
             if [ -d "$INSTALL_PATH" ]; then
-                echo -e "${YELLOW} >> Some files locked. Retrying wipe...${NC}"
-                rm -rf "$INSTALL_PATH" || (echo -e "${RED} [ERROR] Could not wipe $INSTALL_PATH. Please stop any manual processes and try again.${NC}" && exit 1)
+                echo -e "${YELLOW} >> Retrying wipe...${NC}"
+                rm -rf "$INSTALL_PATH" || (echo -e "${RED} [ERROR] Could not wipe $INSTALL_PATH.${NC}" && exit 1)
             fi
 
-            mkdir -p "$INSTALL_PATH"
             echo -e "${WHITE}>> Re-cloning fresh Antigravity to $INSTALL_PATH...${NC}"
             git clone $REPO_URL "$INSTALL_PATH"
             cd "$INSTALL_PATH" && git config core.filemode false
