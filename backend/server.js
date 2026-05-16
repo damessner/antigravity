@@ -195,7 +195,7 @@ const loginLimiter = rateLimit({
 
 const setupLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 150, // Increased from 30 to 150 to prevent blocking admins during configuration
   message: { error: 'Zu viele Anfragen.' },
   standardHeaders: true,
   legacyHeaders: false
