@@ -48,6 +48,11 @@ interface EditCategoryState {
   is_self_directed: boolean;
 }
 
+interface RankRules {
+  meister_max_average: number;
+  geselle_min_sdl: number;
+}
+
 export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const queryClient = useQueryClient();
   const [selectedClassId, setSelectedClassId] = useState<number>(0);
@@ -86,6 +91,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     { level: 2, name: 'Geselle', symbol: '🛠️' },
     { level: 3, name: 'Meister', symbol: '👑' }
   ]);
+  const [rankRules, setRankRules] = useState<RankRules>({
+    meister_max_average: 1.5,
+    geselle_min_sdl: 3
+  });
   const weightsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const updateWeightsMutateRef = useRef(mutations.updateWeights.mutate);
 
@@ -137,6 +146,12 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
         const { data } = await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`);
         if (data && data.ranks) {
           setRankConfig(data.ranks);
+        }
+        if (data?.rules) {
+          setRankRules({
+            meister_max_average: Number(data.rules.meister_max_average ?? 1.5),
+            geselle_min_sdl: Number(data.rules.geselle_min_sdl ?? 3)
+          });
         }
       } catch (err) {
         console.error('Failed to load rank config:', err);
@@ -516,7 +531,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     try {
       await fetchAuth(`/api/gradebook/rank-config/${selectedSubject.id}`, {
         method: "PUT",
-        body: JSON.stringify({ ranks: rankConfig })
+        body: JSON.stringify({ ranks: rankConfig, rules: rankRules })
       });
       setShowRankConfigModal(false);
       toast.success("Rang-Konfiguration gespeichert");
@@ -526,6 +541,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       });
     }
   };
+
+  const handleRankChange = useCallback((pupilId: number, tierTag: string | null) => {
+    if (!isOwner) return;
+    mutations.updateTag.mutate({ pupil_id: pupilId, tier_tag: tierTag });
+  }, [isOwner, mutations.updateTag]);
 
 
   if (!selectedClassId && isLoadingSubjects) {
@@ -618,6 +638,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
           onToggleCategoryVisibility={handleToggleCategoryVisibility}
           onEditCategory={handleOpenEditCategory}
           onToggleCellVisibility={handleToggleCellVisibility}
+          onRankChange={handleRankChange}
         />
       )}
 
@@ -826,6 +847,43 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
               ))}
             </div>
 
+            <div className="mt-5 pt-4 border-t border-slate-800 space-y-3">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Regeln für Rangwechsel</h3>
+              <div className="space-y-2">
+                <label className="text-[10px] text-slate-500 font-bold uppercase block">
+                  Meister ab Durchschnitt ≤
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={5}
+                  step={0.1}
+                  value={rankRules.meister_max_average}
+                  onChange={(e) => setRankRules({
+                    ...rankRules,
+                    meister_max_average: Number(e.target.value)
+                  })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] text-slate-500 font-bold uppercase block">
+                  Geselle ab SDL-Bewertungen ≥
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={rankRules.geselle_min_sdl}
+                  onChange={(e) => setRankRules({
+                    ...rankRules,
+                    geselle_min_sdl: Number(e.target.value)
+                  })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm"
+                />
+              </div>
+            </div>
+ 
             <div className="flex gap-3 mt-6">
               <button
                 type="button"
@@ -837,6 +895,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                     { level: 2, name: 'Geselle', symbol: '🛠️' },
                     { level: 3, name: 'Meister', symbol: '👑' }
                   ]);
+                  setRankRules({
+                    meister_max_average: 1.5,
+                    geselle_min_sdl: 3
+                  });
                 }}
                 className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300"
               >

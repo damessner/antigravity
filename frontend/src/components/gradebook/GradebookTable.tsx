@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Plus, Edit3, Settings2, Trash2, Eye, EyeOff, Pencil } from "lucide-react";
+import { Plus, Settings2, Trash2, Eye, EyeOff, Pencil } from "lucide-react";
 import { Category, Grade, Pupil, PupilTag, User, ColumnMetadata, RankPreviewEntry } from "@/types";
 import { GradeCell } from "./GradeCell";
 import { getPlaceholderForScale } from "../gradeUtils";
@@ -35,6 +35,7 @@ interface GradebookTableProps {
   onToggleCategoryVisibility: (catId: number) => void;
   onEditCategory: (category: Category) => void;
   onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
+  onRankChange: (pupilId: number, tierTag: string | null) => void;
 }
 
 function GradebookTableBase({
@@ -57,7 +58,8 @@ function GradebookTableBase({
   onToggleColumnVisibility,
   onToggleCategoryVisibility,
   onEditCategory,
-  onToggleCellVisibility
+  onToggleCellVisibility,
+  onRankChange
 }: GradebookTableProps) {
   const subjectId = categories.length > 0 ? categories[0].subject_id : null;
 
@@ -105,6 +107,25 @@ function GradebookTableBase({
   const getPredictedRank = (pupilId: number): RankPreviewEntry | null =>
     rankPreview.find((r) => Number(r.pupil_id) === Number(pupilId)) || null;
 
+  const sortedRankOptions = React.useMemo(
+    () => [...rankConfig].sort((a, b) => Number(a.level) - Number(b.level)),
+    [rankConfig]
+  );
+
+  const matrixInsight = React.useMemo(() => {
+    const withAverage = rankPreview.filter(
+      (entry) => entry.grade_average !== null && entry.grade_average !== undefined
+    );
+    if (withAverage.length === 0) return null;
+
+    const classAverage =
+      withAverage.reduce((sum, entry) => sum + Number(entry.grade_average), 0) / withAverage.length;
+    const bestPupil = [...withAverage].sort((a, b) => Number(a.grade_average) - Number(b.grade_average))[0];
+    const needsAttention = [...withAverage].sort((a, b) => Number(b.grade_average) - Number(a.grade_average))[0];
+
+    return { classAverage, bestPupil, needsAttention };
+  }, [rankPreview]);
+
   if (categories.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-3xl p-12 bg-slate-900/20">
@@ -118,7 +139,28 @@ function GradebookTableBase({
   }
 
   return (
-    <div className="flex-1 overflow-auto rounded-2xl border border-slate-800/60 bg-slate-950/40 shadow-2xl custom-scrollbar">
+    <div className="flex-1 flex flex-col gap-3">
+      {isOwner && matrixInsight && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Klassen-Ø</div>
+            <div className="text-sm font-black text-white">Note {matrixInsight.classAverage.toFixed(2)}</div>
+          </div>
+          <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-widest text-emerald-400/80 font-bold">Top aktuell</div>
+            <div className="text-xs font-bold text-emerald-300 truncate">
+              {matrixInsight.bestPupil.pupil_name} (Ø {Number(matrixInsight.bestPupil.grade_average).toFixed(2)})
+            </div>
+          </div>
+          <div className="rounded-xl border border-amber-700/40 bg-amber-900/10 px-3 py-2">
+            <div className="text-[10px] uppercase tracking-widest text-amber-400/80 font-bold">Braucht Fokus</div>
+            <div className="text-xs font-bold text-amber-300 truncate">
+              {matrixInsight.needsAttention.pupil_name} (Ø {Number(matrixInsight.needsAttention.grade_average).toFixed(2)})
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="overflow-auto rounded-2xl border border-slate-800/60 bg-slate-950/40 shadow-2xl custom-scrollbar">
       <table className="w-full border-collapse table-fixed select-none">
         <thead className="sticky top-0 z-40">
           {/* Layer 1: Categories */}
@@ -190,7 +232,14 @@ function GradebookTableBase({
           {/* Layer 2: Assessments */}
           <tr className="bg-slate-900/80 backdrop-blur-md text-[9px]">
             <th className="sticky left-0 z-50 bg-slate-900/80 border-b border-r-2 border-slate-800" />
-            {columns.map((col, idx) => (
+            {columns.map((col, idx) => {
+              const columnGrades = grades.filter(
+                (g) => Number(g.category_id) === Number(col.category.id) && g.assessment_name === col.assessmentName
+              );
+              const isColumnVisible = columnGrades.length === 0
+                ? true
+                : columnGrades.every((g) => g.is_visible !== false);
+              return (
               <th
                 key={`${col.category.id}-${col.assessmentName}-${idx}`}
                 className={`p-0 h-10 align-middle font-mono font-bold text-slate-400 border-b border-slate-800 ${col.isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}
@@ -216,15 +265,16 @@ function GradebookTableBase({
                       <button
                         onClick={() => onToggleColumnVisibility(col.category.id, col.assessmentName)}
                         className="p-2 text-slate-400 hover:text-amber-400 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                        title="Spaltensichtbarkeit für Schüler umschalten"
+                        title={isColumnVisible ? "Spalte für Schüler ausblenden" : "Spalte für Schüler einblenden"}
                       >
-                        <Edit3 className="w-4 h-4" />
+                        {isColumnVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                       </button>
                     </div>
                   )}
                 </div>
               </th>
-            ))}
+              );
+            })}
           </tr>
         </thead>
 
@@ -256,6 +306,21 @@ function GradebookTableBase({
                       </span>
                     )}
                     <span className="truncate">{p.name}</span>
+                    {isOwner && (
+                      <select
+                        value={currentRank || "none"}
+                        onChange={(e) => onRankChange(p.id, e.target.value === "none" ? null : e.target.value)}
+                        className="shrink-0 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[9px] text-slate-200"
+                        title="Rang setzen"
+                      >
+                        <option value="none">Kein Rang</option>
+                        {sortedRankOptions.map((rank) => (
+                          <option key={rank.level} value={rank.name}>
+                            {rank.symbol} {rank.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     {/* Grade average chip */}
                     {isOwner && avgDisplay && (
                       <span className="shrink-0 text-[9px] font-mono text-slate-500 bg-slate-900 border border-slate-800 px-1 rounded">
@@ -298,6 +363,7 @@ function GradebookTableBase({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

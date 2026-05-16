@@ -26,6 +26,7 @@ export function ClassManagement({
   const [showAddPupil, setShowAddPupil] = useState(false);
   const [availablePupils, setAvailablePupils] = useState<User[]>([]);
   const [selectedPupilId, setSelectedPupilId] = useState<string>("");
+  const [pupilSearch, setPupilSearch] = useState("");
 
   const [classView, setClassView] = useState<"roster" | "subjects">("roster");
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -37,6 +38,8 @@ export function ClassManagement({
     setSelectedClass(c);
     setIsRosterLoading(true);
     setShowAddPupil(false);
+    setSelectedPupilId("");
+    setPupilSearch("");
     setShowAddSubject(false);
     try {
       // Load Roster
@@ -95,10 +98,11 @@ export function ClassManagement({
     try {
       await fetchAuth(`/api/admin/pupils/${selectedPupilId}/assign`, {
         method: "POST",
-        body: JSON.stringify({ class_id: selectedClass.id })
+        body: JSON.stringify({ class_id: selectedClass.id, id_type: "user" })
       });
       toast.success("Schüler zugeordnet");
       setSelectedPupilId("");
+      setPupilSearch("");
       setShowAddPupil(false);
       handleShowClassData(selectedClass);
     } catch (err) {
@@ -115,7 +119,7 @@ export function ClassManagement({
  
       await fetchAuth(`/api/admin/pupils/${pupilRecord.id}/assign`, {
         method: "POST",
-        body: JSON.stringify({ class_id: null })
+        body: JSON.stringify({ class_id: null, id_type: "pupil" })
       });
       toast.success("Schüler entfernt");
       if (selectedClass) handleShowClassData(selectedClass);
@@ -245,7 +249,16 @@ export function ClassManagement({
               </div>
               
               {showAddPupil && (
-                <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center gap-4 animate-in slide-in-from-top-2 duration-300">
+                <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row items-center gap-4 animate-in slide-in-from-top-2 duration-300">
+                  <div className="w-full md:w-56">
+                    <input
+                      type="text"
+                      value={pupilSearch}
+                      onChange={(e) => setPupilSearch(e.target.value)}
+                      placeholder="Suche (z.B. y...)"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
                   <div className="flex-1">
                     <select
                       value={selectedPupilId}
@@ -255,6 +268,13 @@ export function ClassManagement({
                       <option value="">-- Schüler wählen --</option>
                       {availablePupils
                         .filter(p => !roster.some(r => r.id === p.id))
+                        .filter((p) => {
+                          const query = pupilSearch.trim().toLowerCase();
+                          if (!query) return true;
+                          const fullName = p.full_name.toLowerCase();
+                          const username = p.username.toLowerCase();
+                          return fullName.startsWith(query) || username.startsWith(query);
+                        })
                         .sort((a, b) => a.full_name.localeCompare(b.full_name))
                         .map(p => (
                           <option key={p.id} value={p.id}>{p.full_name} ({p.username})</option>
