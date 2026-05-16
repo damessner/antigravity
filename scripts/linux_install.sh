@@ -55,13 +55,24 @@ if [ -d "$INSTALL_DIR" ]; then
         read -r confirm_code
         if [ "$confirm_code" == "weissenbach" ]; then
             echo -e "${RED} >> CLEAN SLATE INITIATED...${NC}"
-            # Stop containers if they are running
-            cd "$INSTALL_DIR" && docker compose down -v --remove-orphans 2>/dev/null || true
-            # Wipe and Re-clone
-            cd ..
-            rm -rf "$INSTALL_DIR"
-            git clone $REPO_URL "$INSTALL_DIR"
-            cd "$INSTALL_DIR"
+            
+            # Step out to a safe directory before wiping
+            cd /tmp
+            
+            # Force stop containers if possible
+            if [ -d "$OLDPWD/$INSTALL_DIR" ]; then
+                echo -e "${YELLOW} >> Stopping existing containers...${NC}"
+                cd "$OLDPWD/$INSTALL_DIR" && docker compose down -v --remove-orphans 2>/dev/null || true
+                cd /tmp
+            fi
+
+            echo -e "${YELLOW} >> Wiping all data...${NC}"
+            rm -rf "$OLDPWD/$INSTALL_DIR" 2>/dev/null || true
+            sleep 1
+            
+            echo -e "${WHITE}>> Re-cloning fresh Antigravity...${NC}"
+            git clone $REPO_URL "$OLDPWD/$INSTALL_DIR"
+            cd "$OLDPWD/$INSTALL_DIR"
         else
             echo -e "${YELLOW} [INFO] Confirmation code incorrect. Proceeding with standard update.${NC}"
             cd "$INSTALL_DIR" && git pull origin main
