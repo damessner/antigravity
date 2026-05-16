@@ -72,6 +72,10 @@ if [ -d "$INSTALL_PATH" ]; then
             echo -e "${WHITE}>> Re-cloning fresh Antigravity to $INSTALL_PATH...${NC}"
             git clone $REPO_URL "$INSTALL_PATH"
             cd "$INSTALL_PATH" && git config core.filemode false
+            
+            # CRITICAL: Trigger a rebuild so the new code is actually used
+            echo -e "${WHITE}>> Rebuilding Docker images (this may take a few minutes)...${NC}"
+            docker compose build --no-cache
         else
             echo -e "${YELLOW} [INFO] Confirmation code incorrect. Proceeding with standard update.${NC}"
             cd "$INSTALL_PATH" && git config core.filemode false && git pull origin main
