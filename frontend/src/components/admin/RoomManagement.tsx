@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { Building2, Edit2, Trash2 } from "lucide-react";
-
+import { fetchAuth } from "@/utils/fetchAuth";
+import { toast } from "sonner";
 import { Room } from "@/types";
 
 interface RoomManagementProps {
@@ -14,7 +16,7 @@ interface RoomManagementProps {
   setEditingRoomId: (id: number | null) => void;
   editingRoomName: string;
   setEditingRoomName: (name: string) => void;
-  handleRenameRoom: (id: number) => void;
+  refetch: () => void;
   isLoading: boolean;
 }
 
@@ -28,9 +30,28 @@ export function RoomManagement({
   setEditingRoomId,
   editingRoomName,
   setEditingRoomName,
-  handleRenameRoom,
+  refetch,
   isLoading
 }: RoomManagementProps) {
+  const [editingCapacity, setEditingCapacity] = useState<string>("");
+
+  const handleUpdateRoom = async (id: number) => {
+    try {
+      await fetchAuth(`/api/admin/rooms/${id}/capacity`, {
+        method: "PUT",
+        body: JSON.stringify({ 
+          name: editingRoomName, 
+          capacity: parseInt(editingCapacity) || null 
+        }),
+      });
+      toast.success(`Raum "${editingRoomName}" aktualisiert.`);
+      setEditingRoomId(null);
+      refetch();
+    } catch (err: any) {
+      toast.error("Aktualisierung fehlgeschlagen", { description: err.message });
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -75,51 +96,67 @@ export function RoomManagement({
                 <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
                   <td className="px-6 py-4">
                     {editingRoomId === r.id ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editingRoomName}
-                          onChange={(e) => setEditingRoomName(e.target.value)}
-                          className="bg-slate-950 border border-indigo-500 rounded px-2 py-1 text-sm text-white focus:outline-none"
-                          autoFocus
-                        />
-                        <button
-                          onClick={() => handleRenameRoom(r.id)}
-                          className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
-                        >
-                          Speichern
-                        </button>
-                        <button
-                          onClick={() => setEditingRoomId(null)}
-                          className="text-[10px] font-bold text-slate-500 hover:text-slate-300"
-                        >
-                          Abbrechen
-                        </button>
-                      </div>
+                      <input
+                        type="text"
+                        value={editingRoomName}
+                        onChange={(e) => setEditingRoomName(e.target.value)}
+                        className="bg-slate-950 border border-indigo-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-full max-w-[200px]"
+                        autoFocus
+                      />
                     ) : (
                       <span className="text-sm font-bold text-slate-200">{r.name}</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <span className="text-xs font-mono text-slate-500">{r.capacity || "Unbegrenzt"}</span>
+                    {editingRoomId === r.id ? (
+                      <input
+                        type="number"
+                        value={editingCapacity}
+                        onChange={(e) => setEditingCapacity(e.target.value)}
+                        className="bg-slate-950 border border-indigo-500 rounded px-2 py-1 text-sm text-white focus:outline-none w-20 text-center"
+                        placeholder="∞"
+                      />
+                    ) : (
+                      <span className="text-xs font-mono text-slate-400">{r.capacity || "Unbegrenzt"}</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => {
-                          setEditingRoomId(r.id);
-                          setEditingRoomName(r.name);
-                        }}
-                        className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-all"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteRoom(r.id, r.name)}
-                        className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-all"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {editingRoomId === r.id ? (
+                        <>
+                          <button
+                            onClick={() => handleUpdateRoom(r.id)}
+                            className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded"
+                          >
+                            Speichern
+                          </button>
+                          <button
+                            onClick={() => setEditingRoomId(null)}
+                            className="text-[10px] font-bold text-slate-500 hover:text-slate-300"
+                          >
+                            Abbrechen
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => {
+                              setEditingRoomId(r.id);
+                              setEditingRoomName(r.name);
+                              setEditingCapacity(String(r.capacity || ""));
+                            }}
+                            className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-all"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteRoom(r.id, r.name)}
+                            className="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-all"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
+const SchedulerService = require('./services/schedulerService');
 
 // ── Global process-level safety net ──────────────────────────────────────────
 // Catch any unhandled promise rejection or uncaught exception, log it to the
@@ -189,8 +190,27 @@ async function bootstrapDatabase() {
         -- WebUntis integration columns (added in v2.5)
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;
+        ALTER TABLE users    ADD COLUMN IF NOT EXISTS last_factsheet_at TIMESTAMP WITH TIME ZONE DEFAULT NULL;
         ALTER TABLE classes  ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE pupils   ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
+
+        -- Karriere-Dashboard & Fun Insights
+        CREATE TABLE IF NOT EXISTS achievements (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+          type VARCHAR(50) NOT NULL, -- 'rank_up', 'streak', 'top_performance'
+          title VARCHAR(100) NOT NULL,
+          description TEXT,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS fun_insights (
+          id SERIAL PRIMARY KEY,
+          title VARCHAR(200) NOT NULL,
+          content TEXT NOT NULL,
+          category VARCHAR(50) DEFAULT 'general',
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
 
         INSERT INTO system_settings (key, value) VALUES
           ('school_name', 'MS Weissenbach Telfs'),
@@ -202,10 +222,19 @@ async function bootstrapDatabase() {
           ('webuntis_password', ''),
           ('webuntis_last_sync', ''),
           ('webuntis_sync_status', 'never'),
-          ('webuntis_sync_result', '{}')
+          ('webuntis_sync_result', '{}'),
+          ('webuntis_sync_interval', '1')
         ON CONFLICT (key) DO NOTHING;
 
-        -- Seed base trigger function dynamically if not present
+        -- Seed initial Fun Insights
+        await pool.query(`
+          INSERT INTO fun_insights (title, content, category)
+          VALUES 
+            ('Intergalaktische Pünktlichkeit', '98% aller Schüler sind heute pünktlich gelandet. Die Triebwerke laufen stabil!', 'status'),
+            ('Die Aufsteiger der Woche', 'Die 3b hat ihren Notenschnitt um 0.4 Punkte verbessert. Warp-Antrieb aktiviert!', 'achievement'),
+            ('Hausübungs-Helden', 'In der letzten Woche wurden 1.200 Hausübungen digital eingereicht. Ein neuer Rekord!', 'stat')
+          ON CONFLICT DO NOTHING;
+        `);
         CREATE OR REPLACE FUNCTION create_default_preferences()
         RETURNS TRIGGER AS $$
         BEGIN
@@ -230,7 +259,10 @@ async function bootstrapDatabase() {
 }
 
 // Start the sequential bootstrap
-bootstrapDatabase();
+bootstrapDatabase().then(() => {
+  const scheduler = new SchedulerService(pool);
+  scheduler.start();
+});
 
 app.use((req, res, next) => {
   req.pool = pool;
@@ -340,6 +372,7 @@ app.use('/api/setup', require('./routes/setup'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/participation', require('./routes/participation'));
 app.use('/api/webuntis', require('./routes/webuntis'));
+app.use('/api/karriere', require('./routes/karriere'));
 const pushModule = require('./routes/push');
 
 app.use('/api/push', pushModule.router);

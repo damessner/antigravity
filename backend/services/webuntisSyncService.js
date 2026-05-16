@@ -287,13 +287,13 @@ async function runSync(pool, settings) {
       counts.pupils++;
     }
 
-    // ── 5. Sync Subjects & Pupil-Subject Assignments ──────────────────────────
+    // ── 5. Sync Subjects & Pupil-Subject Assignments (The Clever Aggregator) ──
     const wuSubjects = await client.getSubjects();
-    logger.info(CTX, `${wuSubjects.length} Fächer von WebUntis empfangen`);
+    logger.info(CTX, `Synchronisiere ${wuSubjects.length} Fächer via Wochenplan-Aggregation...`);
 
-    const subjectMap = {};
+    const subjectMetaMap = {};
     for (const ws of wuSubjects) {
-      subjectMap[ws.id] = { name: ws.name, longName: ws.longName };
+      subjectMetaMap[ws.id] = { name: ws.name, longName: ws.longName };
     }
 
     const teacherIdMap = {};
@@ -304,89 +304,101 @@ async function runSync(pool, settings) {
     const pr = await pool.query("SELECT id, webuntis_id FROM users WHERE role = 'pupil' AND webuntis_id IS NOT NULL");
     pr.rows.forEach(row => { pupilIdMap[row.webuntis_id] = row.id; });
 
-    logger.info(CTX, 'Synchronisiere Fach-Gruppen via Stundenplan...');
     const startDate = WebUntisClient.toUntisDate(WebUntisClient.getWeekStart());
     const endDate   = WebUntisClient.toUntisDate(WebUntisClient.getWeekEnd());
+
+    // Master map to aggregate students across lessons: Key = "SubjectID-TeacherID-ClassID"
+    const subjectAggregation = {};
 
     for (const wc of wuClasses) {
       if (!wc._dbClassId) continue;
       
       try {
         const timetable = await client.getTimetable(wc.id, 1, startDate, endDate);
-        const processedLessons = new Set();
-
+        
         for (const entry of timetable) {
           if (!entry.su || entry.su.length === 0) continue;
           if (!entry.te || entry.te.length === 0) continue;
 
           const wuSubjectId = entry.su[0].id;
           const wuTeacherId = entry.te[0].id;
-          const lessonId    = entry.lsid || entry.id; // Lesson ID (Kopplung)
+          const lessonId    = entry.lsid || entry.id;
           
-          if (processedLessons.has(lessonId)) continue;
-          processedLessons.add(lessonId);
-
-          const subjectInfo = subjectMap[wuSubjectId];
-          const dbTeacherId = teacherIdMap[wuTeacherId];
-
-          if (subjectInfo && dbTeacherId) {
-            // Upsert subject
-            const sRes = await pool.query(`
-              INSERT INTO subjects (name, abbreviation, class_id, teacher_id)
-              VALUES ($1, $2, $3, $4)
-              ON CONFLICT (name, class_id) DO UPDATE SET 
-                teacher_id = EXCLUDED.teacher_id,
-                abbreviation = EXCLUDED.abbreviation
-              RETURNING id, (xmax = 0) AS is_new
-            `, [subjectInfo.longName || subjectInfo.name, subjectInfo.name, wc._dbClassId, dbTeacherId]);
-
-            const subjectId = sRes.rows[0].id;
-            const isNewSubject = sRes.rows[0].is_new;
-
-            // --- AUTO-GRADEBOOK SETUP: Seed default categories for new subjects ---
-            if (isNewSubject) {
-              const defaultCategories = [
-                { name: 'Mitarbeit', weight: 40 },
-                { name: 'Hausübungen', weight: 20 },
-                { name: 'Leistungsfeststellungen', weight: 40 }
-              ];
-              for (const cat of defaultCategories) {
-                await pool.query(`
-                  INSERT INTO assessment_categories (subject_id, name, weight)
-                  VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
-                `, [subjectId, cat.name, cat.weight]);
-              }
-            }
-
-            // FETCH PUPIL LIST FOR THIS LESSON (The "Deep Sync")
-            try {
-              const studentsInLesson = await client.getStudentsForLesson(lessonId);
-              if (studentsInLesson && studentsInLesson.length > 0) {
-                // Clear existing assignments for this specific subject to ensure list is fresh
-                await pool.query('DELETE FROM pupil_subject_tags WHERE subject_id = $1', [subjectId]);
-                
-                for (const ws of studentsInLesson) {
-                  const dbUserId = pupilIdMap[ws.id];
-                  if (dbUserId) {
-                    const pIdRes = await pool.query('SELECT id FROM pupils WHERE user_id = $1', [dbUserId]);
-                    if (pIdRes.rows.length > 0) {
-                      await pool.query(`
-                        INSERT INTO pupil_subject_tags (pupil_id, subject_id)
-                        VALUES ($1, $2) ON CONFLICT DO NOTHING
-                      `, [pIdRes.rows[0].id, subjectId]);
-                    }
-                  }
-                }
-              }
-            } catch (lessonErr) {
-               // Many WebUntis setups don't support getStudentsForLesson on all plans; 
-               // we log but continue so the whole sync doesn't fail.
-               logger.warn(CTX, `Konnte Schülerliste für Lesson ${lessonId} nicht laden: ${lessonErr.message}`);
-            }
+          const aggKey = `${wuSubjectId}-${wuTeacherId}-${wc.id}`;
+          if (!subjectAggregation[aggKey]) {
+            subjectAggregation[aggKey] = {
+              wuSubjectId,
+              wuTeacherId,
+              wuClassId: wc.id,
+              dbClassId: wc._dbClassId,
+              lessons: new Set(),
+              pupils: new Set()
+            };
           }
+          subjectAggregation[aggKey].lessons.add(lessonId);
         }
       } catch (err) {
-        logger.warn(CTX, `Fehler beim Abruf des Stundenplans für Klasse ${wc.name}: ${err.message}`);
+        logger.warn(CTX, `Konnte Wochenplan für Klasse ${wc.name} nicht aggregieren: ${err.message}`);
+      }
+    }
+
+    // Now process the aggregated subjects and fetch students for all lessons
+    const aggKeys = Object.keys(subjectAggregation);
+    logger.info(CTX, `Aggregator fertig. Verarbeite ${aggKeys.length} Fach-Gruppen...`);
+
+    for (const key of aggKeys) {
+      const agg = subjectAggregation[key];
+      const subjectInfo = subjectMetaMap[agg.wuSubjectId];
+      const dbTeacherId = teacherIdMap[agg.wuTeacherId];
+
+      if (subjectInfo && dbTeacherId) {
+        // 1. Upsert Subject
+        const sRes = await pool.query(`
+          INSERT INTO subjects (name, abbreviation, class_id, teacher_id)
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (name, class_id) DO UPDATE SET 
+            teacher_id = EXCLUDED.teacher_id,
+            abbreviation = EXCLUDED.abbreviation
+          RETURNING id, (xmax = 0) AS is_new
+        `, [subjectInfo.longName || subjectInfo.name, subjectInfo.name, agg.dbClassId, dbTeacherId]);
+
+        const subjectId = sRes.rows[0].id;
+
+        // 2. Auto-Seed Categories if New
+        if (sRes.rows[0].is_new) {
+          const defaultCategories = [
+            { name: 'Mitarbeit', weight: 40 },
+            { name: 'Hausübungen', weight: 20 },
+            { name: 'Leistungsfeststellungen', weight: 40 }
+          ];
+          for (const cat of defaultCategories) {
+            await pool.query(`
+              INSERT INTO assessment_categories (subject_id, name, weight_percentage)
+              VALUES ($1, $2, $3) ON CONFLICT DO NOTHING
+            `, [subjectId, cat.name, cat.weight]);
+          }
+        }
+
+        // 3. Fetch all unique pupils across all lessons for this subject
+        for (const lessonId of agg.lessons) {
+          try {
+            const studentsInLesson = await client.getStudentsForLesson(lessonId);
+            for (const ws of studentsInLesson) {
+              const dbUserId = pupilIdMap[ws.id];
+              if (dbUserId) {
+                const pIdRes = await pool.query('SELECT id FROM pupils WHERE user_id = $1', [dbUserId]);
+                if (pIdRes.rows.length > 0) {
+                  await pool.query(`
+                    INSERT INTO pupil_subject_tags (pupil_id, subject_id, tier_tag)
+                    VALUES ($1, $2, 'Standard') ON CONFLICT DO NOTHING
+                  `, [pIdRes.rows[0].id, subjectId]);
+                }
+              }
+            }
+          } catch (lErr) {
+            // Non-fatal, just log and continue
+          }
+        }
       }
     }
 

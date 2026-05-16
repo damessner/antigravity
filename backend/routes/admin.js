@@ -148,4 +148,85 @@ router.put('/settings/:key', setupLimiter, authenticateToken, isAdmin, async (re
     }
 });
 
+// --- Room Management ---
+
+// GET /api/admin/rooms — List all rooms with capacities
+router.get('/rooms', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const result = await req.pool.query('SELECT id, name, capacity FROM rooms ORDER BY name');
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Räume konnten nicht geladen werden' });
+    }
+});
+
+// PUT /api/admin/rooms/:id — Update room capacity
+router.put('/rooms/:id', authenticateToken, isAdmin, async (req, res) => {
+    const roomId = Number(req.params.id);
+    const { capacity } = req.body;
+    try {
+        await req.pool.query('UPDATE rooms SET capacity = $1 WHERE id = $2', [capacity || null, roomId]);
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Kapazität konnte nicht gespeichert werden' });
+    }
+});
+
+// --- Class Rosters ---
+
+// GET /api/admin/classes/:id/roster — Get all pupils in a specific class
+router.get('/classes/:id/roster', authenticateToken, isAdmin, async (req, res) => {
+    const classId = Number(req.params.id);
+    try {
+        const result = await req.pool.query(`
+            SELECT u.id, u.username, u.full_name, u.role, u.requires_password_change
+            FROM users u
+            JOIN pupils p ON p.user_id = u.id
+            WHERE p.class_id = $1
+            ORDER BY u.full_name
+        `, [classId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: 'Klassenliste konnte nicht geladen werden' });
+    }
+});
+
+// --- Factsheet Engine ---
+
+const bcrypt = require('bcrypt');
+
+// POST /api/admin/factsheets/teachers — Reset all teacher passwords and return credentials
+router.post('/factsheets/teachers', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const teachersRes = await req.pool.query("SELECT id, username, full_name FROM users WHERE role = 'teacher' AND is_active = true");
+        const results = [];
+
+        for (const t of teachersRes.rows) {
+            const tempPw = `Antigravity_${Math.random().toString(36).substring(2, 8)}!`;
+            const hash = await bcrypt.hash(tempPw, 10);
+            
+            await req.pool.query(`
+                UPDATE users 
+                SET password_hash = $1, requires_password_change = true, last_factsheet_at = NOW() 
+                WHERE id = $2
+            `, [hash, t.id]);
+
+            results.push({
+                full_name: t.full_name,
+                username: t.username,
+                password: tempPw
+            });
+        }
+
+        res.json({ 
+            success: true, 
+            count: results.length,
+            teachers: results 
+        });
+    } catch (err) {
+        logger.error('[Admin]', 'Mass password reset failed', err);
+        res.status(500).json({ error: 'Zurücksetzen der Passwörter fehlgeschlagen' });
+    }
+});
+
 module.exports = router;

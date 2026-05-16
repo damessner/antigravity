@@ -526,6 +526,7 @@ export default function AdminPage() {
               editingRoomName={editingRoomName}
               setEditingRoomName={setEditingRoomName}
               handleRenameRoom={handleRenameRoom}
+              refetch={refetch}
               isLoading={isLoading}
             />
           )}

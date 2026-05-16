@@ -26,6 +26,16 @@ export function UserManagement({
   handleUpdateRole,
   isLoading
 }: UserManagementProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          u.username.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesRole = roleFilter === "all" || u.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
@@ -66,7 +76,7 @@ export function UserManagement({
               <option value="teacher">Lehrperson</option>
               <option value="admin">Administrator</option>
               <option value="pupil">Schüler</option>
-
+              <option value="lernwerkstatt">Lernwerkstatt-Terminal</option>
             </select>
           </div>
           <button
@@ -80,21 +90,42 @@ export function UserManagement({
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
-        <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex items-center gap-2">
-          <Edit2 className="w-5 h-5 text-indigo-400" />
-          <h2 className="text-sm font-bold text-white uppercase tracking-wider">Bestehende Konten</h2>
+        <div className="px-6 py-4 border-b border-slate-800 bg-slate-900/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Edit2 className="w-5 h-5 text-indigo-400" />
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider">Bestehende Konten</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <input 
+              type="text"
+              placeholder="Suchen..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500 w-48"
+            />
+            <select 
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">Alle Rollen</option>
+              <option value="teacher">Lehrer</option>
+              <option value="pupil">Schüler</option>
+              <option value="admin">Admins</option>
+            </select>
+          </div>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-950/50">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-slate-950">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">Benutzer</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase text-center">Rolle</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase text-right">Aktionen</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {users.map((u) => (
+              {filteredUsers.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-800/30 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
@@ -105,14 +136,14 @@ export function UserManagement({
                   <td className="px-6 py-4 text-center">
                     <select
                       value={u.role}
-                      disabled={u.isUpdatingRole}
+                      disabled={isLoading}
                       onChange={(e) => handleUpdateRole(u.id, u.full_name, e.target.value)}
                       className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-[11px] font-bold text-indigo-400 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
                     >
                       <option value="teacher">Lehrer</option>
                       <option value="admin">Admin</option>
                       <option value="pupil">Schüler</option>
-
+                      <option value="lernwerkstatt">Lernwerkstatt</option>
                     </select>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -135,6 +166,13 @@ export function UserManagement({
                   </td>
                 </tr>
               ))}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-6 py-12 text-center text-slate-500 italic text-sm">
+                    Keine Benutzer gefunden.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
