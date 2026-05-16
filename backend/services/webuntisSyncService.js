@@ -198,11 +198,22 @@ async function runSync(pool, settings) {
 
       const username_  = buildUsername(ws, 's.');
       const fullName   = buildFullName(ws);
+      let userId;
 
-      // Resolve class_id from class name in the student record
+      // Resolve class_id from class references in student record (prefer IDs, fallback to name)
       let dbClassId = null;
+      const studentClassIds = Array.isArray(ws.klassen)
+        ? ws.klassen.map(k => Number(k?.id)).filter(Number.isFinite)
+        : [];
+      for (const classId of studentClassIds) {
+        if (classIdMap[classId]) {
+          dbClassId = classIdMap[classId];
+          break;
+        }
+      }
+
       const studentClassName = (ws.klasseName || ws.klassen?.[0]?.name || '').trim();
-      if (studentClassName) {
+      if (dbClassId === null && studentClassName) {
         const cr = await pool.query('SELECT id FROM classes WHERE name = $1', [studentClassName]);
         if (cr.rows.length > 0) dbClassId = cr.rows[0].id;
       }
@@ -213,20 +224,20 @@ async function runSync(pool, settings) {
         [ws.id, 'pupil']
       );
 
+      if (existing.rows.length > 0) {
         userId = existing.rows[0].id;
         await pool.query(
           'UPDATE users SET full_name = $1, is_active = true, deactivated_at = NULL, erasure_due_at = NULL WHERE id = $2',
           [fullName, userId]
         );
-        // Manual assignment only: we no longer auto-update pupil class from WebUntis
-        /*
+
+        // Keep class assignment in sync when a class mapping exists
         if (existing.rows[0].pupil_id && dbClassId !== null) {
           await pool.query(
             'UPDATE pupils SET class_id = $1 WHERE id = $2',
             [dbClassId, existing.rows[0].pupil_id]
           );
         }
-        */
       } else {
         // Create new pupil user account
         let safeUsername = username_;
@@ -246,17 +257,11 @@ async function runSync(pool, settings) {
 
       // Upsert pupils record — but keep class_id as NULL if it's a new pupil, unless manually assigned
       await pool.query(`
-        INSERT INTO pupils (user_id)
-        VALUES ($1)
-        ON CONFLICT (user_id) DO NOTHING
-      `, [userId]);
-
-      // --- AUTO-ALLOCATION: DISABLED ---
-      /*
-      if (dbClassId && studentClassName) {
-        ...
-      }
-      */
+        INSERT INTO pupils (user_id, class_id)
+        VALUES ($1, $2)
+        ON CONFLICT (user_id) DO UPDATE
+          SET class_id = COALESCE(EXCLUDED.class_id, pupils.class_id)
+      `, [userId, dbClassId]);
 
       counts.pupils++;
     }
