@@ -227,14 +227,12 @@ async function bootstrapDatabase() {
         ON CONFLICT (key) DO NOTHING;
 
         -- Seed initial Fun Insights
-        await pool.query(`
-          INSERT INTO fun_insights (title, content, category)
-          VALUES 
-            ('Intergalaktische Pünktlichkeit', '98% aller Schüler sind heute pünktlich gelandet. Die Triebwerke laufen stabil!', 'status'),
-            ('Die Aufsteiger der Woche', 'Die 3b hat ihren Notenschnitt um 0.4 Punkte verbessert. Warp-Antrieb aktiviert!', 'achievement'),
-            ('Hausübungs-Helden', 'In der letzten Woche wurden 1.200 Hausübungen digital eingereicht. Ein neuer Rekord!', 'stat')
-          ON CONFLICT DO NOTHING;
-        `);
+        INSERT INTO fun_insights (title, content, category)
+        VALUES 
+          ('Intergalaktische Pünktlichkeit', '98% aller Schüler sind heute pünktlich gelandet. Die Triebwerke laufen stabil!', 'status'),
+          ('Die Aufsteiger der Woche', 'Die 3b hat ihren Notenschnitt um 0.4 Punkte verbessert. Warp-Antrieb aktiviert!', 'achievement'),
+          ('Hausübungs-Helden', 'In der letzten Woche wurden 1.200 Hausübungen digital eingereicht. Ein neuer Rekord!', 'stat')
+        ON CONFLICT DO NOTHING;
         CREATE OR REPLACE FUNCTION create_default_preferences()
         RETURNS TRIGGER AS $$
         BEGIN
@@ -276,10 +274,39 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Access token required' });
 
-  jwt.verify(token, process.env.JWT_SECRET || 'SuperSecureAustrianSchoolJwtSecretKey998877!', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'SuperSecureAustrianSchoolJwtSecretKey998877!', async (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid or expired token' });
-    req.user = user;
-    next();
+
+    try {
+      const userRes = await pool.query(
+        'SELECT id, role, requires_password_change, is_active FROM users WHERE id = $1 LIMIT 1',
+        [user.id]
+      );
+
+      if (userRes.rows.length === 0 || userRes.rows[0].is_active === false) {
+        return res.status(403).json({ error: 'Benutzerkonto ist nicht aktiv' });
+      }
+
+      const dbUser = userRes.rows[0];
+      req.user = {
+        ...user,
+        role: dbUser.role,
+        requires_password_change: dbUser.requires_password_change
+      };
+
+      const isPasswordChangeEndpoint = req.path === '/change-password' || req.originalUrl?.endsWith('/users/change-password');
+      if (dbUser.requires_password_change && !isPasswordChangeEndpoint) {
+        return res.status(423).json({
+          error: 'Passwortänderung erforderlich',
+          code: 'PASSWORD_CHANGE_REQUIRED'
+        });
+      }
+
+      next();
+    } catch (dbErr) {
+      console.error('Token verification DB check failed:', dbErr);
+      return res.status(500).json({ error: 'Authentifizierung fehlgeschlagen' });
+    }
   });
 };
 

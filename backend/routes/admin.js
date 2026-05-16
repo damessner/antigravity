@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { authenticateToken, setupLimiter } = require('../server');
 const logger = require('../utils/logger');
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 // Helper to check if user is admin
 const isAdmin = (req, res, next) => {
@@ -196,7 +197,7 @@ router.get('/classes/:id/roster', authenticateToken, isAdmin, async (req, res) =
 const bcrypt = require('bcrypt');
 
 // GET /api/admin/factsheets/teachers/status — Check if mass reset was already performed
-router.get('/factsheets/teachers/status', authenticateToken, isAdmin, async (req, res) => {
+router.get('/factsheets/teachers/status', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
     try {
         const result = await req.pool.query("SELECT COUNT(*) FROM users WHERE role = 'teacher' AND last_factsheet_at IS NOT NULL");
         res.json({ has_run_before: parseInt(result.rows[0].count, 10) > 0 });
@@ -206,7 +207,7 @@ router.get('/factsheets/teachers/status', authenticateToken, isAdmin, async (req
 });
 
 // POST /api/admin/factsheets/teachers — Reset all teacher passwords and return credentials
-router.post('/factsheets/teachers', authenticateToken, isAdmin, async (req, res) => {
+router.post('/factsheets/teachers', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
     const { force } = req.body;
     try {
         const statusRes = await req.pool.query("SELECT COUNT(*) FROM users WHERE role = 'teacher' AND last_factsheet_at IS NOT NULL");
@@ -223,7 +224,7 @@ router.post('/factsheets/teachers', authenticateToken, isAdmin, async (req, res)
         const results = [];
 
         for (const t of teachersRes.rows) {
-            const tempPw = `Antigravity_${Math.random().toString(36).substring(2, 8)}!`;
+            const tempPw = generateSecurePassword('Antigravity');
             const hash = await bcrypt.hash(tempPw, 10);
             
             await req.pool.query(`

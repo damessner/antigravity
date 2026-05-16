@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Trophy, TrendingUp, AlertTriangle, Lightbulb, Users, ArrowLeft, Star, Target, Crown 
+  Trophy, TrendingUp, AlertTriangle, Lightbulb, Users, ArrowLeft, Star, Target, Crown, CheckCircle 
 } from "lucide-react";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { toast } from "sonner";
@@ -106,7 +106,7 @@ export default function KarriereDashboard() {
                 <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" />
                 SYSTEM ONLINE
               </span>
-              <p className="text-slate-500 text-xs font-mono tracking-widest uppercase opacity-80">Sector: Karriere-Matrix v2.8</p>
+               <p className="text-slate-500 text-xs font-mono tracking-widest uppercase opacity-80">Sector: Karriere-Matrix v3.0</p>
             </div>
           </div>
         </div>
@@ -369,7 +369,7 @@ export default function KarriereDashboard() {
                   </div>
                   <div className="p-3 bg-white/[0.02] border border-white/5 rounded-xl group-hover:border-emerald-500/20 transition-colors">
                     <p className="text-[11px] text-slate-400 leading-relaxed font-mono opacity-80 group-hover:opacity-100 transition-opacity italic">
-                      > {i.content}
+                      &gt; {i.content}
                     </p>
                   </div>
                 </div>

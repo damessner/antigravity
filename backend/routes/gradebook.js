@@ -3,6 +3,42 @@ const router = express.Router();
 const { authenticateToken, setupLimiter, stateLimiter } = require('../server');
 const ExcelJS = require('exceljs');
 
+async function assertSubjectAccess(req, subjectId, options = {}) {
+  const { allowPupilRead = false } = options;
+  const subRes = await req.pool.query(
+    'SELECT id, class_id, teacher_id, second_teacher_id FROM subjects WHERE id = $1',
+    [Number(subjectId)]
+  );
+
+  if (subRes.rows.length === 0) {
+    return { ok: false, status: 404, error: 'Unterrichtsfach nicht gefunden' };
+  }
+
+  const subject = subRes.rows[0];
+  if (req.user.role === 'admin') return { ok: true, subject };
+
+  if (req.user.role === 'teacher') {
+    const ownsSubject =
+      Number(subject.teacher_id) === Number(req.user.id) ||
+      Number(subject.second_teacher_id) === Number(req.user.id);
+    if (ownsSubject) return { ok: true, subject };
+    return { ok: false, status: 403, error: 'Kein Zugriff auf dieses Fach' };
+  }
+
+  if (req.user.role === 'pupil' && allowPupilRead) {
+    const pRes = await req.pool.query('SELECT class_id FROM pupils WHERE user_id = $1', [req.user.id]);
+    if (pRes.rows.length === 0) {
+      return { ok: false, status: 403, error: 'Schülerprofil nicht gefunden' };
+    }
+    if (Number(pRes.rows[0].class_id) !== Number(subject.class_id)) {
+      return { ok: false, status: 403, error: 'Kein Zugriff auf dieses Fach' };
+    }
+    return { ok: true, subject };
+  }
+
+  return { ok: false, status: 403, error: 'Unzureichende Berechtigung' };
+}
+
 // GET /api/gradebook/export/:id
 router.get('/export/:id', stateLimiter, authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.id);
@@ -10,6 +46,9 @@ router.get('/export/:id', stateLimiter, authenticateToken, async (req, res) => {
   const pupilIdFilter = req.query.pupil_id ? Number(req.query.pupil_id) : null;
 
   try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     // 1. Fetch Subject & Metadata
     const subRes = await req.pool.query(`
       SELECT s.*, c.name as class_name 
@@ -292,6 +331,9 @@ router.get('/rank-preview/:subject_id', stateLimiter, authenticateToken, async (
   if (!subjectId) return res.status(400).json({ error: 'subject_id required' });
 
   try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     // Fetch all categories and grades for this subject
     const catsRes = await req.pool.query(`
       SELECT id, is_self_directed FROM assessment_categories WHERE subject_id = $1
@@ -647,11 +689,13 @@ router.put('/subjects/:id', authenticateToken, async (req, res) => {
 });
 
 // GET /api/gradebook/matrix/:id
-router.get('/matrix/:id', authenticateToken, async (req, res) => {
+router.get('/matrix/:id', stateLimiter, authenticateToken, async (req, res) => {
   const subjectId = Number(req.params.id);
   try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: true });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     const subRes = await req.pool.query('SELECT * FROM subjects WHERE id = $1', [subjectId]);
-    if (subRes.rows.length === 0) return res.status(404).json({ error: 'Unterrichtsfach nicht gefunden' });
     const subj = subRes.rows[0];
 
     const catsRes = await req.pool.query('SELECT * FROM assessment_categories WHERE subject_id = $1 ORDER BY id', [subjectId]);
@@ -686,6 +730,12 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
       column_metadata = assRes.rows;
     }
     const tagsRes = await req.pool.query('SELECT * FROM pupil_subject_tags WHERE subject_id = $1', [subjectId]);
+    let visibleTags = tagsRes.rows;
+    if (req.user.role === 'pupil') {
+      const pupilRes = await req.pool.query('SELECT id FROM pupils WHERE user_id = $1', [req.user.id]);
+      const pupilId = pupilRes.rows[0]?.id;
+      visibleTags = pupilId ? tagsRes.rows.filter(t => Number(t.pupil_id) === Number(pupilId)) : [];
+    }
 
     const categoriesWithMeta = visibleCats.map(c => ({
       ...c,
@@ -697,7 +747,7 @@ router.get('/matrix/:id', authenticateToken, async (req, res) => {
       categories: categoriesWithMeta,
       grades: grades,
       column_metadata: column_metadata,
-      pupil_tags: tagsRes.rows
+      pupil_tags: visibleTags
     });
   } catch (err) {
     console.error('Matrix load error:', err);
@@ -1019,6 +1069,9 @@ router.get('/grades', stateLimiter, authenticateToken, async (req, res) => {
   if (!subjectId) return res.status(400).json({ error: 'subject_id parameter required' });
 
   try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: true });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     // Join category to verify linkage
     let queryStr = `
       SELECT g.id, g.category_id, g.pupil_id, g.assessment_name, g.grade_value, g.is_visible, g.date
@@ -1613,4 +1666,3 @@ router.put('/rank-config/:subject_id', authenticateToken, async (req, res) => {
 });
 
 module.exports = router;
-

@@ -59,7 +59,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-bold tracking-tight text-white">Schulmanagement V2</h1>
           <p className="text-sm text-slate-400 mt-1">Raumbelegung Echtzeit-Belegung</p>
           <span className="inline-block mt-2 px-2.5 py-0.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[10px] font-mono text-indigo-400">
-            v2.1 (Gateway-Proxy)
+            v3.0 (Gateway-Proxy)
           </span>
         </div>
 

@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
@@ -24,7 +25,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST /api/users (Admin only)
-router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const { username, full_name, role } = req.body;
   if (!username || !full_name || !role) {
     return res.status(400).json({ error: 'Username, full name, and role are required' });
@@ -32,7 +33,7 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 
   try {
     // Generate temporary password
-    const tempPassword = `Pass_${Math.random().toString(36).substring(2, 8)}!`;
+    const tempPassword = generateSecurePassword('Pass');
     const password_hash = await bcrypt.hash(tempPassword, 10);
 
     const insertRes = await req.pool.query(`
@@ -55,11 +56,11 @@ router.post('/', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // POST /api/users/:id/reset-password (Admin only)
-router.post('/:id/reset-password', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/:id/reset-password', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
 
   try {
-    const tempPassword = `Reset_${Math.random().toString(36).substring(2, 8)}!`;
+    const tempPassword = generateSecurePassword('Reset');
     const password_hash = await bcrypt.hash(tempPassword, 10);
 
     const updateRes = await req.pool.query(`
@@ -97,7 +98,7 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // POST /api/users/change-password (Any authenticated)
-router.post('/change-password', authenticateToken, async (req, res) => {
+router.post('/change-password', setupLimiter, authenticateToken, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword) {
     return res.status(400).json({ error: 'Current and new passwords required' });

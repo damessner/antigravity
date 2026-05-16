@@ -17,7 +17,7 @@
 const express = require('express');
 const router  = express.Router();
 const { authenticateToken, setupLimiter, stateLimiter } = require('../server');
-const { syncFromWebUntis } = require('../services/webuntisSyncService');
+const { syncFromWebUntis, isSyncRunning } = require('../services/webuntisSyncService');
 const WebUntisClient       = require('../services/webuntisClient');
 const logger               = require('../utils/logger');
 
@@ -72,9 +72,6 @@ async function buildAuthClient(settings) {
   await client.authenticate(webuntis_username, webuntis_password);
   return client;
 }
-
-// Prevent concurrent syncs
-let syncInProgress = false;
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -148,7 +145,7 @@ router.get('/sync/status', setupLimiter, authenticateToken, isAdmin, async (req,
       status:      s.webuntis_sync_status  || 'never',
       last_sync:   s.webuntis_last_sync    || null,
       result:      s.webuntis_sync_result  ? JSON.parse(s.webuntis_sync_result) : null,
-      in_progress: syncInProgress,
+      in_progress: isSyncRunning(),
     });
   } catch (err) {
     res.status(500).json({ error: 'Status konnte nicht geladen werden' });
@@ -161,7 +158,7 @@ router.get('/sync/status', setupLimiter, authenticateToken, isAdmin, async (req,
  * Runs in the background; use GET /sync/status to poll progress.
  */
 router.post('/sync', setupLimiter, authenticateToken, isAdmin, async (req, res) => {
-  if (syncInProgress) {
+  if (isSyncRunning()) {
     return res.status(409).json({ error: 'Synchronisation läuft bereits. Bitte warten.' });
   }
 
@@ -181,11 +178,9 @@ router.post('/sync', setupLimiter, authenticateToken, isAdmin, async (req, res) 
   // Respond immediately — sync runs in background
   res.json({ success: true, message: 'Synchronisation gestartet' });
 
-  syncInProgress = true;
   syncFromWebUntis(req.pool, settings)
     .then(() => { logger.info(CTX, 'Hintergrund-Sync erfolgreich abgeschlossen'); })
-    .catch((err) => { logger.error(CTX, 'Hintergrund-Sync fehlgeschlagen', err); })
-    .finally(() => { syncInProgress = false; });
+    .catch((err) => { logger.error(CTX, 'Hintergrund-Sync fehlgeschlagen', err); });
 });
 
 /**

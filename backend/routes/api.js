@@ -18,6 +18,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
 
     const user = userRes.rows[0];
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'Benutzerkonto ist deaktiviert' });
+    }
+
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({ error: 'Invalid credentials' });
