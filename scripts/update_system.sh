@@ -18,14 +18,19 @@ GRAY='\033[0;90m'
 NC='\033[0m'
 
 print_header() {
-  echo -e "${CYAN}============================================================${NC}"
-  echo -e "${WHITE} $1${NC}"
-  echo -e "${CYAN}============================================================${NC}"
+  echo -e "${CYAN}    ___    _   __________  _______  ___ _    __________  __${NC}"
+  echo -e "${CYAN}   /   |  / | / /_  __/  |/  / __ \/   | |  / /  _/_  __/ / /${NC}"
+  echo -e "${CYAN}  / /| | /  |/ / / / / /|_/ / /_/ / /| | | / // /  / / / /_/ ${NC}"
+  echo -e "${CYAN} / ___ |/ /|  / / / / /  / / _, _/ ___ | |/ // /  / /  \__, / ${NC}"
+  echo -e "${CYAN}/_/  |_/_/ |_/ /_/ /_/  /_/_/ |_/_/  |_|___/___/ /_/  /____/  ${NC}"
+  echo -e "${GRAY}               >> QUANTUM MAINTENANCE MODULE <<${NC}"
   echo ""
+  echo -e "${WHITE}  [MISSION] $1${NC}"
+  echo -e "${CYAN}------------------------------------------------------------${NC}"
 }
 
 clear
-print_header "🔄 System Update Utility (Linux/Unraid/Proxmox)"
+print_header "SYNCHRONIZING WITH COMMAND CENTER"
 
 cd "$PROJECT_ROOT" || exit 1
 
@@ -74,7 +79,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # 5. Fetch and Pull
-echo -e "${WHITE}>> Checking for updates on GitHub...${NC}"
+echo -e "${WHITE}🛰️  Scanning GitHub Frequency for Mission Updates...${NC}"
 git fetch origin main 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
 
 local_hash=$(git rev-parse HEAD)
@@ -87,23 +92,22 @@ elif [ "$local_hash" == "$base_hash" ]; then
     echo -e "\n${GREEN} [UPDATE FOUND] New version available!${NC}"
     read -p " Download and install update now? (y/N): " do_pull
     if [[ "$do_pull" =~ ^[Yy]$ ]]; then
-        echo -e "${WHITE}>> Pulling changes...${NC}"
-        echo -e "${WHITE}>> Pulling latest changes from GitHub...${NC}"
+        echo -e "${WHITE}📡 Downloading Mission Parameters...${NC}"
         git pull origin main 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
         
         # 6. Apply Unraid/Linux Permission Fixes
-        echo -e "${WHITE}>> Re-applying Unraid permissions (nobody:users)...${NC}"
+        echo -e "${WHITE}🛡️  Stabilizing Anti-Gravity Coils (Permissions)...${NC}"
         if [ -d "/mnt/user/appdata/antigravity" ]; then
             chown -R nobody:users .
         fi
         chmod +x scripts/*.sh
 
-        echo -e "\n${WHITE}>> Rebuilding Docker containers (Aggressive Dependency Update)...${NC}"
-        echo -e "${GRAY} [INFO] This will fetch latest security patches for all libraries.${NC}"
+        echo -e "\n${WHITE}☢️  Re-energizing System Cores (Docker Rebuild)...${NC}"
+        echo -e "${GRAY} [INFO] Injecting latest security patches into engine...${NC}"
         docker compose build --no-cache 2>&1 | while read line; do echo -e "   ${GRAY}$line${NC}"; done
         
         # 7. Cleanup old images to save Unraid Cache space
-        echo -e "\n${WHITE}>> Cleaning up old Docker images to save space...${NC}"
+        echo -e "\n${WHITE}🧹 Purging Space Debris (Cleaning Cache)...${NC}"
         docker image prune -f
         
         # 8. Finalize
@@ -112,9 +116,9 @@ elif [ "$local_hash" == "$base_hash" ]; then
         read -r response
 
         if [[ "$response" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
-            echo -e "${WHITE}>> Restarting Antigravity stack...${NC}"
+            echo -e "${WHITE}🚀 Engaging Warp Drive (System Restart)...${NC}"
             docker compose up -d
-            echo -e "${GREEN} [OK] System is back online.${NC}"
+            echo -e "${GREEN} ✨ ANTIGRAVITY IS ONLINE AND STABLE.${NC}"
         else
             echo -e "${GRAY}>> Maintenance finished. Run 'docker compose up -d' manually when ready.${NC}"
         fi
