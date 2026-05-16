@@ -15,8 +15,13 @@ export const getApiUrl = (): string => {
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
       return "http://localhost:4000";
     }
-    // Otherwise, try the same host but port 4000 (common for this setup)
-    return `${window.location.protocol}//${window.location.hostname}:4000`;
+
+    // Force 'http' for port 4000 on local IPs to avoid Mixed Content / TLS Handshake errors
+    // when the Unraid UI is accessed via HTTPS.
+    const isLocalIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname) || window.location.hostname.endsWith('.local');
+    const protocol = isLocalIp ? "http:" : window.location.protocol;
+    
+    return `${protocol}//${window.location.hostname}:4000`;
   }
 
   // Empty base as a last resort to use same-origin proxy
@@ -32,9 +37,13 @@ export const getWsUrl = (): string => {
     // Mirror the same logic as getApiUrl() so the WebSocket always reaches
     // the backend (port 4000), not the frontend (port 3000).
     if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return "http://localhost:4000";
+      return "ws://localhost:4000";
     }
-    return `${window.location.protocol}//${window.location.hostname}:4000`;
+
+    const isLocalIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname) || window.location.hostname.endsWith('.local');
+    const wsProtocol = isLocalIp ? "ws:" : (window.location.protocol === "https:" ? "wss:" : "ws:");
+    
+    return `${wsProtocol}//${window.location.hostname}:4000`;
   }
   return "";
 };
