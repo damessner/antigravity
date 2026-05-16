@@ -18,8 +18,20 @@ class WebUntisClient {
    * @param {string} baseUrl      - The base URL (e.g. "https://ms-telfs.webuntis.com")
    */
   constructor(schoolName, baseUrl) {
-    this.schoolName = schoolName;
-    this.baseUrl    = baseUrl.replace(/\/+$/, '');
+    // 1. Sanitize URL: Remove query strings and redundant paths if pasted
+    try {
+      const urlObj = new URL(baseUrl);
+      // Extract school from query if user pasted full browser URL and schoolName is missing or likely a placeholder
+      if (urlObj.searchParams.has('school') && (!schoolName || schoolName.includes(' '))) {
+        schoolName = urlObj.searchParams.get('school');
+      }
+      // Reconstruct clean base URL (e.g. https://playground.webuntis.com)
+      this.baseUrl = `${urlObj.protocol}//${urlObj.host}`;
+    } catch (e) {
+      this.baseUrl = baseUrl.replace(/\/+$/, '');
+    }
+
+    this.schoolName = (schoolName || '').trim();
     this.sessionId  = null;
     this._rpcId     = 0;
   }
