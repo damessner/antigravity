@@ -85,8 +85,8 @@ const bcrypt = require('bcrypt');
 async function runSync(pool, settings) {
   const { school, url, username, password } = settings;
 
-  if (!school || !url || !username || !password) {
-    throw new Error('WebUntis Konfiguration unvollständig (school, url, username, password erforderlich)');
+  if (!url || !username || !password) {
+    throw new Error('WebUntis Konfiguration unvollständig (url, username, password erforderlich)');
   }
 
   const client  = new WebUntisClient(school, url);
