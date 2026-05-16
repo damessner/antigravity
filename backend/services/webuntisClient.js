@@ -154,6 +154,11 @@ class WebUntisClient {
     return this._request('getStudents', {});
   }
 
+  /** Fetch all subjects (Fächer). */
+  getSubjects() {
+    return this._request('getSubjects', {});
+  }
+
   /**
    * Fetch substitutions for a date range.
    *

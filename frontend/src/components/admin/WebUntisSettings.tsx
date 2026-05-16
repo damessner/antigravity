@@ -45,6 +45,7 @@ export function WebUntisSettings() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const loadSettings = useCallback(async () => {
     try {
@@ -194,69 +195,85 @@ export function WebUntisSettings() {
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
           Verbindungseinstellungen
         </h3>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-4">
             <div>
               <label className="block text-[11px] text-slate-400 font-medium mb-1">
-                Schul-ID / Schulname (Optional)
-              </label>
-              <input
-                type="text"
-                value={settings.webuntis_school}
-                onChange={(e) => setSettings((p) => ({ ...p, webuntis_school: e.target.value }))}
-                placeholder="z.B. ms-telfs"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-              />
-              <p className="text-[10px] text-slate-600 mt-1">
-                Wird automatisch extrahiert, wenn Sie eine vollständige WebUntis-URL rechts einfügen.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-400 font-medium mb-1">
-                WebUntis Base-URL *
+                WebUntis URL *
               </label>
               <input
                 type="url"
                 value={settings.webuntis_url}
                 onChange={(e) => setSettings((p) => ({ ...p, webuntis_url: e.target.value }))}
-                placeholder="https://ms-telfs.webuntis.com"
+                placeholder="https://schule.webuntis.com/WebUntis/?school=ident"
                 required
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-700 transition-colors"
               />
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-400 font-medium mb-1">
-                Benutzername *
-              </label>
-              <input
-                type="text"
-                value={settings.webuntis_username}
-                onChange={(e) => setSettings((p) => ({ ...p, webuntis_username: e.target.value }))}
-                placeholder="Integration-Benutzername"
-                required
-                autoComplete="off"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] text-slate-400 font-medium mb-1">
-                Passwort
-              </label>
-              <input
-                type="password"
-                value={settings.webuntis_password}
-                onChange={(e) => setSettings((p) => ({ ...p, webuntis_password: e.target.value }))}
-                placeholder="Leer lassen um beizubehalten"
-                autoComplete="new-password"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
-              />
-              <p className="text-[10px] text-slate-600 mt-1">
-                Leer lassen, um das gespeicherte Passwort nicht zu überschreiben.
+              <p className="text-[10px] text-slate-600 mt-1.5 flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-emerald-500/50" />
+                Tipp: Einfach die vollständige Browser-URL Ihrer Schule kopieren und hier einfügen.
               </p>
             </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] text-slate-400 font-medium mb-1">
+                  Benutzername *
+                </label>
+                <input
+                  type="text"
+                  value={settings.webuntis_username}
+                  onChange={(e) => setSettings((p) => ({ ...p, webuntis_username: e.target.value }))}
+                  placeholder="Ihr WebUntis-Nutzername"
+                  required
+                  autoComplete="off"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-700 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-slate-400 font-medium mb-1">
+                  Passwort
+                </label>
+                <input
+                  type="password"
+                  value={settings.webuntis_password}
+                  onChange={(e) => setSettings((p) => ({ ...p, webuntis_password: e.target.value }))}
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-700 transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Advanced Toggle */}
+          <div className="pt-2 border-t border-slate-800/50">
+            <button
+              type="button"
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="text-[10px] font-bold text-slate-500 hover:text-slate-300 uppercase tracking-widest flex items-center gap-2 transition-colors"
+            >
+              {showAdvanced ? "Erweiterte Einstellungen ausblenden" : "Erweiterte Einstellungen anzeigen"}
+            </button>
+
+            {showAdvanced && (
+              <div className="mt-4 p-4 bg-slate-950/50 border border-slate-800/50 rounded-xl animate-in fade-in slide-in-from-top-2 duration-200">
+                <label className="block text-[11px] text-slate-400 font-medium mb-1">
+                  Technische Schul-ID (Manuell)
+                </label>
+                <input
+                  type="text"
+                  value={settings.webuntis_school}
+                  onChange={(e) => setSettings((p) => ({ ...p, webuntis_school: e.target.value }))}
+                  placeholder="Wird normalerweise automatisch extrahiert"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 placeholder-slate-700"
+                />
+                <p className="text-[10px] text-slate-600 mt-2 italic">
+                  Hinweis: Dieses Feld wird nur benötigt, wenn die URL keine Schul-Parameter enthält.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end pt-2">

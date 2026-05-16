@@ -253,7 +253,65 @@ async function runSync(pool, settings) {
       counts.pupils++;
     }
 
-    // ── 5. Soft-Delete Users Removed from WebUntis ────────────────────────────
+    // ── 5. Sync Subjects & Assignments (Teacher-Class-Subject mapping) ────────
+    const wuSubjects = await client.getSubjects();
+    logger.info(CTX, `${wuSubjects.length} Fächer von WebUntis empfangen`);
+
+    // Build subject lookup: WebUntis Subject ID -> { name, longName }
+    const subjectMap = {};
+    for (const ws of wuSubjects) {
+      subjectMap[ws.id] = { name: ws.name, longName: ws.longName };
+    }
+
+    // Build teacher lookup: WebUntis Teacher ID -> DB User ID
+    const teacherIdMap = {};
+    const tr = await pool.query("SELECT id, webuntis_id FROM users WHERE role = 'teacher' AND webuntis_id IS NOT NULL");
+    tr.rows.forEach(row => { teacherIdMap[row.webuntis_id] = row.id; });
+
+    logger.info(CTX, 'Synchronisiere Fach-Lehrer-Klassen Zuordnungen via Stundenplan...');
+    const startDate = WebUntisClient.toUntisDate(WebUntisClient.getWeekStart());
+    const endDate   = WebUntisClient.toUntisDate(WebUntisClient.getWeekEnd());
+
+    // Iterate through active classes to find their subjects and teachers
+    for (const wc of wuClasses) {
+      if (!wc._dbClassId) continue;
+      
+      try {
+        // Fetch timetable for this class for the current week
+        const timetable = await client.getTimetable(wc.id, 1, startDate, endDate);
+        const uniqueAssignments = new Set(); // To avoid duplicate subjects per class
+
+        for (const entry of timetable) {
+          if (!entry.su || entry.su.length === 0) continue; // No subject
+          if (!entry.te || entry.te.length === 0) continue; // No teacher
+
+          const wuSubjectId = entry.su[0].id;
+          const wuTeacherId = entry.te[0].id;
+          const assignmentKey = `${wuSubjectId}-${wuTeacherId}`;
+
+          if (uniqueAssignments.has(assignmentKey)) continue;
+          uniqueAssignments.add(assignmentKey);
+
+          const subjectInfo = subjectMap[wuSubjectId];
+          const dbTeacherId = teacherIdMap[wuTeacherId];
+
+          if (subjectInfo && dbTeacherId) {
+            // Upsert into subjects table
+            await pool.query(`
+              INSERT INTO subjects (name, abbreviation, class_id, teacher_id)
+              VALUES ($1, $2, $3, $4)
+              ON CONFLICT (name, class_id) DO UPDATE SET 
+                teacher_id = EXCLUDED.teacher_id,
+                abbreviation = EXCLUDED.abbreviation
+            `, [subjectInfo.longName || subjectInfo.name, subjectInfo.name, wc._dbClassId, dbTeacherId]);
+          }
+        }
+      } catch (err) {
+        logger.warn(CTX, `Fehler beim Abruf des Stundenplans für Klasse ${wc.name}: ${err.message}`);
+      }
+    }
+
+    // ── 6. Soft-Delete Users Removed from WebUntis ────────────────────────────
     if (activeTeacherWebuntisIds.length > 0) {
       const deactivated = await pool.query(`
         UPDATE users SET is_active = false
