@@ -4,6 +4,67 @@ const bcrypt = require('bcrypt');
 const { authenticateToken, setupLimiter } = require('../server');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
 
+const getRetentionDays = async (pool) => {
+  const r = await pool.query("SELECT value FROM system_settings WHERE key = 'data_retention_days' LIMIT 1");
+  const n = Number(r.rows[0]?.value || 90);
+  return Number.isFinite(n) && n > 0 ? n : 90;
+};
+
+const buildUserExportBundle = async (pool, userId) => {
+  const userRes = await pool.query(
+    'SELECT id, username, full_name, role, requires_password_change, created_at, is_active, deactivated_at, erasure_due_at FROM users WHERE id = $1',
+    [userId]
+  );
+  if (userRes.rows.length === 0) return null;
+
+  const user = userRes.rows[0];
+  const exportData = {
+    exported_at: new Date().toISOString(),
+    user,
+    pupil: null,
+    allocation_logs: [],
+    disciplinary_notes_as_teacher: [],
+    disciplinary_notes_as_pupil: [],
+    help_requests_as_teacher: [],
+    help_requests_as_pupil: [],
+    participation_logs_as_teacher: [],
+    push_subscriptions: [],
+    user_preferences: null,
+  };
+
+  const pupilRes = await pool.query('SELECT id, class_id FROM pupils WHERE user_id = $1', [userId]);
+  if (pupilRes.rows.length > 0) {
+    const pupil = pupilRes.rows[0];
+    exportData.pupil = pupil;
+
+    const [allocRes, notesPupilRes, helpPupilRes] = await Promise.all([
+      pool.query('SELECT * FROM allocation_logs WHERE pupil_id = $1 ORDER BY id', [pupil.id]),
+      pool.query('SELECT * FROM disciplinary_notes WHERE pupil_id = $1 ORDER BY id', [pupil.id]),
+      pool.query('SELECT * FROM help_requests WHERE pupil_id = $1 ORDER BY id', [pupil.id]),
+    ]);
+
+    exportData.allocation_logs = allocRes.rows;
+    exportData.disciplinary_notes_as_pupil = notesPupilRes.rows;
+    exportData.help_requests_as_pupil = helpPupilRes.rows;
+  }
+
+  const [notesTeacherRes, helpTeacherRes, participationTeacherRes, pushRes, prefRes] = await Promise.all([
+    pool.query('SELECT * FROM disciplinary_notes WHERE teacher_id = $1 ORDER BY id', [userId]),
+    pool.query('SELECT * FROM help_requests WHERE claimed_by_teacher_id = $1 ORDER BY id', [userId]),
+    pool.query('SELECT * FROM participation_logs WHERE teacher_id = $1 ORDER BY id', [userId]),
+    pool.query('SELECT * FROM push_subscriptions WHERE user_id = $1 ORDER BY id', [userId]),
+    pool.query('SELECT * FROM user_preferences WHERE user_id = $1', [userId]),
+  ]);
+
+  exportData.disciplinary_notes_as_teacher = notesTeacherRes.rows;
+  exportData.help_requests_as_teacher = helpTeacherRes.rows;
+  exportData.participation_logs_as_teacher = participationTeacherRes.rows;
+  exportData.push_subscriptions = pushRes.rows;
+  exportData.user_preferences = prefRes.rows[0] || null;
+
+  return exportData;
+};
+
 // Middleware to check if user is admin
 const requireAdmin = (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
@@ -16,7 +77,13 @@ const requireAdmin = (req, res, next) => {
 router.get('/', authenticateToken, async (req, res) => {
   // Allow teachers to read list for assignment purposes if needed, or enforce admin logic
   try {
-    const usersRes = await req.pool.query('SELECT id, username, full_name, role, requires_password_change, created_at FROM users ORDER BY full_name');
+    const includeInactive = String(req.query.include_inactive || 'false').toLowerCase() === 'true';
+    const usersRes = await req.pool.query(`
+      SELECT id, username, full_name, role, requires_password_change, created_at, is_active, deactivated_at, erasure_due_at
+      FROM users
+      WHERE ($1::boolean = true OR is_active = true)
+      ORDER BY full_name
+    `, [includeInactive]);
     res.json(usersRes.rows);
   } catch (err) {
     console.error('Fetch users error:', err);
@@ -82,18 +149,105 @@ router.post('/:id/reset-password', setupLimiter, authenticateToken, requireAdmin
 });
 
 // DELETE /api/users/:id (Admin only)
-router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+router.delete('/:id', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const userId = Number(req.params.id);
   if (userId === Number(req.user.id)) {
     return res.status(400).json({ error: 'Cannot delete your own active administrator account' });
   }
 
   try {
-    await req.pool.query('DELETE FROM users WHERE id = $1', [userId]);
-    res.json({ success: true });
+    const retentionDays = await getRetentionDays(req.pool);
+    const updateRes = await req.pool.query(`
+      UPDATE users
+      SET is_active = false,
+          deactivated_at = COALESCE(deactivated_at, NOW()),
+          erasure_due_at = COALESCE(erasure_due_at, NOW() + ($2 || ' days')::interval)
+      WHERE id = $1
+      RETURNING id, is_active, deactivated_at, erasure_due_at
+    `, [userId, String(retentionDays)]);
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await req.pool.query(`
+      UPDATE allocation_logs
+      SET is_active = false
+      WHERE is_active = true
+        AND pupil_id IN (SELECT id FROM pupils WHERE user_id = $1)
+    `, [userId]);
+
+    res.json({ success: true, soft_deleted: true, retention_days: retentionDays, user: updateRes.rows[0] });
   } catch (err) {
     console.error('Delete user error:', err);
     res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// GET /api/users/erasure/queue (Admin only)
+router.get('/erasure/queue', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const queueRes = await req.pool.query(`
+      SELECT id, username, full_name, role, deactivated_at, erasure_due_at
+      FROM users
+      WHERE is_active = false AND erasure_due_at IS NOT NULL
+      ORDER BY erasure_due_at ASC
+    `);
+    res.json(queueRes.rows);
+  } catch (err) {
+    console.error('Fetch erasure queue error:', err);
+    res.status(500).json({ error: 'Failed to fetch erasure queue' });
+  }
+});
+
+// GET /api/users/:id/export (Admin only)
+router.get('/:id/export', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  try {
+    const bundle = await buildUserExportBundle(req.pool, userId);
+    if (!bundle) return res.status(404).json({ error: 'User not found' });
+    res.json(bundle);
+  } catch (err) {
+    console.error('User export error:', err);
+    res.status(500).json({ error: 'Failed to export user data' });
+  }
+});
+
+// POST /api/users/:id/erase (Admin only)
+router.post('/:id/erase', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const userId = Number(req.params.id);
+  const { confirm, reason } = req.body || {};
+
+  if (confirm !== 'ERASE') {
+    return res.status(400).json({ error: "Confirmation parameter required: confirm='ERASE'" });
+  }
+  if (userId === Number(req.user.id)) {
+    return res.status(400).json({ error: 'Cannot erase your own active administrator account' });
+  }
+
+  const client = await req.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const bundle = await buildUserExportBundle(client, userId);
+    if (!bundle) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await client.query(`
+      INSERT INTO user_erasure_audit (user_id, deleted_by, reason, export_snapshot)
+      VALUES ($1, $2, $3, $4::jsonb)
+    `, [userId, req.user.id, reason || 'manual_admin_erasure', JSON.stringify(bundle)]);
+
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+    await client.query('COMMIT');
+
+    res.json({ success: true, erased: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('User erase error:', err);
+    res.status(500).json({ error: 'Failed to erase user' });
+  } finally {
+    client.release();
   }
 });
 

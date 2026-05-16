@@ -3,6 +3,7 @@
 const { syncFromWebUntis, saveSyncStatus } = require('./webuntisSyncService');
 const InsightGenerator = require('./insightGenerator');
 const logger = require('../utils/logger');
+const { decryptSecret } = require('../utils/secretStore');
 
 const CTX = '[Scheduler]';
 
@@ -60,6 +61,9 @@ class SchedulerService {
       
       const s = {};
       settingsRes.rows.forEach(r => { s[r.key] = r.value; });
+      if (s.webuntis_password) {
+        s.webuntis_password = decryptSecret(s.webuntis_password).value;
+      }
 
       if (!s.webuntis_url || !s.webuntis_username || !s.webuntis_password) return;
 
