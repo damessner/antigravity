@@ -56,6 +56,10 @@ if [ -d "$INSTALL_PATH" ]; then
               docker compose -f "$INSTALL_PATH/docker-compose.yml" down -v --remove-orphans 2>/dev/null || true
             fi
             
+            # Brute force removal of any remaining containers with "antigravity" in the name
+            echo -e "${YELLOW} >> Force-removing any zombie Antigravity containers...${NC}"
+            docker ps -a --format '{{.Names}}' | grep "antigravity" | xargs -I {} docker rm -f {} 2>/dev/null || true
+            
             echo -e "${YELLOW} >> Wiping all data at $INSTALL_PATH...${NC}"
             rm -rf "$INSTALL_PATH" 2>/dev/null || true
             
