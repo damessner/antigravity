@@ -35,8 +35,33 @@ echo -e "${WHITE}>> Preparing Appdata folder...${NC}"
 git config --global --add safe.directory "$INSTALL_PATH"
 
 if [ -d "$INSTALL_PATH" ]; then
-    echo -e "${YELLOW} [INFO] Folder already exists. Updating existing installation...${NC}"
-    cd "$INSTALL_PATH" && git config core.filemode false && git pull origin main
+    echo -e "${YELLOW} [INFO] Existing installation found at $INSTALL_PATH.${NC}"
+    echo -e "${RED} 🔥 DANGER ZONE: Do you want to trigger a FULL CLEAN SLATE?${NC}"
+    echo -e "    This will wipe ALL data and reset the system to factory defaults."
+    echo -en "${WHITE} >> Trigger Clean Slate? (y/N): ${NC}"
+    read -r do_clean_slate
+    
+    if [[ "$do_clean_slate" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
+        echo -en "${RED}    Enter confirmation code to proceed: ${NC}"
+        read -r confirm_code
+        if [ "$confirm_code" == "weissenbach" ]; then
+            echo -e "${RED} >> CLEAN SLATE INITIATED...${NC}"
+            # Stop containers if they are running
+            cd "$INSTALL_PATH" && docker compose down -v --remove-orphans 2>/dev/null || true
+            # Wipe and Re-clone
+            rm -rf "$INSTALL_PATH"
+            mkdir -p "$INSTALL_PATH"
+            echo -e "${WHITE}>> Re-cloning fresh Antigravity to $INSTALL_PATH...${NC}"
+            git clone $REPO_URL "$INSTALL_PATH"
+            cd "$INSTALL_PATH" && git config core.filemode false
+        else
+            echo -e "${YELLOW} [INFO] Confirmation code incorrect. Proceeding with standard update.${NC}"
+            cd "$INSTALL_PATH" && git config core.filemode false && git pull origin main
+        fi
+    else
+        echo -e "${WHITE}>> Updating existing installation...${NC}"
+        cd "$INSTALL_PATH" && git config core.filemode false && git pull origin main
+    fi
 else
     mkdir -p "$INSTALL_PATH"
     echo -e "${WHITE}>> Cloning Antigravity to $INSTALL_PATH...${NC}"
