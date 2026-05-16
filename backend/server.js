@@ -31,7 +31,9 @@ const io = new Server(server, {
   cors: {
     origin: process.env.ALLOWED_ORIGIN || '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE']
-  }
+  },
+  pingInterval: Number(process.env.SOCKET_PING_INTERVAL_MS || 25000),
+  pingTimeout: Number(process.env.SOCKET_PING_TIMEOUT_MS || 20000),
 });
 
 const pool = new Pool({
@@ -39,7 +41,11 @@ const pool = new Pool({
   port: process.env.DB_PORT || 5432,
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'SuperSecretSchoolDbPass2026!',
-  database: process.env.DB_NAME || 'school_management'
+  database: process.env.DB_NAME || 'school_management',
+  max: Number(process.env.DB_POOL_MAX || 20),
+  idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_TIMEOUT_MS || 30000),
+  connectionTimeoutMillis: Number(process.env.DB_POOL_CONNECTION_TIMEOUT_MS || 5000),
+  maxUses: Number(process.env.DB_POOL_MAX_USES || 7500),
 });
 
 // Ensure SDL Schema fields exist seamlessly
@@ -210,9 +216,32 @@ io.use((socket, next) => {
 });
 
 const registerRoomHandlers = require('./sockets/roomHandler');
+const socketHeartbeatMap = new Map();
 io.on('connection', (socket) => {
   socket.join('global_dashboard');
+  socketHeartbeatMap.set(socket.id, Date.now());
+
+  socket.conn.on('packet', (packet) => {
+    if (packet?.type === 'pong') {
+      socketHeartbeatMap.set(socket.id, Date.now());
+    }
+  });
+
+  socket.on('join_admin_debug', () => {
+    if (socket.user?.role === 'admin') {
+      socket.join('admin_debug');
+    }
+  });
+
+  socket.on('disconnect', () => {
+    socketHeartbeatMap.delete(socket.id);
+  });
+
   registerRoomHandlers(io, socket, pool);
+});
+
+logger.onEntry((entry) => {
+  io.to('admin_debug').emit('admin_log', entry);
 });
 
 // Mount Routes
@@ -238,6 +267,15 @@ app.use('/api/users/preferences', pushModule.preferencesRouter);
 // Automated Schedulers
 const executedTriggers = new Set();
 const BACKUP_RETENTION_DAYS = 14;
+const MAINTENANCE_HEALTH_CHECK_MS = Number(process.env.MAINTENANCE_HEALTH_CHECK_MS || 5 * 60 * 1000);
+const MAINTENANCE_REQUIRED_DEGRADES = Number(process.env.MAINTENANCE_REQUIRED_DEGRADES || 3);
+const MAINTENANCE_MAX_RSS_MB = Number(process.env.MAINTENANCE_MAX_RSS_MB || 1200);
+const MAINTENANCE_MAX_DB_WAITING = Number(process.env.MAINTENANCE_MAX_DB_WAITING || 30);
+const MAINTENANCE_MAX_STALE_SOCKETS = Number(process.env.MAINTENANCE_MAX_STALE_SOCKETS || 10);
+const MAINTENANCE_TRIGGER_EXIT = String(process.env.AUTO_MAINTENANCE_EXIT_ON_TRIGGER || 'true').toLowerCase() !== 'false';
+const MAINTENANCE_PENDING_PATH = process.env.MAINTENANCE_PENDING_FILE
+  || '/opt/school-management/school_data/MAINTENANCE_RESTART_PENDING';
+let degradedHealthStreak = 0;
 
 const triggerLessonBoundaryReset = async (lessonNumber) => {
   const todayStr = new Date().toISOString().split('T')[0];
@@ -360,6 +398,65 @@ const DEFAULT_LESSON_BOUNDARIES = {
 
 let cachedLessonBoundaries = DEFAULT_LESSON_BOUNDARIES;
 
+const parseMinutes = (timeStr) => {
+  const [h, m] = String(timeStr).split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return (h * 60) + m;
+};
+
+const getSchoolDayWindow = (boundaries) => {
+  const minuteValues = Object.keys(boundaries || {})
+    .map(parseMinutes)
+    .filter((v) => v !== null)
+    .sort((a, b) => a - b);
+  if (minuteValues.length === 0) return { start: 8 * 60, end: 17 * 60 };
+  return { start: minuteValues[0], end: minuteValues[minuteValues.length - 1] };
+};
+
+const isSchoolBreakWindow = (now) => {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return true; // Weekend
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const { start, end } = getSchoolDayWindow(cachedLessonBoundaries);
+  return mins < start || mins > end;
+};
+
+const getRuntimeHealthSnapshot = () => {
+  const rssMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
+  const staleCutoff = Date.now() - (Number(process.env.SOCKET_STALE_THRESHOLD_MS || 90000));
+  let staleSockets = 0;
+  for (const ts of socketHeartbeatMap.values()) {
+    if (ts < staleCutoff) staleSockets += 1;
+  }
+  return {
+    rssMb,
+    dbTotal: pool.totalCount,
+    dbIdle: pool.idleCount,
+    dbWaiting: pool.waitingCount,
+    staleSockets,
+    socketClients: io.engine.clientsCount,
+  };
+};
+
+const triggerAutomatedMaintenanceRestart = (snapshot) => {
+  try {
+    const markerDir = path.dirname(MAINTENANCE_PENDING_PATH);
+    if (!fs.existsSync(markerDir)) fs.mkdirSync(markerDir, { recursive: true });
+    fs.writeFileSync(MAINTENANCE_PENDING_PATH, JSON.stringify({
+      created_at: new Date().toISOString(),
+      reason: 'automated_maintenance_window_health_degradation',
+      snapshot,
+    }, null, 2));
+  } catch (err) {
+    logger.warn('[Maintenance]', `Failed to write maintenance marker file: ${err.message}`);
+  }
+
+  logger.warn('[Maintenance]', `Automated maintenance restart triggered (rss=${snapshot.rssMb}MB, waiting=${snapshot.dbWaiting}, staleSockets=${snapshot.staleSockets})`);
+  if (MAINTENANCE_TRIGGER_EXIT) {
+    process.exit(1);
+  }
+};
+
 // Refresh boundaries cache every 5 minutes from system_settings
 const refreshLessonBoundaries = async () => {
   try {
@@ -378,6 +475,40 @@ const refreshLessonBoundaries = async () => {
 // Initial load and periodic refresh
 refreshLessonBoundaries();
 setInterval(refreshLessonBoundaries, 5 * 60 * 1000);
+
+// Socket + DB runtime health audit loop
+setInterval(() => {
+  const snapshot = getRuntimeHealthSnapshot();
+
+  // Force-close stale sockets to prevent idle heap growth in degraded networks
+  const staleCutoff = Date.now() - (Number(process.env.SOCKET_STALE_THRESHOLD_MS || 90000));
+  for (const [socketId, ts] of socketHeartbeatMap.entries()) {
+    if (ts < staleCutoff) {
+      const staleSocket = io.sockets.sockets.get(socketId);
+      if (staleSocket) staleSocket.disconnect(true);
+      socketHeartbeatMap.delete(socketId);
+    }
+  }
+
+  const degraded = snapshot.rssMb >= MAINTENANCE_MAX_RSS_MB
+    || snapshot.dbWaiting >= MAINTENANCE_MAX_DB_WAITING
+    || snapshot.staleSockets >= MAINTENANCE_MAX_STALE_SOCKETS;
+
+  if (degraded) {
+    degradedHealthStreak += 1;
+    logger.warn('[Health]', `Degraded metrics streak=${degradedHealthStreak} rss=${snapshot.rssMb}MB dbWaiting=${snapshot.dbWaiting} staleSockets=${snapshot.staleSockets}`);
+  } else {
+    if (degradedHealthStreak > 0) {
+      logger.info('[Health]', 'Metrics recovered; maintenance streak reset');
+    }
+    degradedHealthStreak = 0;
+  }
+
+  if (degradedHealthStreak >= MAINTENANCE_REQUIRED_DEGRADES && isSchoolBreakWindow(new Date())) {
+    triggerAutomatedMaintenanceRestart(snapshot);
+    degradedHealthStreak = 0;
+  }
+}, MAINTENANCE_HEALTH_CHECK_MS);
 
 setInterval(() => {
   const now = new Date();

@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { io, Socket } from "socket.io-client";
 import { getApiUrl, getWsUrl } from "@/utils/apiDiscovery";
+import { fetchAuth } from "@/utils/fetchAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import {
@@ -25,11 +26,20 @@ import PupilCommentModal from "./PupilCommentModal";
 import Gradebook from "./Gradebook";
 import DisciplinaryNotes from "./DisciplinaryNotes";
 import StudentLernplaner from "./StudentLernplaner";
-import HelpFeed from "./HelpFeed";
 import ParticipationTracker from "./ParticipationTracker";
 import { OnboardingTip } from "./OnboardingTip";
 
 import { Pupil, Room, User } from "@/types";
+
+type UnlockableTab = "gradebook" | "notes" | "karriere";
+interface DeskHelpRequest {
+  id: number;
+  pupil_id: number;
+  subject: string;
+  message: string;
+  status: "open" | "claimed" | "resolved";
+  claimed_by_teacher_id?: number | null;
+}
 
 const DEFAULT_LESSON_SCHEDULE = [
   { nr: 1, start: "07:55", end: "08:45" },
@@ -54,9 +64,14 @@ export default function TeacherDashboard() {
 
   // Primary States
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "help" | "karriere">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "gradebook" | "notes" | "planner" | "karriere">("dashboard");
   const [selectedClass, setSelectedClass] = useState<string>("all");
-  const [featureModal, setFeatureModal] = useState<{title: string; description: string} | null>(null);
+  const [unlockConfirmTab, setUnlockConfirmTab] = useState<UnlockableTab | null>(null);
+  const [unlockedTabs, setUnlockedTabs] = useState<Record<UnlockableTab, boolean>>({
+    gradebook: false,
+    notes: false,
+    karriere: false,
+  });
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [pupils, setPupils] = useState<Pupil[]>([]);
@@ -64,6 +79,7 @@ export default function TeacherDashboard() {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [subjectTags, setSubjectTags] = useState<any[]>([]);
   const [notes, setNotes] = useState<any[]>([]);
+  const [helpRequests, setHelpRequests] = useState<DeskHelpRequest[]>([]);
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -135,6 +151,66 @@ export default function TeacherDashboard() {
       }
     }
   }, [classesData, selectedClass, classes]);
+
+  useEffect(() => {
+    const loadHelpRequests = async () => {
+      if (!token || user?.role === "pupil") return;
+      try {
+        const { data } = await fetchAuth("/api/help/active");
+        setHelpRequests(data || []);
+      } catch {
+        setHelpRequests([]);
+      }
+    };
+    loadHelpRequests();
+  }, [token, user?.role]);
+
+  const subjectColorByName = useMemo(() => ({
+    english: "border-blue-400/70 shadow-blue-500/30",
+    deutsch: "border-red-400/70 shadow-red-500/30",
+    math: "border-emerald-400/70 shadow-emerald-500/30",
+  }), []);
+
+  const openHelpByPupil = useMemo(() => {
+    const map: Record<number, DeskHelpRequest> = {};
+    helpRequests
+      .filter((r) => r.status !== "resolved")
+      .forEach((r) => { map[Number(r.pupil_id)] = r; });
+    return map;
+  }, [helpRequests]);
+
+  const getSubjectVisualClass = (subjectRaw?: string) => {
+    const subject = String(subjectRaw || "").toLowerCase();
+    if (subject.includes("engl")) return subjectColorByName.english;
+    if (subject.includes("deutsch")) return subjectColorByName.deutsch;
+    if (subject.includes("math") || subject.includes("mathe")) return subjectColorByName.math;
+    return "border-indigo-400/70 shadow-indigo-500/30";
+  };
+
+  const promptUnlock = (tab: UnlockableTab) => {
+    if (user?.role === "teacher" && !unlockedTabs[tab]) {
+      setUnlockConfirmTab(tab);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
+  const confirmUnlock = () => {
+    if (!unlockConfirmTab) return;
+    setUnlockedTabs((prev) => ({ ...prev, [unlockConfirmTab]: true }));
+    setActiveTab(unlockConfirmTab);
+    setUnlockConfirmTab(null);
+  };
+
+  const claimDeskHelp = async (requestId: number) => {
+    try {
+      const { data: updated } = await fetchAuth(`/api/help/${requestId}/claim`, { method: "PUT" });
+      if (!updated) return;
+      setHelpRequests((prev) => prev.map((r) => Number(r.id) === Number(requestId) ? updated : r));
+    } catch {
+      setAlertToast("Hilfeanfrage konnte nicht übernommen werden.");
+    }
+  };
 
 
   // Socket Connection Setup
@@ -264,6 +340,20 @@ export default function TeacherDashboard() {
       setNotes((prev: any[]) => [newNote, ...prev]);
     });
 
+    socketInstance.on("help_created", (item: DeskHelpRequest) => {
+      setHelpRequests((prev) => prev.some((r) => Number(r.id) === Number(item.id)) ? prev : [...prev, item]);
+    });
+
+    const upsertHelp = (item: DeskHelpRequest) => {
+      setHelpRequests((prev) => prev.map((r) => Number(r.id) === Number(item.id) ? item : r));
+    };
+
+    socketInstance.on("help_claimed", upsertHelp);
+    socketInstance.on("help_updated", upsertHelp);
+    socketInstance.on("help_resolved", (payload: { id: number }) => {
+      setHelpRequests((prev) => prev.filter((r) => Number(r.id) !== Number(payload.id)));
+    });
+
     socketInstance.on("move_rejected", ({ reason }: { reason: string }) => {
       setAlertToast(`Verschieben blockiert: ${reason}`);
     });
@@ -271,6 +361,10 @@ export default function TeacherDashboard() {
     setSocket(socketInstance);
 
     return () => {
+      socketInstance.off("help_created");
+      socketInstance.off("help_claimed");
+      socketInstance.off("help_updated");
+      socketInstance.off("help_resolved");
       socketInstance.disconnect();
     };
   }, [router]);
@@ -507,51 +601,27 @@ export default function TeacherDashboard() {
           )}
 
           <button
-            onClick={() => {
-              setFeatureModal({
-                title: "Evaluationsbereich",
-                description: "Der Evaluationsbereich ermöglicht Ihnen eine umfassende Verwaltung von Noten, Bewertungen und Leistungsanalysen. Hier können Sie Kategorien erstellen, Bewertungen eintragen und die Leistungsentwicklung Ihrer Schüler verfolgen. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
-              });
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
+            onClick={() => promptUnlock("gradebook")}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${user?.role === "teacher" && !unlockedTabs.gradebook ? "opacity-50" : ""} ${activeTab === "gradebook" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
           >
             <GraduationCap className="w-4 h-4 md:w-3.5 md:h-3.5 text-cyan-400 shrink-0" />
             <span>Evaluationsbereich</span>
           </button>
 
           <button
-            onClick={() => {
-              setFeatureModal({
-                title: "Notizen",
-                description: "Der Notizenbereich ermöglicht Ihnen, disziplinarische und allgemeine Notizen zu Schülern zu erfassen. Sie können Verhaltensbeobachtungen dokumentieren und später nachvollziehen. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
-              });
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
+            onClick={() => promptUnlock("notes")}
+            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${user?.role === "teacher" && !unlockedTabs.notes ? "opacity-50" : ""} ${activeTab === "notes" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+                }`}
           >
             <ClipboardList className="w-4 h-4 md:w-3.5 md:h-3.5 text-amber-400 shrink-0" />
             <span>Notizen</span>
           </button>
 
-          <button
-            onClick={() => {
-              setFeatureModal({
-                title: "Live-Hilfe",
-                description: "Das Live-Hilfe-System ermöglicht es Schülern, in Echtzeit Hilfe anzufordern. Lehrer können die Anfragen sehen und priorisieren. Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten."
-              });
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 opacity-50 cursor-not-allowed ${activeTab === "help" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
-              }`}
-          >
-            <span className="text-indigo-400 shrink-0">🙋</span>
-            <span>Live-Hilfe</span>
-          </button>
-
           {user?.role !== "pupil" && (
             <button
-              onClick={() => setActiveTab("karriere")}
-              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${activeTab === "karriere" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
+              onClick={() => promptUnlock("karriere")}
+              className={`flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap min-h-[2.5rem] md:min-h-0 ${user?.role === "teacher" && !unlockedTabs.karriere ? "opacity-50" : ""} ${activeTab === "karriere" ? "bg-slate-800 text-white shadow-xs" : "text-slate-400 hover:text-slate-200"
                 }`}
             >
               <span className="text-purple-400 shrink-0">🏆</span>
@@ -691,6 +761,11 @@ export default function TeacherDashboard() {
             </button>
           </div>
 
+          <div className="text-[11px] text-slate-400 bg-slate-900/30 border border-slate-800/50 rounded-xl px-3 py-2">
+            🙋 Live-Hilfe ist jetzt in der Raumbelegung integriert. Aktive Desk-Alerts:{" "}
+            <span className="font-bold text-indigo-300">{helpRequests.filter((r) => r.status !== "resolved").length}</span>
+          </div>
+
           {/* DndKit Orchestration Grid */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 flex-1">
@@ -736,6 +811,11 @@ export default function TeacherDashboard() {
                             socket={socket}
                             onOpenTimer={() => setSelectedPupilForTimer(pupil)}
                             onOpenComment={() => setSelectedPupilForComment(pupil)}
+                            helpRequest={openHelpByPupil[Number(pupil.id)]}
+                            helpVisualClass={getSubjectVisualClass(openHelpByPupil[Number(pupil.id)]?.subject)}
+                            onClaimHelp={(requestId) => claimDeskHelp(requestId)}
+                            canClaimHelp={user?.role === "teacher" || user?.role === "admin"}
+                            currentUserId={Number(user?.id || 0)}
                           />
                         );
                       })}
@@ -770,17 +850,12 @@ export default function TeacherDashboard() {
           />
         </div>
 
-        {/* TAB 4: LIVE HELP FEED / DISPATCH SYSTEM */}
-        <div className={activeTab === "help" ? "flex-1 flex flex-col h-full w-full relative" : "hidden"}>
-          <HelpFeed socket={socket} currentUser={user} />
-        </div>
-
-        {/* TAB 5: SELF-DIRECTED LEARNING PLANNER */}
+        {/* TAB 4: SELF-DIRECTED LEARNING PLANNER */}
         <div className={activeTab === "planner" ? "flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full h-full relative" : "hidden"}>
           <StudentLernplaner socket={socket} />
         </div>
 
-        {/* TAB 6: KARRIERE DASHBOARD - View pupil ranks and achievements */}
+        {/* TAB 5: KARRIERE DASHBOARD - View pupil ranks and achievements */}
         {activeTab === "karriere" && user?.role !== "pupil" && (
           <div className="flex-1 p-4 md:p-6 max-w-7xl mx-auto w-full">
             <div className="mb-4">
@@ -893,34 +968,46 @@ export default function TeacherDashboard() {
         />
       )}
 
-      {/* Feature Information Modal */}
-      {featureModal && (
+      {/* Confirm Access Modal for teacher-unlock tabs */}
+      {unlockConfirmTab && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
             <div className="flex items-start justify-between mb-4">
-              <h3 className="text-lg font-bold text-white">{featureModal.title}</h3>
+              <h3 className="text-lg font-bold text-white">Zugriff bestätigen</h3>
               <button
-                onClick={() => setFeatureModal(null)}
+                onClick={() => setUnlockConfirmTab(null)}
                 className="text-slate-400 hover:text-white transition-colors"
               >
                 ✕
               </button>
             </div>
             <p className="text-sm text-slate-300 leading-relaxed mb-4">
-              {featureModal.description}
+              Dieser Bereich ist für Lehrkräfte zunächst gesperrt. Möchten Sie den Zugriff auf{" "}
+              <strong>
+                {unlockConfirmTab === "gradebook" ? "Evaluationsbereich" : unlockConfirmTab === "notes" ? "Notizen" : "Karriere"}
+              </strong>{" "}
+              jetzt freischalten?
             </p>
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 mb-4">
               <p className="text-xs text-amber-300 flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>Diese Funktion befindet sich in aktiver Entwicklung und kann Fehler enthalten.</span>
+                <span>Bitte nur verwenden, wenn der Zugriff im aktuellen Unterricht benötigt wird.</span>
               </p>
             </div>
-            <button
-              onClick={() => setFeatureModal(null)}
-              className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
-            >
-              Verstanden
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setUnlockConfirmTab(null)}
+                className="w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-semibold transition-colors"
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={confirmUnlock}
+                className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-semibold transition-colors"
+              >
+                Freischalten
+              </button>
+            </div>
           </div>
         </div>
       )}
