@@ -314,6 +314,32 @@ export default function AdminPage() {
     }
   };
 
+  const handleInitiateDemoSchool = async () => {
+    if (!confirm("Bist du sicher? Alle vorhandenen Klassen, Lehrer, Schüler, Noten, Fächer und Verhaltenslogs werden gelöscht und durch eine Großschule mit 400 SchülerInnen, 60 Lehrkräften und 20 Wochen Noten-Historie ersetzt! Dieser Vorgang kann bis zu 10 Sekunden dauern.")) {
+      return;
+    }
+    
+    const loadingToastId = toast.loading("Demo-Schule wird initialisiert... Generiere Klassen, Lehrkräfte, Schüler und 20 Wochen historische Daten...");
+    try {
+      setIsLoading(true);
+      await fetchAuth("/api/admin/seed-demo", { method: "POST" });
+      
+      toast.dismiss(loadingToastId);
+      toast.success("Demo-Schule erfolgreich geladen!", {
+        description: `16 Klassen, 60 Lehrer, 400 Schüler und 20 Wochen Historie wurden erfolgreich initialisiert.`,
+        duration: 8000
+      });
+      refetch();
+    } catch (err: any) {
+      toast.dismiss(loadingToastId);
+      toast.error("Initialisierung der Demo-Schule fehlgeschlagen", {
+        description: err.message || "Unbekannter Fehler beim Seeding."
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -511,6 +537,7 @@ export default function AdminPage() {
               loadSavedBackups={loadSavedBackups}
               systemStatus={systemStatus}
               handleTriggerUpdate={handleTriggerUpdate}
+              handleInitiateDemoSchool={handleInitiateDemoSchool}
             />
 
           )}
@@ -527,7 +554,6 @@ export default function AdminPage() {
               setEditingRoomId={setEditingRoomId}
               editingRoomName={editingRoomName}
               setEditingRoomName={setEditingRoomName}
-              handleRenameRoom={handleRenameRoom}
               refetch={refetch}
               isLoading={isLoading}
             />

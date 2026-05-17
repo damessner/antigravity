@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, Upload, AlertTriangle, RefreshCw } from "lucide-react";
+import { Download, Upload, AlertTriangle, RefreshCw, Sparkles } from "lucide-react";
 
 interface SystemMaintenanceProps {
   handleDownloadBackup: (type: "full" | "gradebooks" | "notes") => void;
@@ -20,6 +20,7 @@ interface SystemMaintenanceProps {
   // New System Update Props
   systemStatus: { isPending: boolean; lastLog: string } | null;
   handleTriggerUpdate: () => void;
+  handleInitiateDemoSchool: () => void;
 }
 
 
@@ -39,7 +40,8 @@ export function SystemMaintenance({
   savedBackups,
   loadSavedBackups,
   systemStatus,
-  handleTriggerUpdate
+  handleTriggerUpdate,
+  handleInitiateDemoSchool
 }: SystemMaintenanceProps) {
 
   return (
@@ -257,6 +259,43 @@ export function SystemMaintenance({
              <pre className="flex-1 overflow-y-auto whitespace-pre-wrap custom-scrollbar">
                 {systemStatus?.lastLog || "Keine Logs verfügbar."}
              </pre>
+          </div>
+        </div>
+      </div>
+
+      {/* Demo-Umgebung / Initiate Demo School Card */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm border-emerald-500/20">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/10 rounded-xl">
+              <Sparkles className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white">Demo-Schule initialisieren</h3>
+              <p className="text-[11px] text-slate-500 italic">Setzt die Testdatenbank zurück und befüllt sie mit realistischen Großschul-Demo-Daten (20 Wochen Historie)</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-2">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Dadurch wird die aktuelle Datenbank geleert und eine vollständige Schule mit <strong>60 Lehrkräften, 16 Klassen, 400 SchülerInnen, 128 Fächern und einer kompletten 20-wöchigen Historie</strong> an Noten und Mitarbeitseinträgen angelegt.
+            </p>
+            <p className="text-[11px] text-amber-500/80 font-medium">
+              ⚠️ Achtung: Dieser Vorgang überschreibt alle bestehenden Daten unwiderruflich! Nur für Demo- und Testzwecke verwenden.
+            </p>
+          </div>
+
+          <div className="lg:col-span-1 flex items-center justify-center">
+            <button
+              onClick={handleInitiateDemoSchool}
+              disabled={isLoading}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2 text-sm"
+            >
+              <Sparkles className="w-4 h-4 text-emerald-200" />
+              <span>Demo-Schule initialisieren</span>
+            </button>
           </div>
         </div>
       </div>
