@@ -20,6 +20,7 @@ import {
 
 import RoomDroppable from "./RoomDroppable";
 import PupilDraggable from "./PupilDraggable";
+import PupilChip from "./PupilChip";
 import TimerPopover from "./TimerPopover";
 import TimeOutModal from "./TimeOutModal";
 import PupilCommentModal from "./PupilCommentModal";
@@ -437,11 +438,12 @@ export default function TeacherDashboard() {
     const targetRoom = rooms.find((r) => Number(r.id) === toRoomId);
     if (!targetRoom) return;
 
-    // Check Lernwerkstatt hard cap locally for reactive responsiveness
-    if (targetRoom.name === "Lernwerkstatt") {
-      const currentInLW = pupils.filter((p) => Number(p.room_id) === toRoomId).length;
-      if (currentInLW >= 24) {
-        setAlertToast("Lernwerkstatt hat die Maximalkapazität von 24 Schülern erreicht.");
+    // Check room capacity locally for immediate feedback
+    const roomCapacity = targetRoom.capacity ?? (targetRoom.name === "Lernwerkstatt" ? 24 : null);
+    if (roomCapacity !== null) {
+      const currentCount = pupils.filter((p) => Number(p.room_id) === toRoomId).length;
+      if (currentCount >= roomCapacity) {
+        setAlertToast(`${targetRoom.name} hat die Maximalkapazität von ${roomCapacity} Schülern erreicht.`);
         return;
       }
     }
@@ -528,6 +530,39 @@ export default function TeacherDashboard() {
   const stableGradebookPupils = useMemo(() => {
     return pupils.map((p) => ({ ...p }));
   }, [pupils.length, JSON.stringify(pupils.map((p) => p.id)), JSON.stringify(pupils.map((p) => p.class_name))]);
+
+  // Build compact chip labels: first name only, or "First L." if duplicate first names exist
+  const chipLabels = useMemo(() => {
+    const firstNameCount: Record<string, number> = {};
+    pupils.forEach((p) => {
+      const first = p.name.split(" ")[0];
+      firstNameCount[first] = (firstNameCount[first] || 0) + 1;
+    });
+    const labels: Record<number, string> = {};
+    pupils.forEach((p) => {
+      const parts = p.name.split(" ");
+      const first = parts[0];
+      if (firstNameCount[first] > 1 && parts.length > 1) {
+        labels[p.id] = `${first} ${parts[parts.length - 1][0]}.`;
+      } else {
+        labels[p.id] = first;
+      }
+    });
+    return labels;
+  }, [pupils]);
+
+  // TimeOut room and its occupants
+  const timeoutRoom = useMemo(() => rooms.find((r) => r.name === "TimeOut"), [rooms]);
+  const timeoutPupils = useMemo(
+    () => (timeoutRoom ? pupils.filter((p) => Number(p.room_id) === Number(timeoutRoom.id)) : []),
+    [pupils, timeoutRoom]
+  );
+
+  // Pupils of the currently selected class (for the overview panel)
+  const selectedClassPupils = useMemo(
+    () => (selectedClass === "all" ? [] : pupils.filter((p) => p.class_name === selectedClass)),
+    [pupils, selectedClass]
+  );
 
   // German Locale format
   const dateStrDe = currentTime.toLocaleDateString("de-DE", {
@@ -779,75 +814,110 @@ export default function TeacherDashboard() {
             <span className="font-bold text-indigo-300">{helpRequests.filter((r) => r.status !== "resolved").length}</span>
           </div>
 
+          {/* Meine Klasse — Overview strip: all pupils of selected class shown as compact chips with room label */}
+          {selectedClass !== "all" && selectedClassPupils.length > 0 && (
+            <div className="bg-slate-900/40 border border-slate-800/50 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">
+                  📋 Klasse {selectedClass} — Übersicht
+                </span>
+                <span className="text-[10px] text-slate-500">{selectedClassPupils.length} Schüler</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {selectedClassPupils.map((pupil) => {
+                  const room = rooms.find((r) => Number(r.id) === Number(pupil.room_id));
+                  const roomName = room?.name ?? "?";
+                  return (
+                    <PupilChip
+                      key={pupil.id}
+                      pupil={pupil}
+                      label={chipLabels[pupil.id] ?? pupil.name.split(" ")[0]}
+                      roomName={roomName}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* DndKit Orchestration Grid */}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
               {rooms
                 .filter((room) => {
-                  const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut", "Klassenzimmer"].includes(room.name);
-                  // Show if it's a shared room OR the room specifically for the selected class
+                  // Exclude TimeOut — it is embedded inside Lernwerkstatt
+                  if (room.name === "TimeOut") return false;
+                  const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "Klassenzimmer"].includes(room.name);
                   const isSelectedClassRoom = room.name === selectedClass || room.name === `Klassenzimmer - ${selectedClass}`;
                   return isShared || isSelectedClassRoom;
                 })
                 .map((room) => {
-                const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt", "TimeOut"].includes(room.name);
+                  const isShared = ["Gang 1. OG", "Gang 2. OG", "Lernwerkstatt"].includes(room.name);
 
-                // Filter mapping logic Section 8
-                const roomPupils = pupils.filter((p) => {
-                  if (Number(p.room_id) !== Number(room.id)) return false;
-                  if (isShared) return true; // shared rooms view all attached
-                  return p.class_name === selectedClass;
-                });
+                  // All pupils physically in this room
+                  const allRoomPupils = pupils.filter((p) => Number(p.room_id) === Number(room.id));
 
-                const countSelectedClass = roomPupils.filter((p) => p.class_name === selectedClass).length;
+                  // Pupils shown as full draggable cards: selected-class pupils (or all in non-filtered mode)
+                  const visiblePupils = allRoomPupils.filter((p) => {
+                    if (selectedClass === "all") return true;
+                    if (isShared) return p.class_name === selectedClass; // other-class pupils just counted
+                    return p.class_name === selectedClass;
+                  });
 
-                return (
-                  <RoomDroppable
-                    key={room.id}
-                    room={room}
-                    totalCount={roomPupils.length}
-                    classCount={countSelectedClass}
-                    selectedClass={selectedClass}
-                  >
-                    <div className="space-y-2 min-h-[120px]">
-                      {roomPupils.map((pupil) => {
-                        // Extract subject tags matching this pupil safely
-                        const matchingTags = subjectTags
-                          .filter((t) => Number(t.pupil_id) === Number(pupil.id))
-                          .map((t) => {
-                            const sub = subjects.find((s) => Number(s.id) === Number(t.subject_id));
-                            const abbr = sub?.abbreviation || "F";
-                            const tag = t.tier_tag || "none";
-                            const sym = tag === "Meister" ? "👑" : tag === "Geselle" ? "🛠️" : tag === "Lehrling" ? "🌱" : "➖";
-                            const lbl = tag === "Meister" ? "Meister" : tag === "Geselle" ? "Geselle" : tag === "Lehrling" ? "Lehrling" : "Nichts/Null";
-                            return `${abbr}: ${sym} ${lbl}`;
-                          });
+                  const countSelectedClass = allRoomPupils.filter((p) => p.class_name === selectedClass).length;
 
-                        return (
-                          <PupilDraggable
-                            key={pupil.id}
-                            pupil={pupil}
-                            masteryTags={matchingTags}
-                            socket={socket}
-                            onOpenTimer={() => setSelectedPupilForTimer(pupil)}
-                            onOpenComment={() => setSelectedPupilForComment(pupil)}
-                            helpRequest={openHelpByPupil[Number(pupil.id)]}
-                            helpVisualClass={getSubjectVisualClass(openHelpByPupil[Number(pupil.id)]?.subject)}
-                            onClaimHelp={(requestId) => claimDeskHelp(requestId)}
-                            canClaimHelp={user?.role === "teacher" || user?.role === "admin"}
-                            currentUserId={Number(user?.id || 0)}
-                          />
-                        );
-                      })}
-                      {roomPupils.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-[11px] text-slate-600 italic py-6 border-2 border-dashed border-slate-800/40 rounded-xl">
-                          Keine Schüler im Raum
-                        </div>
-                      )}
-                    </div>
-                  </RoomDroppable>
-                );
-              })}
+                  return (
+                    <RoomDroppable
+                      key={room.id}
+                      room={room}
+                      totalCount={allRoomPupils.length}
+                      classCount={countSelectedClass}
+                      selectedClass={selectedClass}
+                      timeoutPupils={room.name === "Lernwerkstatt" ? timeoutPupils : undefined}
+                      timeoutRoom={room.name === "Lernwerkstatt" ? timeoutRoom : undefined}
+                      chipLabels={chipLabels}
+                      roomPupils={allRoomPupils}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {visiblePupils.map((pupil) => {
+                          const matchingTags = subjectTags
+                            .filter((t) => Number(t.pupil_id) === Number(pupil.id))
+                            .map((t) => {
+                              const sub = subjects.find((s) => Number(s.id) === Number(t.subject_id));
+                              const abbr = sub?.abbreviation || "F";
+                              const tag = t.tier_tag || "none";
+                              const sym = tag === "Meister" ? "👑" : tag === "Geselle" ? "🛠️" : tag === "Lehrling" ? "🌱" : "➖";
+                              const lbl = tag === "Meister" ? "Meister" : tag === "Geselle" ? "Geselle" : tag === "Lehrling" ? "Lehrling" : "Nichts/Null";
+                              return `${abbr}: ${sym} ${lbl}`;
+                            });
+
+                          return (
+                            <PupilDraggable
+                              key={pupil.id}
+                              pupil={pupil}
+                              masteryTags={matchingTags}
+                              socket={socket}
+                              onOpenTimer={() => setSelectedPupilForTimer(pupil)}
+                              onOpenComment={() => setSelectedPupilForComment(pupil)}
+                              helpRequest={openHelpByPupil[Number(pupil.id)]}
+                              helpVisualClass={getSubjectVisualClass(openHelpByPupil[Number(pupil.id)]?.subject)}
+                              onClaimHelp={(requestId) => claimDeskHelp(requestId)}
+                              canClaimHelp={user?.role === "teacher" || user?.role === "admin"}
+                              currentUserId={Number(user?.id || 0)}
+                            />
+                          );
+                        })}
+                        {visiblePupils.length === 0 && (
+                          <div className="flex items-center justify-center text-[11px] text-slate-600 italic py-4 border-2 border-dashed border-slate-800/40 rounded-xl">
+                            {selectedClass !== "all" && allRoomPupils.length > 0
+                              ? `${allRoomPupils.length} Schüler (andere Klassen)`
+                              : "Keine Schüler im Raum"}
+                          </div>
+                        )}
+                      </div>
+                    </RoomDroppable>
+                  );
+                })}
             </div>
           </DndContext>
         </div>

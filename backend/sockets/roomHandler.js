@@ -20,12 +20,13 @@ module.exports = (io, socket, pool) => {
       const comment = payload.comment ? String(payload.comment).trim() : '';
 
       // 1. Fetch Target Room Details
-      const roomRes = await pool.query('SELECT name FROM rooms WHERE id = $1', [toRoomId]);
+      const roomRes = await pool.query('SELECT name, capacity FROM rooms WHERE id = $1', [toRoomId]);
       if (roomRes.rows.length === 0) {
         socket.emit('move_rejected', { pupilId, reason: 'Zielraum existiert nicht' });
         return;
       }
       const roomName = roomRes.rows[0].name;
+      const roomCapacity = roomRes.rows[0].capacity ? Number(roomRes.rows[0].capacity) : null;
 
       // 2. Validate TimeOut constraint
       if (roomName === 'TimeOut' && !comment) {
@@ -33,8 +34,8 @@ module.exports = (io, socket, pool) => {
         return;
       }
 
-      // 3. Validate Lernwerkstatt Capacity constraint
-      if (roomName === 'Lernwerkstatt') {
+      // 3. Validate room capacity constraint (generic — applies to any room with a set capacity)
+      if (roomCapacity !== null) {
         const countRes = await pool.query(`
           SELECT COUNT(*) as cnt 
           FROM allocation_logs 
@@ -42,8 +43,8 @@ module.exports = (io, socket, pool) => {
         `, [toRoomId]);
         
         const activeCount = Number(countRes.rows[0].cnt);
-        if (activeCount >= 24) {
-          socket.emit('move_rejected', { pupilId, reason: 'Lernwerkstatt ist voll (max. 24)' });
+        if (activeCount >= roomCapacity) {
+          socket.emit('move_rejected', { pupilId, reason: `${roomName} ist voll (max. ${roomCapacity})` });
           return;
         }
       }

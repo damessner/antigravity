@@ -35,6 +35,7 @@ export interface Room {
   id: number;
   name: string;
   capacity?: number;
+  is_special?: boolean;
 }
 
 export interface Note {

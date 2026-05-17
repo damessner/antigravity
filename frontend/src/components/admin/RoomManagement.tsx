@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Edit2, Trash2 } from "lucide-react";
+import { Building2, Edit2, Trash2, Star } from "lucide-react";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { toast } from "sonner";
 import { Room } from "@/types";
@@ -34,18 +34,32 @@ export function RoomManagement({
   isLoading
 }: RoomManagementProps) {
   const [editingCapacity, setEditingCapacity] = useState<string>("");
+  const [editingIsSpecial, setEditingIsSpecial] = useState<boolean>(false);
 
   const handleUpdateRoom = async (id: number) => {
     try {
       await fetchAuth(`/api/admin/rooms/${id}/capacity`, {
         method: "PUT",
         body: JSON.stringify({ 
-          name: editingRoomName, 
-          capacity: parseInt(editingCapacity) || null 
+          capacity: parseInt(editingCapacity) || null,
+          is_special: editingIsSpecial,
         }),
       });
       toast.success(`Raum "${editingRoomName}" aktualisiert.`);
       setEditingRoomId(null);
+      refetch();
+    } catch (err: any) {
+      toast.error("Aktualisierung fehlgeschlagen", { description: err.message });
+    }
+  };
+
+  const handleToggleSpecial = async (room: Room) => {
+    try {
+      await fetchAuth(`/api/admin/rooms/${room.id}/capacity`, {
+        method: "PUT",
+        body: JSON.stringify({ is_special: !room.is_special }),
+      });
+      toast.success(`"${room.name}" als ${!room.is_special ? "Sonderraum markiert" : "normalen Raum gesetzt"}.`);
       refetch();
     } catch (err: any) {
       toast.error("Aktualisierung fehlgeschlagen", { description: err.message });
@@ -88,6 +102,7 @@ export function RoomManagement({
               <tr className="bg-slate-950/50">
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase">Raumname</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase text-center">Kapazität</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase text-center">Sonderraum</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase text-right">Aktionen</th>
               </tr>
             </thead>
@@ -120,6 +135,31 @@ export function RoomManagement({
                       <span className="text-xs font-mono text-slate-400">{r.capacity || "Unbegrenzt"}</span>
                     )}
                   </td>
+                  <td className="px-6 py-4 text-center">
+                    {editingRoomId === r.id ? (
+                      <label className="flex items-center justify-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editingIsSpecial}
+                          onChange={(e) => setEditingIsSpecial(e.target.checked)}
+                          className="w-4 h-4 accent-amber-500"
+                        />
+                        <span className="text-[10px] text-slate-400">Sonder</span>
+                      </label>
+                    ) : (
+                      <button
+                        onClick={() => handleToggleSpecial(r)}
+                        title={r.is_special ? "Als normalen Raum markieren" : "Als Sonderraum markieren"}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          r.is_special
+                            ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                            : "text-slate-600 hover:text-amber-400 hover:bg-amber-500/10"
+                        }`}
+                      >
+                        <Star className={`w-4 h-4 ${r.is_special ? "fill-amber-400" : ""}`} />
+                      </button>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       {editingRoomId === r.id ? (
@@ -144,6 +184,7 @@ export function RoomManagement({
                               setEditingRoomId(r.id);
                               setEditingRoomName(r.name);
                               setEditingCapacity(String(r.capacity || ""));
+                              setEditingIsSpecial(r.is_special ?? false);
                             }}
                             className="p-2 text-slate-400 hover:text-indigo-400 hover:bg-indigo-400/10 rounded-lg transition-all"
                           >
@@ -168,3 +209,4 @@ export function RoomManagement({
     </div>
   );
 }
+
