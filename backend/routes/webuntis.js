@@ -224,10 +224,72 @@ router.get('/substitutions', stateLimiter, authenticateToken, isTeacherOrAdmin, 
   }
 });
 
+/** Local database fallback: serves imported offline GP-Untis timetable. */
+async function serveLocalOfflineTimetable(dbClassId, className, pool, res) {
+  try {
+    const localEntriesRes = await pool.query(`
+      SELECT 
+        te.day_of_week,
+        te.period_number,
+        te.start_time,
+        te.end_time,
+        s.abbreviation AS subject_abbr,
+        s.name AS subject_name,
+        u.username AS teacher_username,
+        u.full_name AS teacher_full_name,
+        r.name AS room_name
+      FROM timetable_entries te
+      JOIN subjects s ON te.subject_id = s.id
+      LEFT JOIN users u ON te.teacher_id = u.id
+      LEFT JOIN rooms r ON te.room_id = r.id
+      WHERE te.class_id = $1
+    `, [dbClassId]);
+
+    const mon = WebUntisClient.getWeekStart();
+    const startDate = WebUntisClient.toUntisDate(mon);
+    const endDate = WebUntisClient.toUntisDate(WebUntisClient.getWeekEnd());
+
+    const timetable = localEntriesRes.rows.map((row, idx) => {
+      const dateObj = new Date(mon);
+      dateObj.setDate(mon.getDate() + (row.day_of_week - 1));
+      const untisDate = WebUntisClient.toUntisDate(dateObj);
+      
+      const startTime = parseInt(row.start_time.replace(':', ''), 10);
+      const endTime = parseInt(row.end_time.replace(':', ''), 10);
+      
+      return {
+        id: idx + 1,
+        date: untisDate,
+        startTime,
+        endTime,
+        su: [{ name: row.subject_abbr, longName: row.subject_name }],
+        te: row.teacher_username ? [{ name: row.teacher_username.toUpperCase(), longName: row.teacher_full_name }] : [],
+        ro: row.room_name ? [{ name: row.room_name, longName: row.room_name }] : [],
+        code: null
+      };
+    });
+
+    logger.info(CTX, `Offline-Fallback: ${timetable.length} Stundenplan-Einträge lokal für Klasse ${className} (ID: ${dbClassId}) geladen`);
+
+    return res.json({
+      classId: dbClassId,
+      className,
+      wuClassId: null,
+      weekStart: startDate,
+      weekEnd: endDate,
+      timetable,
+      isOffline: true
+    });
+  } catch (err) {
+    logger.error(CTX, `Kritischer Fehler im Offline-Fallback für Klasse ${dbClassId}`, err);
+    return res.status(502).json({ error: 'Stundenplan weder online noch offline verfügbar' });
+  }
+}
+
 /**
  * GET /api/webuntis/timetable/:classId
  * Returns this week's timetable for a given DB class ID.
- * Looks up the WebUntis class ID via `webuntis_id` column.
+ * Falls back to local timetable entries if WebUntis is offline or not configured.
  */
 router.get('/timetable/:classId', stateLimiter, authenticateToken, isTeacherOrAdmin, async (req, res) => {
   const dbClassId = Number(req.params.classId);
@@ -236,15 +298,18 @@ router.get('/timetable/:classId', stateLimiter, authenticateToken, isTeacherOrAd
   }
 
   let client;
+  let className = 'Unbekannt';
   try {
     // Look up WebUntis ID for this class
     const cr = await req.pool.query('SELECT webuntis_id, name FROM classes WHERE id = $1', [dbClassId]);
     if (cr.rows.length === 0) {
       return res.status(404).json({ error: 'Klasse nicht gefunden' });
     }
+    className = cr.rows[0].name;
     const wuClassId = cr.rows[0].webuntis_id;
     if (!wuClassId) {
-      return res.status(404).json({ error: 'Diese Klasse hat keine WebUntis-Verknüpfung' });
+      // Fallback directly to local offline if class has no WebUntis link
+      return await serveLocalOfflineTimetable(dbClassId, className, req.pool, res);
     }
 
     const settings = await loadSettings(req.pool);
@@ -258,25 +323,15 @@ router.get('/timetable/:classId', stateLimiter, authenticateToken, isTeacherOrAd
 
     res.json({
       classId:    dbClassId,
-      className:  cr.rows[0].name,
+      className,
       wuClassId,
       weekStart:  startDate,
       weekEnd:    endDate,
       timetable:  timetable || [],
     });
   } catch (err) {
-    const errMsg = err.message || '';
-    if (errMsg.includes('-8509') || errMsg.includes('no right') || errMsg.includes('-7004')) {
-      logger.warn(CTX, `Zugriff auf Stundenplan für Klasse ${dbClassId} eingeschränkt: ${errMsg}`);
-      return res.json({
-        classId: dbClassId,
-        className: 'Eingeschränkt',
-        timetable: [],
-        restricted: true
-      });
-    }
-    logger.error(CTX, `Fehler beim Laden des Stundenplans für Klasse ${dbClassId}`, err);
-    res.status(502).json({ error: err.message || 'WebUntis nicht erreichbar' });
+    logger.warn(CTX, `Fehler beim Live-Laden des Stundenplans für Klasse ${dbClassId} (${err.message}). Wechsle zu Offline-Fallback.`);
+    return await serveLocalOfflineTimetable(dbClassId, className, req.pool, res);
   } finally {
     if (client) await client.logout().catch(() => {});
   }

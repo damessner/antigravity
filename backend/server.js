@@ -235,6 +235,19 @@ async function bootstrapDatabase() {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
 
+        CREATE TABLE IF NOT EXISTS timetable_entries (
+          id SERIAL PRIMARY KEY,
+          class_id INTEGER REFERENCES classes(id) ON DELETE CASCADE,
+          subject_id INTEGER REFERENCES subjects(id) ON DELETE CASCADE,
+          teacher_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+          day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 7),
+          period_number INTEGER NOT NULL,
+          start_time VARCHAR(5) NOT NULL,
+          end_time VARCHAR(5) NOT NULL,
+          CONSTRAINT uq_timetable_entry UNIQUE (class_id, day_of_week, period_number)
+        );
+
         INSERT INTO system_settings (key, value) VALUES
           ('school_name', 'MS Weissenbach Telfs'),
           ('lesson_boundaries', '{"07:55":1,"08:50":2,"09:45":3,"10:50":4,"11:45":5,"12:40":6,"13:35":7,"14:30":8,"15:25":9,"16:20":10,"18:00":10}'),
@@ -439,6 +452,7 @@ app.use('/api/setup', require('./routes/setup'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/participation', require('./routes/participation'));
 app.use('/api/webuntis', require('./routes/webuntis'));
+app.use('/api/untis-import', require('./routes/untisImport'));
 app.use('/api/karriere', require('./routes/karriere'));
 const pushModule = require('./routes/push');
 

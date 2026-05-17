@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Globe, RefreshCw, CheckCircle, XCircle, Clock, Loader2 } from "lucide-react";
+import { Globe, RefreshCw, CheckCircle, XCircle, Clock, Loader2, FileText, AlertTriangle, Play, FolderOpen } from "lucide-react";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { toast } from "sonner";
 
@@ -51,6 +51,26 @@ export function WebUntisSettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  // Offline Import States
+  const [importStatus, setImportStatus] = useState<{
+    exists: boolean;
+    allRequiredPresent: boolean;
+    checklist: Array<{
+      key: string;
+      label: string;
+      present: boolean;
+      fileName: string | null;
+      recordCount: number;
+      status: "ready" | "missing" | "optional_missing" | "error";
+      required: boolean;
+      message: string;
+    }>;
+  } | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importLog, setImportLog] = useState<string[]>([]);
+  const [importCounts, setImportCounts] = useState<any | null>(null);
+
   const loadSettings = useCallback(async () => {
     try {
       const { data } = await fetchAuth("/api/webuntis/settings");
@@ -76,10 +96,23 @@ export function WebUntisSettings() {
     }
   }, []);
 
+  const loadImportStatus = useCallback(async () => {
+    setIsScanning(true);
+    try {
+      const { data } = await fetchAuth("/api/untis-import/status");
+      setImportStatus(data);
+    } catch (err: any) {
+      toast.error("Fehler beim Scannen der GP-Untis Exportdateien", { description: err.message });
+    } finally {
+      setIsScanning(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadSettings();
     loadSyncStatus();
-  }, [loadSettings, loadSyncStatus]);
+    loadImportStatus();
+  }, [loadSettings, loadSyncStatus, loadImportStatus]);
 
   // Poll sync status while syncing
   useEffect(() => {
@@ -124,6 +157,30 @@ export function WebUntisSettings() {
     } catch (err: any) {
       setIsSyncing(false);
       toast.error("Sync-Start fehlgeschlagen", { description: err.message });
+    }
+  };
+
+  const handleImport = async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    setImportLog(["Starte Offline-Import...", "Bitte warten..."]);
+    setImportCounts(null);
+    try {
+      const { data } = await fetchAuth("/api/untis-import/run", { method: "POST" });
+      if (data.success) {
+        toast.success("Offline-Import erfolgreich abgeschlossen!");
+        setImportLog(data.logs || ["Erfolgreich abgeschlossen."]);
+        setImportCounts(data.counts);
+        loadImportStatus();
+      } else {
+        toast.error("Offline-Import fehlgeschlagen", { description: data.error });
+        setImportLog(prev => [...prev, `❌ FEHLER: ${data.error}`]);
+      }
+    } catch (err: any) {
+      toast.error("Offline-Import fehlgeschlagen", { description: err.message });
+      setImportLog(prev => [...prev, `❌ FEHLER: ${err.message || "Unerwarteter Fehler"}`]);
+    } finally {
+      setIsImporting(false);
     }
   };
 
@@ -408,6 +465,152 @@ export function WebUntisSettings() {
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Offline Datei-Import (GP-Untis) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/10 rounded-xl">
+              <FolderOpen className="w-5 h-5 text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                Offline-Datei-Import (GP-Untis)
+              </h3>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Stundenplan und Stammdaten direkt aus dem lokalen Ordner <code className="font-mono bg-slate-950 px-1 py-0.5 rounded text-indigo-400">untis_export/</code> einlesen
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loadImportStatus}
+            disabled={isScanning}
+            className="text-slate-500 hover:text-slate-300 transition-colors p-1.5 rounded-lg hover:bg-slate-800/50"
+            title="Dateien neu einscannen"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanning ? "animate-spin" : ""}`} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* File Status Checklist */}
+          <div className="lg:col-span-2 space-y-3">
+            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              Export-Dateien Checkliste
+            </h4>
+            
+            {importStatus && !importStatus.exists ? (
+              <div className="bg-rose-500/5 border border-rose-500/10 rounded-xl p-4 text-center">
+                <AlertTriangle className="w-6 h-6 text-rose-400 mx-auto mb-2" />
+                <p className="text-xs text-rose-300 font-bold">Verzeichnis `untis_export` fehlt</p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Bitte legen Sie einen Ordner namens <code className="font-mono text-slate-400">untis_export</code> im Stammverzeichnis der Anwendung an und platzieren Sie dort die Exportdateien.
+                </p>
+              </div>
+            ) : importStatus ? (
+              <div className="divide-y divide-slate-800 bg-slate-950/40 border border-slate-800 rounded-xl overflow-hidden">
+                {importStatus.checklist.map((file) => (
+                  <div key={file.key} className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-2">
+                      <FileText className={`w-4 h-4 ${file.present ? "text-indigo-400" : "text-slate-600"}`} />
+                      <div>
+                        <p className="text-xs font-bold text-slate-300">{file.label}</p>
+                        <p className="text-[10px] text-slate-500">
+                          {file.present ? `Gefunden: ${file.fileName}` : "Nicht gefunden"}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      {file.status === "ready" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] font-mono font-bold rounded-full border border-emerald-500/20">
+                          <CheckCircle className="w-2.5 h-2.5" />
+                          Bereit ({file.recordCount})
+                        </span>
+                      )}
+                      {file.status === "missing" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] font-bold rounded-full border border-rose-500/20">
+                          <XCircle className="w-2.5 h-2.5" />
+                          Erforderlich
+                        </span>
+                      )}
+                      {file.status === "optional_missing" && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] font-bold rounded-full border border-amber-500/20">
+                          <Clock className="w-2.5 h-2.5" />
+                          Optional
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-slate-500 text-xs">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Scanne Ordner...
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={isImporting || isScanning || !importStatus?.allRequiredPresent}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold py-2.5 rounded-xl transition-all text-sm shadow-md shadow-emerald-950/20"
+            >
+              {isImporting ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Importiere Daten…</>
+              ) : (
+                <><Play className="w-4 h-4" /> Offline-Import starten</>
+              )}
+            </button>
+          </div>
+
+          {/* Action Log / Counts */}
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+              Import Verlauf
+            </h4>
+
+            {importCounts && (
+              <div className="bg-slate-950/60 border border-slate-800/60 rounded-xl p-3">
+                <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-2">Importierte Objekte</p>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {[
+                    { label: "Klassen", value: importCounts.classes, color: "text-cyan-400" },
+                    { label: "Räume",   value: importCounts.rooms,   color: "text-indigo-400" },
+                    { label: "Lehrer",  value: importCounts.teachers, color: "text-amber-400" },
+                    { label: "Fächer Zuw.", value: importCounts.subjects, color: "text-purple-400" },
+                    { label: "Wochenplan", value: importCounts.timetable, color: "text-emerald-400" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-slate-900 rounded p-1.5 text-center border border-slate-800/30">
+                      <div className={`text-sm font-bold font-mono ${color}`}>{value ?? 0}</div>
+                      <div className="text-[9px] text-slate-500">{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-3 h-44 overflow-y-auto font-mono text-[9px] text-slate-400 space-y-1 scrollbar-thin">
+              {importLog.length === 0 ? (
+                <span className="text-slate-600 italic">Noch kein Import ausgeführt. Klicken Sie auf "Offline-Import starten", um den Vorgang zu beginnen.</span>
+              ) : (
+                importLog.map((log, i) => {
+                  let isError = log.includes("FEHLER") || log.includes("❌");
+                  let isSuccess = log.includes("erfolgreich") || log.includes("COMMIT");
+                  let colorClass = "text-slate-400";
+                  if (isError) colorClass = "text-rose-400";
+                  else if (isSuccess) colorClass = "text-emerald-400";
+                  return (
+                    <div key={i} className={`${colorClass} leading-tight`}>
+                      {log}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
 

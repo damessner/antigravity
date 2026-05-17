@@ -40,3 +40,8 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Offline Untis export files
+untis_export/*.TXT
+untis_export/*.txt
+
