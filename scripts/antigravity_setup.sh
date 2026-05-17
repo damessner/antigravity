@@ -133,8 +133,18 @@ echo -e "${WHITE}>> Initializing Microsoft Teams offline spreadsheet sync hooks.
 run_with_scifi_progress $! 42 55 "Microsoft Teams Offline Excel Export/Import (exceljs & multer)"
 
 # 5. Optional: Enable Auto-Updates (Cron)
-echo -en "${YELLOW}>> Enable automatic nightly updates & backups at 2:00 AM? (y/n): ${NC}"
-read -r auto_update
+auto_update="yes"
+if [ -t 0 ]; then
+    echo -en "${YELLOW}>> Enable automatic nightly updates & backups at 2:00 AM? (y/n) [Default: y]: ${NC}"
+    if ! read -t 3 -r input_update; then
+        input_update="y"
+    fi
+    auto_update="${input_update:-yes}"
+else
+    # Non-interactive fallback: auto-enable
+    auto_update="yes"
+fi
+
 if [[ "$auto_update" =~ ^([yY][eE][sS]|[yY])+$ ]]; then
     (
       (crontab -l 2>/dev/null; echo "0 2 * * * /bin/bash /opt/antigravity/scripts/auto_updater.sh") | crontab -
