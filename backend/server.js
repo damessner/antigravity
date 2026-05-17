@@ -9,6 +9,7 @@ const path = require('path');
 const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
 const SchedulerService = require('./services/schedulerService');
+const backupService = require('./services/backupService');
 
 // ── Global process-level safety net ──────────────────────────────────────────
 // Catch any unhandled promise rejection or uncaught exception, log it to the
@@ -279,6 +280,9 @@ async function bootstrapDatabase() {
 
 // Start the sequential bootstrap
 bootstrapDatabase().then(() => {
+  backupService.seedDefaults(pool).catch((err) => {
+    logger.error('[Bootstrap]', 'Failed to seed backup defaults', err);
+  });
   const scheduler = new SchedulerService(pool);
   scheduler.start();
 });
@@ -501,55 +505,18 @@ const triggerLessonBoundaryReset = async (lessonNumber) => {
   }
 };
 
-const triggerDailyBackup = async (slot) => {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const triggerKey = `${todayStr}-backup-${slot}`;
+const triggerHourlyBackup = async () => {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const hour = String(now.getHours()).padStart(2, '0');
+  const triggerKey = `${todayStr}-backup-${hour}`;
   if (executedTriggers.has(triggerKey)) return;
   executedTriggers.add(triggerKey);
 
-  logger.info('[Scheduler]', `Starting backup for slot ${slot}...`);
+  logger.info('[Scheduler]', `Starting hourly backup for ${hour}:00...`);
   try {
-    const tables = ['users', 'classes', 'pupils', 'rooms', 'subjects', 'assessment_categories', 'assessments', 'grades', 'pupil_subject_tags', 'disciplinary_notes', 'allocation_logs', 'student_learning_plan', 'help_requests'];
-    const backupData = {};
-    for (const t of tables) {
-      try {
-        const res = await pool.query(`SELECT * FROM ${t}`);
-        backupData[t] = res.rows;
-      } catch (tableErr) {
-        logger.warn('[Scheduler]', `Skipping table ${t}: ${tableErr.message}`);
-      }
-    }
-
-    // Determine target folder
-    const backupDir = fs.existsSync('/opt/school-management/backups')
-      ? '/opt/school-management/backups'
-      : fs.existsSync('/backups')
-      ? '/backups'
-      : path.join(__dirname, '../backups');
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-
-    const filename = `auto_backup_${todayStr}_${slot}.json`;
-    const filepath = path.join(backupDir, filename);
-    fs.writeFileSync(filepath, JSON.stringify(backupData, null, 2));
-    logger.info('[Scheduler]', `Backup completed: ${filename}`);
-
-    // Retention: delete backups older than BACKUP_RETENTION_DAYS days
-    const cutoffMs = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
-    const files = fs.readdirSync(backupDir)
-      .filter(f => f.startsWith('auto_backup_') && f.endsWith('.json'));
-
-    for (const fname of files) {
-      const fpath = path.join(backupDir, fname);
-      try {
-        const stat = fs.statSync(fpath);
-        if (stat.mtimeMs < cutoffMs) {
-          fs.unlinkSync(fpath);
-          logger.info('[Scheduler]', `Deleted old backup: ${fname}`);
-        }
-      } catch (e) { /* ignore */ }
-    }
+    await backupService.runAdminBackup(pool);
+    logger.info('[Scheduler]', 'Hourly backup completed');
   } catch (err) {
     logger.error('[Scheduler]', 'Error creating backup', err);
   }
@@ -696,12 +663,9 @@ setInterval(() => {
     triggerLessonBoundaryReset(cachedLessonBoundaries[timeStr]);
   }
 
-  // Backup triggers: 05:00 and 17:00 (every 12 hours)
-  if (timeStr === '05:00') {
-    triggerDailyBackup('05-00');
-  }
-  if (timeStr === '17:00') {
-    triggerDailyBackup('17-00');
+  // Backup trigger: hourly at minute 00
+  if (minutes === '00') {
+    triggerHourlyBackup();
   }
 
   // Clear executedTriggers map at midnight

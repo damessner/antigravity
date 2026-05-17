@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, setupLimiter, stateLimiter } = require('../server');
 const ExcelJS = require('exceljs');
+const backupService = require('../services/backupService');
 
 async function assertSubjectAccess(req, subjectId, options = {}) {
   const { allowPupilRead = false } = options;
@@ -1022,9 +1023,23 @@ router.post('/grade', authenticateToken, async (req, res) => {
   if (!category_id || !pupil_id || !assessment_name) return res.status(400).json({ error: 'Missing cell metrics' });
 
   try {
+    const metaRes = await req.pool.query(`
+      SELECT c.subject_id
+      FROM assessment_categories c
+      WHERE c.id = $1
+      LIMIT 1
+    `, [Number(category_id)]);
+    if (metaRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+    }
+    const subjectId = Number(metaRes.rows[0].subject_id);
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+
     if (grade_value === '' || grade_value === null || grade_value === undefined) {
       await req.pool.query('DELETE FROM grades WHERE category_id = $1 AND pupil_id = $2 AND assessment_name = $3', 
         [Number(category_id), Number(pupil_id), assessment_name.trim()]);
+      backupService.scheduleTeacherSync(req.pool, subjectId, req.user?.id).catch(() => {});
       return res.json({ deleted: true });
     }
 
@@ -1042,6 +1057,7 @@ router.post('/grade', authenticateToken, async (req, res) => {
         [Number(category_id), Number(pupil_id), assessment_name.trim(), String(grade_value).trim(), visibility]);
       saved = insRes.rows[0];
     }
+    backupService.scheduleTeacherSync(req.pool, subjectId, req.user?.id).catch(() => {});
     res.json(saved);
   } catch (err) {
     res.status(500).json({ error: 'Cell upsert processing failed' });
@@ -1564,6 +1580,7 @@ router.post('/import-batch', authenticateToken, async (req, res) => {
 
     // Broadcast update boundary live
     req.io.emit('matrix_imported_batch', { subject_id: Number(subject_id) });
+    backupService.scheduleTeacherSync(req.pool, Number(subject_id), req.user?.id).catch(() => {});
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1665,6 +1682,7 @@ router.post('/import/:id', authenticateToken, upload.single('file'), async (req,
 
       await client.query('COMMIT');
       req.io.emit('matrix_imported_batch', { subject_id: Number(subjectId) });
+      backupService.scheduleTeacherSync(req.pool, Number(subjectId), req.user?.id).catch(() => {});
       res.json({ success: true });
     } catch (err) {
       await client.query('ROLLBACK');
