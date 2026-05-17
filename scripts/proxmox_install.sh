@@ -36,6 +36,10 @@ var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
 var_unprivileged="${var_unprivileged:-1}"
 
+# Local terminal styling variables
+WHITE='\033[1;37m'
+NC='\033[0m'
+
 # ── Header ──────────────────────────────────────────────────────────────────
 header_info
 variables
