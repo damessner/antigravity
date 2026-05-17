@@ -159,22 +159,50 @@ router.put('/settings/:key', setupLimiter, authenticateToken, isAdmin, async (re
 // GET /api/admin/rooms — List all rooms with capacities
 router.get('/rooms', authenticateToken, isAdmin, async (req, res) => {
     try {
-        const result = await req.pool.query('SELECT id, name, capacity FROM rooms ORDER BY name');
+        const result = await req.pool.query('SELECT id, name, capacity, is_special FROM rooms ORDER BY name');
         res.json(result.rows);
     } catch (err) {
         res.status(500).json({ error: 'Räume konnten nicht geladen werden' });
     }
 });
 
-// PUT /api/admin/rooms/:id — Update room capacity
+// PUT /api/admin/rooms/:id — Update room capacity and settings
 router.put('/rooms/:id', authenticateToken, isAdmin, async (req, res) => {
     const roomId = Number(req.params.id);
-    const { capacity } = req.body;
+    const { capacity, is_special } = req.body;
     try {
-        await req.pool.query('UPDATE rooms SET capacity = $1 WHERE id = $2', [capacity || null, roomId]);
+        const fields = [];
+        const values = [];
+        let idx = 1;
+        if (capacity !== undefined) { fields.push(`capacity = $${idx++}`); values.push(capacity || null); }
+        if (is_special !== undefined) { fields.push(`is_special = $${idx++}`); values.push(is_special); }
+        if (fields.length > 0) {
+            values.push(roomId);
+            await req.pool.query(`UPDATE rooms SET ${fields.join(', ')} WHERE id = $${idx}`, values);
+        }
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ error: 'Kapazität konnte nicht gespeichert werden' });
+        res.status(500).json({ error: 'Raumeinstellungen konnten nicht gespeichert werden' });
+    }
+});
+
+// PUT /api/admin/rooms/:id/capacity — Update room capacity (also accepts is_special)
+router.put('/rooms/:id/capacity', authenticateToken, isAdmin, async (req, res) => {
+    const roomId = Number(req.params.id);
+    const { capacity, is_special } = req.body;
+    try {
+        const fields = [];
+        const values = [];
+        let idx = 1;
+        if (capacity !== undefined) { fields.push(`capacity = $${idx++}`); values.push(capacity || null); }
+        if (is_special !== undefined) { fields.push(`is_special = $${idx++}`); values.push(is_special); }
+        if (fields.length > 0) {
+            values.push(roomId);
+            await req.pool.query(`UPDATE rooms SET ${fields.join(', ')} WHERE id = $${idx}`, values);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Raumeinstellungen konnten nicht gespeichert werden' });
     }
 });
 

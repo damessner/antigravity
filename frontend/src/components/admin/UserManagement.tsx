@@ -30,8 +30,14 @@ export function UserManagement({
   const [roleFilter, setRoleFilter] = useState<string>("all");
 
   const filteredUsers = users.filter(u => {
-    const matchesSearch = u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          u.username.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    // For single-letter searches use word-startsWith so "D" shows David, Dominik etc.
+    // For longer terms fall back to substring matching for flexibility.
+    const nameWords = u.full_name.toLowerCase().split(/\s+/);
+    const matchesSearch = term.length === 0
+      || (term.length === 1
+        ? nameWords.some(w => w.startsWith(term)) || u.username.toLowerCase().startsWith(term)
+        : nameWords.some(w => w.startsWith(term)) || u.full_name.toLowerCase().includes(term) || u.username.toLowerCase().includes(term));
     const matchesRole = roleFilter === "all" || u.role === roleFilter;
     return matchesSearch && matchesRole;
   });

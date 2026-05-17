@@ -114,6 +114,8 @@ async function bootstrapDatabase() {
         ALTER TABLE assessment_categories DROP COLUMN IF EXISTS default_deadline;
         ALTER TABLE grades ADD COLUMN IF NOT EXISTS student_planned_date DATE;
         ALTER TABLE rooms ADD COLUMN IF NOT EXISTS capacity INTEGER DEFAULT NULL;
+        ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_special BOOLEAN DEFAULT FALSE;
+        UPDATE rooms SET is_special = TRUE WHERE name IN ('TimeOut', 'Lernwerkstatt');
 
         CREATE TABLE IF NOT EXISTS assessments (
           id SERIAL PRIMARY KEY,

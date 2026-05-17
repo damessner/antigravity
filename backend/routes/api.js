@@ -55,7 +55,7 @@ router.post('/login', loginLimiter, async (req, res) => {
 router.get('/state', stateLimiter, authenticateToken, async (req, res) => {
   try {
     // 1. Rooms
-    const roomsRes = await req.pool.query('SELECT id, name FROM rooms ORDER BY id');
+    const roomsRes = await req.pool.query('SELECT id, name, capacity, is_special FROM rooms ORDER BY id');
 
     // 2. Pupils joining active allocation logs
     const pupilsRes = await req.pool.query(`
