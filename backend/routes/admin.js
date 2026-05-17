@@ -7,6 +7,7 @@ const logger = require('../utils/logger');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
 const ExcelJS = require('exceljs');
 const multer = require('multer');
+const crypto = require('crypto');
 const upload = multer({ dest: 'uploads/' });
 
 // Helper to check if user is admin
@@ -517,12 +518,14 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
         const firstNamesP = ["Lukas", "Anna", "Tobias", "Lena", "Maximilian", "Sophie", "Jakob", "Marie", "David", "Laura", "Felix", "Emily", "Leon", "Johanna", "Simon", "Mia", "Jonas", "Luisa", "Paul", "Clara"];
         const lastNames = ["Gruber", "Huber", "Maier", "Pichler", "Berger", "Moser", "Hofer", "Eder", "Wimmer", "Lehner", "Steiner", "Schuster", "Brunner", "Winkler", "Glaser", "Gartner", "Ebner", "Fischer", "Wallner", "Kramer"];
         const subjectsPool = ["Mathematik", "Deutsch", "Englisch", "Biologie", "Geografie", "Physik", "Musik", "Sport"];
+        const pickRandom = (arr) => arr[crypto.randomInt(arr.length)];
+        const randomFloat = () => crypto.randomInt(0, 1000) / 1000;
 
         // 1. Generate 60 Teachers
         const teacherIds = [];
         for (let i = 1; i <= 60; i++) {
-            const first = firstNamesT[Math.floor(Math.random() * firstNamesT.length)];
-            const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const first = pickRandom(firstNamesT);
+            const last = pickRandom(lastNames);
             const username = `teacher.${first.toLowerCase()}.${last.toLowerCase()}.${i}`;
             const fullName = `${first} ${last}`;
 
@@ -550,8 +553,8 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
         // 3. Generate 400 Pupils evenly distributed
         const pupilIds = [];
         for (let i = 1; i <= 400; i++) {
-            const first = firstNamesP[Math.floor(Math.random() * firstNamesP.length)];
-            const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const first = pickRandom(firstNamesP);
+            const last = pickRandom(lastNames);
             const username = `pupil.${first.toLowerCase()}.${last.toLowerCase()}.${i}`;
             const fullName = `${first} ${last}`;
             const className = classNames[(i - 1) % classNames.length];
@@ -589,7 +592,7 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
 
             for (const subjName of subjectsPool) {
                 const abbrev = subjName.substring(0, 3).toUpperCase();
-                const randTeacherId = teacherIds[Math.floor(Math.random() * teacherIds.length)];
+                const randTeacherId = pickRandom(teacherIds);
 
                 // Create Subject
                 const sRes = await client.query(
@@ -623,7 +626,7 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
                 for (const pupil of classPupils) {
                     for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
                         const weekStartStr = weeks[wIdx];
-                        const randVal = Math.random();
+                        const randVal = randomFloat();
                         const rating = randVal < 0.6 ? 'excellent' : randVal < 0.9 ? 'engaged' : 'passive';
                         const gradeVal = rating === 'excellent' ? '1' : rating === 'engaged' ? '2' : '4';
 
@@ -642,8 +645,8 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
 
                     const sa1Date = weeks[5];
                     const sa2Date = weeks[14];
-                    const sa1Grade = String(Math.floor(Math.random() * 4) + 1);
-                    const sa2Grade = String(Math.floor(Math.random() * 3) + 1);
+                    const sa1Grade = String(crypto.randomInt(1, 5));
+                    const sa2Grade = String(crypto.randomInt(1, 4));
 
                     await client.query(
                         `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, date)
@@ -660,7 +663,7 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
                     for (let l = 0; l < lzkWeeks.length; l++) {
                         const lzkDate = weeks[lzkWeeks[l]];
                         const baseScore = 50 + (l * 8);
-                        const finalScore = String(Math.min(100, baseScore + Math.floor(Math.random() * 15)));
+                        const finalScore = String(Math.min(100, baseScore + crypto.randomInt(0, 15)));
                         await client.query(
                             `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, date)
                              VALUES ($1, $2, $3, $4, $5)`,
@@ -668,7 +671,7 @@ router.post('/seed-demo', authenticateToken, async (req, res) => {
                         );
                     }
 
-                    const finalScoreAverage = (Math.random() * 2) + 1;
+                    const finalScoreAverage = 1 + randomFloat() * 2;
                     const finalTag = finalScoreAverage < 1.6 ? 'Meister' : finalScoreAverage < 2.8 ? 'Geselle' : 'Lehrling';
                     await client.query(
                         `INSERT INTO pupil_subject_tags (pupil_id, subject_id, tier_tag)

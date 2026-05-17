@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { ParticipationLog, Subject, Pupil } from "@/types";
@@ -47,18 +47,6 @@ export default function ParticipationTracker({
     d.setDate(diff);
     return d.toISOString().split("T")[0];
   });
-
-  useEffect(() => {
-    if (initialSubjectId) setSelectedSubjectId(initialSubjectId);
-  }, [initialSubjectId]);
-
-  useEffect(() => {
-    if (initialLessonDate) setLessonDate(initialLessonDate);
-  }, [initialLessonDate]);
-
-  useEffect(() => {
-    if (initialWeekStart) setBatchWeekStart(initialWeekStart);
-  }, [initialWeekStart]);
 
   const classPupils = pupils.filter((p) => Number(p.class_id) === Number(classId));
 

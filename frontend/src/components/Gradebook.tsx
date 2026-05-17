@@ -264,17 +264,6 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     return list;
   }, [balancedCategories, grades]);
 
-  useEffect(() => {
-    if (categories.length === 0) return;
-    setGuildThresholds((prev) => {
-      const next = { ...prev };
-      categories.forEach((cat) => {
-        if (!next[cat.id]) next[cat.id] = { journeyman: 45, master: 75 };
-      });
-      return next;
-    });
-  }, [categories]);
-
   const rowInsights = useMemo(() => {
     return classPupils.map((pupil) => {
       const values = allColumns
@@ -979,6 +968,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       {gradebookView === "participation" && selectedSubject && (
         <div className="flex-1 overflow-y-auto">
           <ParticipationTracker
+            key={`${selectedSubject.id}-${focusParticipationWeek || "live"}`}
             subjects={subjects}
             pupils={classPupils}
             classId={selectedClassId}
