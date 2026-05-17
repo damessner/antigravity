@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../server');
+const { authenticateToken, setupLimiter } = require('../server');
 const fs = require('fs');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
+const backupService = require('../services/backupService');
 
 const BACKUP_RETENTION_DAYS = 14;
 
@@ -29,6 +30,8 @@ const getDateString = () => {
   const m = String(now.getMinutes()).padStart(2, '0');
   return `${d}_${h}-${m}`;
 };
+
+const isBooleanLike = (v) => ['true', 'false', true, false].includes(v);
 
 // GET /api/backup/full (Admin only)
 router.get('/full', authenticateToken, requireAdmin, async (req, res) => {
@@ -490,5 +493,116 @@ router.post('/restore-server-file', adminLimiter, authenticateToken, requireAdmi
     res.status(500).json({ error: 'Wiederherstellung fehlgeschlagen: ' + err.message });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/backup/cloud/settings (Admin only)
+router.get('/cloud/settings', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const settings = await backupService.loadSettings(req.pool);
+    res.json(settings);
+  } catch (err) {
+    res.status(500).json({ error: 'Cloud-Backup-Einstellungen konnten nicht geladen werden' });
+  }
+});
+
+// PUT /api/backup/cloud/settings (Admin only)
+router.put('/cloud/settings', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const body = req.body || {};
+  const allowed = [
+    'backup_provider',
+    'backup_enabled',
+    'backup_retention_days',
+    'backup_admin_hourly_enabled',
+    'backup_teacher_sync_enabled',
+    'backup_teacher_sync_delay_minutes',
+    'backup_admin_root_template',
+    'backup_teacher_root',
+    'backup_onedrive_client_id',
+    'backup_onedrive_tenant_id',
+    'backup_onedrive_redirect_uri',
+    'backup_onedrive_client_secret',
+    'backup_s3_enabled',
+    'backup_google_drive_enabled'
+  ];
+
+  const updates = {};
+  for (const key of allowed) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      updates[key] = body[key];
+    }
+  }
+
+  if (updates.backup_provider && !['local', 'onedrive', 's3', 'google_drive'].includes(String(updates.backup_provider))) {
+    return res.status(400).json({ error: 'Ungültiger Backup-Provider' });
+  }
+  if (updates.backup_enabled !== undefined && !isBooleanLike(updates.backup_enabled)) {
+    return res.status(400).json({ error: 'backup_enabled muss true/false sein' });
+  }
+
+  try {
+    await backupService.upsertSettings(req.pool, updates);
+    const settings = await backupService.loadSettings(req.pool);
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.status(500).json({ error: 'Cloud-Backup-Einstellungen konnten nicht gespeichert werden' });
+  }
+});
+
+// GET /api/backup/cloud/status (Admin only)
+router.get('/cloud/status', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const status = await backupService.getCloudStatus(req.pool);
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: 'Cloud-Backup-Status konnte nicht geladen werden' });
+  }
+});
+
+// POST /api/backup/cloud/test (Admin only)
+router.post('/cloud/test', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const provider = req.body?.provider;
+  try {
+    const result = await backupService.testProviderConnection(req.pool, provider);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'Verbindungstest fehlgeschlagen' });
+  }
+});
+
+// GET /api/backup/cloud/onedrive/auth-url (Admin only)
+router.get('/cloud/onedrive/auth-url', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const settings = await backupService.loadSettings(req.pool);
+    const state = String(req.query.state || 'antigravity-backup');
+    const url = backupService.buildOneDriveAuthUrl(settings, state);
+    res.json({ url });
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'OAuth-URL konnte nicht erstellt werden' });
+  }
+});
+
+// POST /api/backup/cloud/onedrive/exchange (Admin only)
+router.post('/cloud/onedrive/exchange', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  const code = req.body?.code;
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ error: 'OAuth-Code fehlt' });
+  }
+
+  try {
+    const result = await backupService.exchangeOneDriveCode(req.pool, code.trim());
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message || 'OAuth-Code konnte nicht ausgetauscht werden' });
+  }
+});
+
+// POST /api/backup/cloud/run-now (Admin only)
+router.post('/cloud/run-now', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await backupService.runAdminBackup(req.pool);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Backup konnte nicht gestartet werden' });
   }
 });

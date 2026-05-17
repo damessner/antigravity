@@ -15,6 +15,7 @@ import { RoomManagement } from "@/components/admin/RoomManagement";
 import { SystemMaintenance } from "@/components/admin/SystemMaintenance";
 import { AdminDebugConsole } from "@/components/admin/AdminDebugConsole";
 import { WebUntisSettings } from "@/components/admin/WebUntisSettings";
+import { BackupCloudSettings } from "@/components/admin/BackupCloudSettings";
 import { OnboardingTip } from "@/components/OnboardingTip";
 
 import { User, SchoolClass, Pupil, Room } from "@/types";
@@ -539,7 +540,10 @@ export default function AdminPage() {
 
           {/* SECTION 7: EXTERNE INTEGRATIONEN (WebUntis) */}
           {activeSection === "integrations" && (
-            <WebUntisSettings />
+            <div className="space-y-6">
+              <WebUntisSettings />
+              <BackupCloudSettings />
+            </div>
           )}
         </main>
       </div>
