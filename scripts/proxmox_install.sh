@@ -18,12 +18,13 @@ var_ram="${var_ram:-4096}"
 var_disk="${var_disk:-32}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
-NSAPP=$(echo ${APP,,} | tr -d ' ')
-var_unprivileged="1"
+var_unprivileged="${var_unprivileged:-1}"
 
 # ── Header ──────────────────────────────────────────────────────────────────
 header_info
-echo -e "Loading Proxmox Helper Framework..."
+variables
+color
+catch_errors
 
 # ── Build Logic ─────────────────────────────────────────────────────────────
 function update_script() {
@@ -39,7 +40,7 @@ function update_script() {
     exit
 }
 
-start_menu
+start
 build_container
 description
 
