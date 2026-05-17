@@ -36,6 +36,7 @@ interface GradebookTableProps {
   onEditCategory: (category: Category) => void;
   onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
   onRankChange: (pupilId: number, tierTag: string | null) => void;
+  showOwnerInsights?: boolean;
 }
 
 const toAustrianGrade = (score: number | null): number | null => {
@@ -64,7 +65,8 @@ function GradebookTableBase({
   onToggleCategoryVisibility,
   onEditCategory,
   onToggleCellVisibility,
-  onRankChange
+  onRankChange,
+  showOwnerInsights = true
 }: GradebookTableProps) {
   const subjectId = categories.length > 0 ? categories[0].subject_id : null;
 
@@ -120,6 +122,7 @@ function GradebookTableBase({
   const [templateCategoryId, setTemplateCategoryId] = React.useState<number | null>(
     categories[0]?.id ?? null
   );
+  const [templateDateManual, setTemplateDateManual] = React.useState("");
 
   React.useEffect(() => {
     if (categories.length === 0) {
@@ -131,7 +134,18 @@ function GradebookTableBase({
   }, [categories, templateCategoryId]);
 
   const assignmentTemplates = React.useMemo(
-    () => ["Kurztest", "Hausübung", "Mündliche Überprüfung", "Projekt", "Lernzielkontrolle"],
+    () => [
+      "Vokabeltest",
+      "Portfolioabgabe",
+      "Projektpräsentation",
+      "Aktive Mitarbeit",
+      "Heftführung",
+      "Lesepass-Kontrolle",
+      "Lernzielkontrolle",
+      "Kurzquiz",
+      "Praktische Übung",
+      "Reflexionsbogen"
+    ],
     []
   );
 
@@ -289,7 +303,7 @@ function GradebookTableBase({
 
   return (
     <div className="flex-1 flex flex-col gap-3">
-      {isOwner && matrixInsight && (
+      {showOwnerInsights && isOwner && matrixInsight && (
         <div className="space-y-2">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
@@ -395,7 +409,15 @@ function GradebookTableBase({
                     <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
-                <span className="text-[10px] text-slate-500">+ Datum wird automatisch ergänzt</span>
+                <label className="text-[10px] text-slate-400 flex items-center gap-2">
+                  <span>[Datum manuell ergänzen]</span>
+                  <input
+                    type="date"
+                    value={templateDateManual}
+                    onChange={(e) => setTemplateDateManual(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px] text-slate-200"
+                  />
+                </label>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {assignmentTemplates.map((template) => (
@@ -404,7 +426,8 @@ function GradebookTableBase({
                     type="button"
                     onClick={() => {
                       if (!templateCategoryId) return;
-                      const dateLabel = new Date().toLocaleDateString("de-AT");
+                      const sourceDate = templateDateManual ? new Date(templateDateManual) : new Date();
+                      const dateLabel = sourceDate.toLocaleDateString("de-AT");
                       onAddAssessment(templateCategoryId, `${template} ${dateLabel}`);
                     }}
                     className="px-2 py-1 rounded bg-indigo-600/20 border border-indigo-500/30 text-indigo-200 text-[10px] hover:bg-indigo-600/30 transition-colors"

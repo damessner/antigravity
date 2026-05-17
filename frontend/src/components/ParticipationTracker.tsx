@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchAuth } from "@/utils/fetchAuth";
 import { ParticipationLog, Subject, Pupil } from "@/types";
@@ -11,6 +11,9 @@ interface ParticipationTrackerProps {
   pupils: Pupil[];
   /** Currently viewed class ID */
   classId: number;
+  initialSubjectId?: number | null;
+  initialLessonDate?: string | null;
+  initialWeekStart?: string | null;
 }
 
 const RATING_CONFIG = {
@@ -21,21 +24,41 @@ const RATING_CONFIG = {
 
 type Rating = keyof typeof RATING_CONFIG;
 
-export default function ParticipationTracker({ subjects, pupils, classId }: ParticipationTrackerProps) {
+export default function ParticipationTracker({
+  subjects,
+  pupils,
+  classId,
+  initialSubjectId,
+  initialLessonDate,
+  initialWeekStart
+}: ParticipationTrackerProps) {
   const queryClient = useQueryClient();
   const today = new Date().toISOString().split("T")[0];
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<number | null>(
-    subjects.length > 0 ? subjects[0].id : null
+    initialSubjectId ?? (subjects.length > 0 ? subjects[0].id : null)
   );
-  const [lessonDate, setLessonDate] = useState(today);
+  const [lessonDate, setLessonDate] = useState(initialLessonDate || today);
   const [batchWeekStart, setBatchWeekStart] = useState(() => {
+    if (initialWeekStart) return initialWeekStart;
     const d = new Date();
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     d.setDate(diff);
     return d.toISOString().split("T")[0];
   });
+
+  useEffect(() => {
+    if (initialSubjectId) setSelectedSubjectId(initialSubjectId);
+  }, [initialSubjectId]);
+
+  useEffect(() => {
+    if (initialLessonDate) setLessonDate(initialLessonDate);
+  }, [initialLessonDate]);
+
+  useEffect(() => {
+    if (initialWeekStart) setBatchWeekStart(initialWeekStart);
+  }, [initialWeekStart]);
 
   const classPupils = pupils.filter((p) => Number(p.class_id) === Number(classId));
 

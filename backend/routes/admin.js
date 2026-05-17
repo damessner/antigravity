@@ -493,4 +493,205 @@ router.delete('/subjects/:id', authenticateToken, isAdmin, async (req, res) => {
     }
 });
 
+// POST /api/admin/seed-demo
+router.post('/seed-demo', authenticateToken, async (req, res) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'System administration privileges required' });
+    }
+    const client = await req.pool.connect();
+    try {
+        await client.query('BEGIN');
+        // Clean Existing Tables
+        await client.query('DELETE FROM grades');
+        await client.query('DELETE FROM assessments');
+        await client.query('DELETE FROM assessment_categories');
+        await client.query('DELETE FROM subjects');
+        await client.query('DELETE FROM pupil_subject_tags');
+        await client.query('DELETE FROM participation_logs');
+        await client.query('DELETE FROM pupils');
+        await client.query('DELETE FROM classes');
+        await client.query("DELETE FROM users WHERE role IN ('teacher', 'pupil')");
+
+        // Generator Arrays
+        const firstNamesT = ["Monika", "Sarah", "Andreas", "Alexander", "Thomas", "Stefan", "Katharina", "Sabine", "Michael", "Wolfgang", "Christian", "Elisabeth", "Maria", "Johannes", "Daniel", "Eva", "Renate", "Herbert", "Daniela", "Klaus"];
+        const firstNamesP = ["Lukas", "Anna", "Tobias", "Lena", "Maximilian", "Sophie", "Jakob", "Marie", "David", "Laura", "Felix", "Emily", "Leon", "Johanna", "Simon", "Mia", "Jonas", "Luisa", "Paul", "Clara"];
+        const lastNames = ["Gruber", "Huber", "Maier", "Pichler", "Berger", "Moser", "Hofer", "Eder", "Wimmer", "Lehner", "Steiner", "Schuster", "Brunner", "Winkler", "Glaser", "Gartner", "Ebner", "Fischer", "Wallner", "Kramer"];
+        const subjectsPool = ["Mathematik", "Deutsch", "Englisch", "Biologie", "Geografie", "Physik", "Musik", "Sport"];
+
+        // 1. Generate 60 Teachers
+        const teacherIds = [];
+        for (let i = 1; i <= 60; i++) {
+            const first = firstNamesT[Math.floor(Math.random() * firstNamesT.length)];
+            const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const username = `teacher.${first.toLowerCase()}.${last.toLowerCase()}.${i}`;
+            const fullName = `${first} ${last}`;
+
+            const uRes = await client.query(
+                `INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
+                 VALUES ($1, $2, 'teacher', 'demohash123', false) RETURNING id`,
+                [username, fullName]
+            );
+            teacherIds.push(uRes.rows[0].id);
+        }
+
+        // 2. Generate 16 Classes (1A - 4D)
+        const classIds = {};
+        const classNames = [];
+        const letters = ['A', 'B', 'C', 'D'];
+        for (let grade = 1; grade <= 4; grade++) {
+            for (const letter of letters) {
+                const cName = `${grade}${letter}`;
+                const cRes = await client.query('INSERT INTO classes (name) VALUES ($1) RETURNING id', [cName]);
+                classIds[cName] = cRes.rows[0].id;
+                classNames.push(cName);
+            }
+        }
+
+        // 3. Generate 400 Pupils evenly distributed
+        const pupilIds = [];
+        for (let i = 1; i <= 400; i++) {
+            const first = firstNamesP[Math.floor(Math.random() * firstNamesP.length)];
+            const last = lastNames[Math.floor(Math.random() * lastNames.length)];
+            const username = `pupil.${first.toLowerCase()}.${last.toLowerCase()}.${i}`;
+            const fullName = `${first} ${last}`;
+            const className = classNames[(i - 1) % classNames.length];
+            const classId = classIds[className];
+            const uRes = await client.query(
+                `INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
+                 VALUES ($1, $2, 'pupil', 'demohash123', false) RETURNING id`,
+                [username, fullName]
+            );
+            const uId = uRes.rows[0].id;
+
+            const pRes = await client.query(
+                'INSERT INTO pupils (user_id, class_id) VALUES ($1, $2) RETURNING id',
+                [uId, classId]
+            );
+            pupilIds.push({ id: pRes.rows[0].id, classId });
+        }
+
+        // 4. Generate 20-Week Historical Timeline
+        const weeks = [];
+        const now = new Date();
+        for (let w = 19; w >= 0; w--) {
+            const d = new Date(now.getTime());
+            d.setDate(d.getDate() - (w * 7));
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            const monday = new Date(d.setDate(diff));
+            weeks.push(monday.toISOString().split('T')[0]);
+        }
+
+        // 5. Generate Subjects, Categories, and Backdated Historical Grades
+        for (const className of classNames) {
+            const classId = classIds[className];
+            const classPupils = pupilIds.filter(p => p.classId === classId);
+
+            for (const subjName of subjectsPool) {
+                const abbrev = subjName.substring(0, 3).toUpperCase();
+                const randTeacherId = teacherIds[Math.floor(Math.random() * teacherIds.length)];
+
+                // Create Subject
+                const sRes = await client.query(
+                    `INSERT INTO subjects (name, class_id, teacher_id, abbreviation)
+                     VALUES ($1, $2, $3, $4) RETURNING id`,
+                    [subjName, classId, randTeacherId, abbrev]
+                );
+                const subjectId = sRes.rows[0].id;
+
+                // Categories
+                const catRes1 = await client.query(
+                    `INSERT INTO assessment_categories (subject_id, name, weight_percentage, scale_type, is_self_directed)
+                     VALUES ($1, 'Mitarbeit', 20, 'numeric_1_5', false) RETURNING id`,
+                    [subjectId]
+                );
+                const catRes2 = await client.query(
+                    `INSERT INTO assessment_categories (subject_id, name, weight_percentage, scale_type, is_self_directed)
+                     VALUES ($1, 'Lernzielkontrollen', 30, 'percentage', true) RETURNING id`,
+                    [subjectId]
+                );
+                const catRes3 = await client.query(
+                    `INSERT INTO assessment_categories (subject_id, name, weight_percentage, scale_type, is_self_directed)
+                     VALUES ($1, 'Schularbeiten', 50, 'numeric_1_5', false) RETURNING id`,
+                    [subjectId]
+                );
+                const cMitarbeit = catRes1.rows[0].id;
+                const cLzk = catRes2.rows[0].id;
+                const cSchularbeiten = catRes3.rows[0].id;
+
+                // Populate 20 Weeks of History for each student
+                for (const pupil of classPupils) {
+                    for (let wIdx = 0; wIdx < weeks.length; wIdx++) {
+                        const weekStartStr = weeks[wIdx];
+                        const randVal = Math.random();
+                        const rating = randVal < 0.6 ? 'excellent' : randVal < 0.9 ? 'engaged' : 'passive';
+                        const gradeVal = rating === 'excellent' ? '1' : rating === 'engaged' ? '2' : '4';
+
+                        await client.query(
+                            `INSERT INTO participation_logs (pupil_id, teacher_id, subject_id, lesson_date, rating, applied_to_grade)
+                             VALUES ($1, $2, $3, $4, $5, true)`,
+                            [pupil.id, randTeacherId, subjectId, weekStartStr, rating]
+                        );
+
+                        await client.query(
+                            `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, is_visible, date)
+                             VALUES ($1, $2, $3, $4, true, $5)`,
+                            [cMitarbeit, pupil.id, `Mitarbeit KW ${weekStartStr}`, gradeVal, weekStartStr]
+                        );
+                    }
+
+                    const sa1Date = weeks[5];
+                    const sa2Date = weeks[14];
+                    const sa1Grade = String(Math.floor(Math.random() * 4) + 1);
+                    const sa2Grade = String(Math.floor(Math.random() * 3) + 1);
+
+                    await client.query(
+                        `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, date)
+                         VALUES ($1, $2, '1. Schularbeit', $3, $4)`,
+                        [cSchularbeiten, pupil.id, sa1Grade, sa1Date]
+                    );
+                    await client.query(
+                        `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, date)
+                         VALUES ($1, $2, '2. Schularbeit', $3, $4)`,
+                        [cSchularbeiten, pupil.id, sa2Grade, sa2Date]
+                    );
+
+                    const lzkWeeks = [2, 6, 10, 13, 17];
+                    for (let l = 0; l < lzkWeeks.length; l++) {
+                        const lzkDate = weeks[lzkWeeks[l]];
+                        const baseScore = 50 + (l * 8);
+                        const finalScore = String(Math.min(100, baseScore + Math.floor(Math.random() * 15)));
+                        await client.query(
+                            `INSERT INTO grades (category_id, pupil_id, assessment_name, grade_value, date)
+                             VALUES ($1, $2, $3, $4, $5)`,
+                            [cLzk, pupil.id, `Lernzielkontrolle ${l + 1}`, finalScore, lzkDate]
+                        );
+                    }
+
+                    const finalScoreAverage = (Math.random() * 2) + 1;
+                    const finalTag = finalScoreAverage < 1.6 ? 'Meister' : finalScoreAverage < 2.8 ? 'Geselle' : 'Lehrling';
+                    await client.query(
+                        `INSERT INTO pupil_subject_tags (pupil_id, subject_id, tier_tag)
+                         VALUES ($1, $2, $3)`,
+                        [pupil.id, subjectId, finalTag]
+                    );
+                }
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({
+            success: true,
+            message: 'Large-Scale school successfully seeded with 20 weeks of backdated history!',
+            stats: { classes: 16, teachers: 60, pupils: 400, subjects: 128, categories: 384, history_weeks: 20 }
+        });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Seeding failure:', err);
+        res.status(500).json({ error: 'Demo seeding aborted. Data rollback executed.', details: err.message });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
