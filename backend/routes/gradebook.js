@@ -385,6 +385,22 @@ function computePredictedRank(grades, sdlCompletedCount, rankRules) {
   return null;
 }
 
+const toIsoDate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getMonday = (baseDate = new Date()) => {
+  const d = new Date(baseDate);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d;
+};
+
 // GET /api/gradebook/rank-preview/:subject_id
 // Returns predicted rank and current grade average for all pupils in a subject
 router.get('/rank-preview/:subject_id', stateLimiter, authenticateToken, async (req, res) => {
@@ -1794,6 +1810,104 @@ router.put('/rank-config/:subject_id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to update rank configuration' });
   } finally {
     client.release();
+  }
+});
+
+// GET /api/gradebook/participation-gap/:subject_id
+// Checks if previous week participation is missing for the current teacher and subject.
+router.get('/participation-gap/:subject_id', authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.subject_id);
+  if (!subjectId) return res.status(400).json({ error: 'subject_id required' });
+
+  try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+    if (req.user.role === 'admin') return res.json({ blocked: false, reason: 'admin_bypass' });
+
+    const currentMonday = getMonday(new Date());
+    const prevMondayDate = new Date(currentMonday);
+    prevMondayDate.setDate(prevMondayDate.getDate() - 7);
+    const prevSundayDate = new Date(prevMondayDate);
+    prevSundayDate.setDate(prevSundayDate.getDate() + 6);
+
+    const prevMonday = toIsoDate(prevMondayDate);
+    const prevSunday = toIsoDate(prevSundayDate);
+    const skipKey = `participation_skip_subject_${subjectId}_teacher_${Number(req.user.id)}_week_${prevMonday}`;
+
+    const skipRes = await req.pool.query(
+      'SELECT key FROM system_settings WHERE key = $1 LIMIT 1',
+      [skipKey]
+    );
+    if (skipRes.rows.length > 0) {
+      return res.json({
+        blocked: false,
+        previous_week_start: prevMonday,
+        previous_week_end: prevSunday,
+        reason: 'marked_absent'
+      });
+    }
+
+    const weekStatsRes = await req.pool.query(`
+      SELECT COUNT(*)::int AS total_logs,
+             COUNT(*) FILTER (WHERE applied_to_grade = true)::int AS applied_logs
+      FROM participation_logs
+      WHERE subject_id = $1
+        AND teacher_id = $2
+        AND lesson_date BETWEEN $3 AND $4
+    `, [subjectId, Number(req.user.id), prevMonday, prevSunday]);
+
+    const totalLogs = Number(weekStatsRes.rows[0]?.total_logs || 0);
+    const appliedLogs = Number(weekStatsRes.rows[0]?.applied_logs || 0);
+    const blocked = totalLogs === 0 || appliedLogs < totalLogs;
+
+    res.json({
+      blocked,
+      previous_week_start: prevMonday,
+      previous_week_end: prevSunday,
+      total_logs: totalLogs,
+      applied_logs: appliedLogs,
+      reason: blocked ? (totalLogs === 0 ? 'missing_logs' : 'not_applied') : 'complete'
+    });
+  } catch (err) {
+    console.error('Participation gap check failed:', err);
+    res.status(500).json({ error: 'Participation gap could not be verified' });
+  }
+});
+
+// POST /api/gradebook/participation-gap/:subject_id/skip
+// Marks previous week as absent/no-school to clear blocker.
+router.post('/participation-gap/:subject_id/skip', setupLimiter, authenticateToken, async (req, res) => {
+  const subjectId = Number(req.params.subject_id);
+  const requestedWeekStart = req.body?.week_start;
+  if (!subjectId || !requestedWeekStart) {
+    return res.status(400).json({ error: 'subject_id and week_start required' });
+  }
+
+  try {
+    const access = await assertSubjectAccess(req, subjectId, { allowPupilRead: false });
+    if (!access.ok) return res.status(access.status).json({ error: access.error });
+    if (req.user.role === 'admin') return res.status(400).json({ error: 'Admin skip marker not required' });
+
+    const normalizedMonday = toIsoDate(getMonday(new Date(requestedWeekStart)));
+    const skipKey = `participation_skip_subject_${subjectId}_teacher_${Number(req.user.id)}_week_${normalizedMonday}`;
+    const payload = JSON.stringify({
+      subject_id: subjectId,
+      teacher_id: Number(req.user.id),
+      week_start: normalizedMonday,
+      skipped_reason: 'class_absent_or_no_school',
+      created_at: new Date().toISOString()
+    });
+
+    await req.pool.query(`
+      INSERT INTO system_settings (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+    `, [skipKey, payload]);
+
+    res.json({ success: true, week_start: normalizedMonday });
+  } catch (err) {
+    console.error('Participation gap skip failed:', err);
+    res.status(500).json({ error: 'Skip marker could not be saved' });
   }
 });
 
