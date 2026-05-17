@@ -252,7 +252,10 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
     });
   }, [isOwner, grades, mutations.updateGrade]);
 
-  const handleOpenAddAssessment = useCallback((catId: number) => {
+  const handleOpenAddAssessment = useCallback((catId: number, suggestedName?: string) => {
+    if (suggestedName) {
+      setNewAssessmentName(suggestedName);
+    }
     setShowAddAssessment({ categoryId: catId });
   }, []);
 

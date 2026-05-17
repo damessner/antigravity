@@ -4,7 +4,7 @@ import React from "react";
 import { Plus, Settings2, Trash2, Eye, EyeOff, Pencil } from "lucide-react";
 import { Category, Grade, Pupil, PupilTag, User, ColumnMetadata, RankPreviewEntry } from "@/types";
 import { GradeCell } from "./GradeCell";
-import { getPlaceholderForScale } from "../gradeUtils";
+import { getPlaceholderForScale, toPercent } from "../gradeUtils";
 import { ScaleType } from "../gradeUtils";
 
 interface GradebookColumn {
@@ -26,7 +26,7 @@ interface GradebookTableProps {
   isOwner: boolean;
   onGradeChange: (catId: number, pId: number, assName: string, val: string) => void;
   onCellContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
-  onAddAssessment: (catId: number) => void;
+  onAddAssessment: (catId: number, suggestedName?: string) => void;
   onRenameColumn: (catId: number, oldName: string) => void;
   onEditMetadata: (catId: number, assName: string, metadata?: ColumnMetadata) => void;
   onDeleteCategory: (catId: number) => void;
@@ -37,6 +37,11 @@ interface GradebookTableProps {
   onToggleCellVisibility: (catId: number, pupilId: number, assName: string, isVisible: boolean) => void;
   onRankChange: (pupilId: number, tierTag: string | null) => void;
 }
+
+const toAustrianGrade = (score: number | null): number | null => {
+  if (score === null || Number.isNaN(score)) return null;
+  return 1 + (1 - score) * 4;
+};
 
 function GradebookTableBase({
   pupils,
@@ -112,19 +117,163 @@ function GradebookTableBase({
     [rankConfig]
   );
 
+  const [templateCategoryId, setTemplateCategoryId] = React.useState<number | null>(
+    categories[0]?.id ?? null
+  );
+
+  React.useEffect(() => {
+    if (categories.length === 0) {
+      setTemplateCategoryId(null);
+      return;
+    }
+    if (templateCategoryId && categories.some((c) => Number(c.id) === Number(templateCategoryId))) return;
+    setTemplateCategoryId(categories[0].id);
+  }, [categories, templateCategoryId]);
+
+  const assignmentTemplates = React.useMemo(
+    () => ["Kurztest", "Hausübung", "Mündliche Überprüfung", "Projekt", "Lernzielkontrolle"],
+    []
+  );
+
+  const columnInsights = React.useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const oneWeek = new Date(today);
+    oneWeek.setDate(oneWeek.getDate() + 7);
+
+    return columns.map((col) => {
+      const key = `${Number(col.category.id)}:${col.assessmentName}`;
+      const colGrades = grades.filter(
+        (g) => `${Number(g.category_id)}:${g.assessment_name}` === key
+      );
+      const filled = colGrades.filter((g) => String(g.grade_value ?? "").trim() !== "").length;
+      const isVisible = colGrades.length === 0 ? true : colGrades.every((g) => g.is_visible !== false);
+      const deadline = col.metadata?.deadline ? new Date(col.metadata.deadline) : null;
+      if (deadline) deadline.setHours(0, 0, 0, 0);
+
+      const isOverdue = !!deadline && deadline < today && filled < pupils.length;
+      const isDueSoon = !!deadline && deadline >= today && deadline <= oneWeek;
+
+      return { filled, isVisible, isOverdue, isDueSoon };
+    });
+  }, [columns, grades, pupils.length]);
+
+  const categoryInsights = React.useMemo(() => {
+    return categories.map((cat) => {
+      const catColumns = columns.filter((col) => Number(col.category.id) === Number(cat.id));
+      const values = grades
+        .filter((g) => Number(g.category_id) === Number(cat.id))
+        .map((g) => toPercent(g.grade_value?.toString() ?? null, cat.scale_type))
+        .filter((v): v is number => v !== null);
+      const average = values.length ? values.reduce((sum, v) => sum + v, 0) / values.length : null;
+      return {
+        id: cat.id,
+        name: cat.name,
+        average,
+        assessmentCount: catColumns.length
+      };
+    });
+  }, [categories, columns, grades]);
+
+  const rowInsights = React.useMemo(() => {
+    return pupils.map((pupil) => {
+      const perColumnValues = columns
+        .map((col) => {
+          const grade = gradeByCellKey.get(`${Number(col.category.id)}:${Number(pupil.id)}:${col.assessmentName}`);
+          return toPercent(grade?.grade_value?.toString() ?? null, col.category.scale_type);
+        })
+        .filter((v): v is number => v !== null);
+      const average = perColumnValues.length
+        ? perColumnValues.reduce((sum, v) => sum + v, 0) / perColumnValues.length
+        : null;
+      const trend = perColumnValues.length >= 4
+        ? perColumnValues.slice(-3).reduce((a, b) => a + b, 0) / 3
+          - perColumnValues.slice(0, 3).reduce((a, b) => a + b, 0) / 3
+        : 0;
+      const completionRate = columns.length ? perColumnValues.length / columns.length : 0;
+      return { pupilId: pupil.id, pupilName: pupil.name, average, trend, completionRate };
+    });
+  }, [pupils, columns, gradeByCellKey]);
+
   const matrixInsight = React.useMemo(() => {
-    const withAverage = rankPreview.filter(
-      (entry) => entry.grade_average !== null && entry.grade_average !== undefined
+    const averageScores = rowInsights
+      .map((entry) => entry.average)
+      .filter((v): v is number => v !== null);
+    if (averageScores.length === 0) return null;
+
+    const sorted = [...averageScores].sort((a, b) => a - b);
+    const classAverage = averageScores.reduce((sum, v) => sum + v, 0) / averageScores.length;
+    const median = sorted[Math.floor(sorted.length / 2)];
+    const stddev = Math.sqrt(
+      averageScores.reduce((sum, v) => sum + (v - classAverage) ** 2, 0) / averageScores.length
     );
-    if (withAverage.length === 0) return null;
 
-    const classAverage =
-      withAverage.reduce((sum, entry) => sum + Number(entry.grade_average), 0) / withAverage.length;
-    const bestPupil = [...withAverage].sort((a, b) => Number(a.grade_average) - Number(b.grade_average))[0];
-    const needsAttention = [...withAverage].sort((a, b) => Number(b.grade_average) - Number(a.grade_average))[0];
+    const bestPupil = [...rowInsights]
+      .filter((p) => p.average !== null)
+      .sort((a, b) => Number(b.average) - Number(a.average))[0];
+    const needsAttention = [...rowInsights]
+      .filter((p) => p.average !== null)
+      .sort((a, b) => Number(a.average) - Number(b.average))[0];
 
-    return { classAverage, bestPupil, needsAttention };
-  }, [rankPreview]);
+    const completedCells = rowInsights.reduce(
+      (sum, row) => sum + Math.round(row.completionRate * columns.length),
+      0
+    );
+    const totalCells = columns.length * pupils.length;
+    const completionPercent = totalCells > 0 ? (completedCells / totalCells) * 100 : 0;
+
+    const numeric15Grades = grades
+      .filter((g) => {
+        const cat = categories.find((c) => Number(c.id) === Number(g.category_id));
+        return cat?.scale_type === "numeric_1_5";
+      })
+      .map((g) => Number(g.grade_value))
+      .filter((v) => Number.isFinite(v) && v >= 1 && v <= 5)
+      .map((v) => Math.round(v));
+
+    const gradeDistribution = [1, 2, 3, 4, 5].map((grade) => ({
+      grade,
+      count: numeric15Grades.filter((v) => v === grade).length
+    }));
+
+    const improvingPupils = rowInsights.filter((r) => r.trend >= 0.08).length;
+    const decliningPupils = rowInsights.filter((r) => r.trend <= -0.08).length;
+    const atRiskPupils = rowInsights.filter((r) => (r.average ?? 1) <= 0.45).length;
+
+    const topCategory = [...categoryInsights]
+      .filter((c) => c.average !== null)
+      .sort((a, b) => Number(b.average) - Number(a.average))[0];
+    const weakestCategory = [...categoryInsights]
+      .filter((c) => c.average !== null)
+      .sort((a, b) => Number(a.average) - Number(b.average))[0];
+
+    const hiddenCategoryCount = categories.filter((c) => c.is_hidden_from_pupils).length;
+    const hiddenColumnCount = columnInsights.filter((c) => !c.isVisible).length;
+    const overdueAssignments = columnInsights.filter((c) => c.isOverdue).length;
+    const dueSoonAssignments = columnInsights.filter((c) => c.isDueSoon).length;
+
+    return {
+      classAverage,
+      median,
+      stddev,
+      bestPupil,
+      needsAttention,
+      completionPercent,
+      completedCells,
+      totalCells,
+      hiddenCategoryCount,
+      hiddenColumnCount,
+      overdueAssignments,
+      dueSoonAssignments,
+      sdlCategories: categories.filter((c) => c.is_self_directed).length,
+      atRiskPupils,
+      improvingPupils,
+      decliningPupils,
+      gradeDistribution,
+      topCategory,
+      weakestCategory
+    };
+  }, [rowInsights, grades, categories, categoryInsights, columnInsights, columns.length, pupils.length]);
 
   if (categories.length === 0) {
     return (
@@ -141,21 +290,129 @@ function GradebookTableBase({
   return (
     <div className="flex-1 flex flex-col gap-3">
       {isOwner && matrixInsight && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Klassen-Ø</div>
-            <div className="text-sm font-black text-white">Note {matrixInsight.classAverage.toFixed(2)}</div>
-          </div>
-          <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-emerald-400/80 font-bold">Top aktuell</div>
-            <div className="text-xs font-bold text-emerald-300 truncate">
-              {matrixInsight.bestPupil.pupil_name} (Ø {Number(matrixInsight.bestPupil.grade_average).toFixed(2)})
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Klassen-Ø</div>
+              <div className="text-sm font-black text-white">Note {toAustrianGrade(matrixInsight.classAverage)?.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Median</div>
+              <div className="text-sm font-black text-white">{toAustrianGrade(matrixInsight.median)?.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Streuung σ</div>
+              <div className="text-sm font-black text-white">{matrixInsight.stddev.toFixed(2)}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-700/40 bg-emerald-900/10 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-emerald-400/80 font-bold">Top aktuell</div>
+              <div className="text-xs font-bold text-emerald-300 truncate">{matrixInsight.bestPupil?.pupilName || "—"}</div>
+            </div>
+            <div className="rounded-xl border border-amber-700/40 bg-amber-900/10 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-amber-400/80 font-bold">Braucht Fokus</div>
+              <div className="text-xs font-bold text-amber-300 truncate">{matrixInsight.needsAttention?.pupilName || "—"}</div>
             </div>
           </div>
-          <div className="rounded-xl border border-amber-700/40 bg-amber-900/10 px-3 py-2">
-            <div className="text-[10px] uppercase tracking-widest text-amber-400/80 font-bold">Braucht Fokus</div>
-            <div className="text-xs font-bold text-amber-300 truncate">
-              {matrixInsight.needsAttention.pupil_name} (Ø {Number(matrixInsight.needsAttention.grade_average).toFixed(2)})
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Abdeckung</div>
+              <div className="text-sm font-black text-white">{matrixInsight.completionPercent.toFixed(0)}%</div>
+              <div className="text-[9px] text-slate-500">{matrixInsight.completedCells}/{matrixInsight.totalCells}</div>
+            </div>
+            <div className="rounded-xl border border-rose-800/40 bg-rose-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-rose-300/80 font-bold">Überfällig</div>
+              <div className="text-sm font-black text-rose-300">{matrixInsight.overdueAssignments}</div>
+            </div>
+            <div className="rounded-xl border border-cyan-800/40 bg-cyan-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-cyan-300/80 font-bold">Fällig (7 Tage)</div>
+              <div className="text-sm font-black text-cyan-300">{matrixInsight.dueSoonAssignments}</div>
+            </div>
+            <div className="rounded-xl border border-indigo-800/40 bg-indigo-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-indigo-300/80 font-bold">Ausgeblendete Spalten</div>
+              <div className="text-sm font-black text-indigo-200">{matrixInsight.hiddenColumnCount}</div>
+            </div>
+            <div className="rounded-xl border border-indigo-800/40 bg-indigo-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-indigo-300/80 font-bold">Ausgeblendete Bereiche</div>
+              <div className="text-sm font-black text-indigo-200">{matrixInsight.hiddenCategoryCount}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="rounded-xl border border-amber-800/40 bg-amber-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-amber-300/80 font-bold">Risikogruppe</div>
+              <div className="text-sm font-black text-amber-200">{matrixInsight.atRiskPupils}</div>
+            </div>
+            <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-emerald-300/80 font-bold">Aufwärtstrend</div>
+              <div className="text-sm font-black text-emerald-200">{matrixInsight.improvingPupils}</div>
+            </div>
+            <div className="rounded-xl border border-orange-800/40 bg-orange-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-orange-300/80 font-bold">Abwärtstrend</div>
+              <div className="text-sm font-black text-orange-200">{matrixInsight.decliningPupils}</div>
+            </div>
+            <div className="rounded-xl border border-violet-800/40 bg-violet-950/20 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-violet-300/80 font-bold">SDL-Bereiche</div>
+              <div className="text-sm font-black text-violet-200">{matrixInsight.sdlCategories}</div>
+            </div>
+            <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Beste/Schwächste Kategorie</div>
+              <div className="text-[10px] text-slate-200 truncate">
+                {matrixInsight.topCategory?.name || "—"} / {matrixInsight.weakestCategory?.name || "—"}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Notenverteilung (1-5)</div>
+              <div className="space-y-1">
+                {matrixInsight.gradeDistribution.map((bucket) => {
+                  const max = Math.max(...matrixInsight.gradeDistribution.map((b) => b.count), 1);
+                  const width = (bucket.count / max) * 100;
+                  return (
+                    <div key={bucket.grade} className="flex items-center gap-2">
+                      <span className="text-[10px] w-8 text-slate-400">Note {bucket.grade}</span>
+                      <div className="flex-1 h-2 bg-slate-800 rounded">
+                        <div className="h-2 bg-indigo-500/70 rounded" style={{ width: `${width}%` }} />
+                      </div>
+                      <span className="text-[10px] w-5 text-right text-slate-300">{bucket.count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-2">Schnellvorlagen für Bewertungen</div>
+              <div className="flex gap-2 items-center mb-2">
+                <select
+                  value={templateCategoryId ?? ""}
+                  onChange={(e) => setTemplateCategoryId(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-[10px]"
+                >
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+                <span className="text-[10px] text-slate-500">+ Datum wird automatisch ergänzt</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {assignmentTemplates.map((template) => (
+                  <button
+                    key={template}
+                    type="button"
+                    onClick={() => {
+                      if (!templateCategoryId) return;
+                      const dateLabel = new Date().toLocaleDateString("de-AT");
+                      onAddAssessment(templateCategoryId, `${template} ${dateLabel}`);
+                    }}
+                    className="px-2 py-1 rounded bg-indigo-600/20 border border-indigo-500/30 text-indigo-200 text-[10px] hover:bg-indigo-600/30 transition-colors"
+                  >
+                    + {template}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
