@@ -10,6 +10,22 @@
 # Sourcing the Community Build Functions
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 
+# Override the default header_info with our beautiful custom Antigravity ASCII art
+function header_info() {
+  clear
+  echo -e "\033[0;36m"
+  cat <<'EOF'
+    ___   _   _ _____ ___  ____  ____     _     ____   _   _  _____ __   __
+   /   | / | / /_  __/  _|/ ___|/ __ \   / \   / ___| | | | |/_   _|\ \ / /
+  / /| |/  |/ / / /  | | | |  _| /_/ /  / _ \ | |  _  | | | |  | |   \ V / 
+ / ___ | /|  / / /  | |  | |_| |  _ <  / ___ \| |_| | | |_| |  | |    | |  
+/_/  |_/_/ |_/ /_/ |___|  \____|_| \_\/_/   \_\\____|  \___/   |_|    |_|  
+EOF
+  echo -e "\033[1;37m                      >> EDUCATIONAL OS DEPLOYMENT <<\033[0m"
+  echo ""
+}
+
+
 # ── App Configuration ────────────────────────────────────────────────────────
 APP="antigravity"
 var_tags="${var_tags:-education;docker}"
