@@ -4,6 +4,19 @@ const bcrypt = require('bcrypt');
 const { authenticateToken, setupLimiter } = require('../server');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
 
+const normalizeUsername = (username) => {
+  if (typeof username !== 'string') return '';
+  return username.normalize('NFKC').trim().toLowerCase();
+};
+
+const normalizeFullName = (fullName) => {
+  if (typeof fullName !== 'string') return '';
+  return fullName.normalize('NFKC').trim().replace(/\s+/g, ' ');
+};
+
+const USERNAME_PATTERN = /^[a-z0-9._-]{3,50}$/;
+const VALID_ROLES = ['admin', 'teacher', 'pupil', 'lernwerkstatt'];
+
 const getRetentionDays = async (pool) => {
   const r = await pool.query("SELECT value FROM system_settings WHERE key = 'data_retention_days' LIMIT 1");
   const n = Number(r.rows[0]?.value || 90);
@@ -94,11 +107,28 @@ router.get('/', authenticateToken, async (req, res) => {
 // POST /api/users (Admin only)
 router.post('/', setupLimiter, authenticateToken, requireAdmin, async (req, res) => {
   const { username, full_name, role } = req.body;
-  if (!username || !full_name || !role) {
+  const normalizedUsername = normalizeUsername(username);
+  const normalizedFullName = normalizeFullName(full_name);
+
+  if (!normalizedUsername || !normalizedFullName || !role) {
     return res.status(400).json({ error: 'Username, full name, and role are required' });
+  }
+  if (!USERNAME_PATTERN.test(normalizedUsername)) {
+    return res.status(400).json({ error: 'Username must be 3-50 chars and contain only a-z, 0-9, ".", "_" or "-"' });
+  }
+  if (!VALID_ROLES.includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
   }
 
   try {
+    const existsRes = await req.pool.query(
+      'SELECT id FROM users WHERE lower(btrim(username)) = $1 LIMIT 1',
+      [normalizedUsername]
+    );
+    if (existsRes.rows.length > 0) {
+      return res.status(400).json({ error: 'Username already exists' });
+    }
+
     // Generate temporary password
     const tempPassword = generateSecurePassword('Pass');
     const password_hash = await bcrypt.hash(tempPassword, 10);
@@ -107,7 +137,7 @@ router.post('/', setupLimiter, authenticateToken, requireAdmin, async (req, res)
       INSERT INTO users (username, full_name, role, password_hash, requires_password_change)
       VALUES ($1, $2, $3, $4, true)
       RETURNING id, username, full_name, role, requires_password_change, created_at
-    `, [username, full_name, role, password_hash]);
+    `, [normalizedUsername, normalizedFullName, role, password_hash]);
 
     res.json({
       user: insertRes.rows[0],
@@ -292,8 +322,7 @@ router.put('/:id/role', authenticateToken, requireAdmin, async (req, res) => {
     return res.status(403).json({ error: 'Aus Sicherheitsgründen kann die eigene Administrator-Rolle nicht entzogen werden' });
   }
 
-  const validRoles = ['admin', 'teacher', 'pupil', 'lernwerkstatt'];
-  if (!validRoles.includes(role)) {
+  if (!VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'Ungültige Rollenbezeichnung' });
   }
 
