@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { ColorScheme, getGradeColor, ScaleType } from "../gradeUtils";
 
 interface GradeCellProps {
   categoryId: number;
@@ -13,6 +14,8 @@ interface GradeCellProps {
   placeholderGuide: string;
   maxLength?: number;
   isCatLastCol: boolean;
+  scaleType: ScaleType;
+  colorScheme?: ColorScheme | null;
   onChange: (catId: number, pId: number, assName: string, val: string) => void;
   onContextMenu: (e: React.MouseEvent, catId: number, pId: number, assName: string) => void;
   onToggleVisibility: (catId: number, pId: number, assName: string, isVisible: boolean) => void;
@@ -28,15 +31,20 @@ export const GradeCell = React.memo(function GradeCell({
   placeholderGuide,
   maxLength = 3,
   isCatLastCol,
+  scaleType,
+  colorScheme,
   onChange,
   onContextMenu,
   onToggleVisibility
 }: GradeCellProps) {
+  const cellColor = getGradeColor(valueStr, scaleType, colorScheme);
+
   return (
     <td className={`p-0 w-12 min-w-[44px] max-w-[52px] h-11 align-middle ${isCatLastCol ? "border-r-2 border-slate-700/80" : "border-r border-slate-800/40"}`}>
       <div 
         onContextMenu={(e) => onContextMenu(e, categoryId, pupilId, assessmentName)}
         className={`w-full h-full flex items-center justify-center relative ${!isVisible ? "opacity-30 bg-slate-950/80" : ""}`}
+        style={cellColor && isVisible ? { backgroundColor: cellColor + '55' } : undefined}
         title="Rechtsklick/Longpress zum Umschalten der spezifischen Schülersichtbarkeit"
       >
         <input
@@ -47,6 +55,7 @@ export const GradeCell = React.memo(function GradeCell({
           onChange={(e) => onChange(categoryId, pupilId, assessmentName, e.target.value)}
           placeholder={placeholderGuide}
           className="w-full h-full bg-transparent hover:bg-slate-900/50 focus:bg-slate-900 text-center font-mono text-sm font-bold text-white focus:outline-none transition-colors p-0 rounded-none border-none disabled:opacity-50 disabled:cursor-not-allowed selection:bg-cyan-500/30 touch-manipulation"
+          style={cellColor && isVisible && valueStr ? { color: cellColor, textShadow: '0 0 8px currentColor' } : undefined}
         />
         {!disabled && (
           <button

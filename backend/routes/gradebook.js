@@ -1033,6 +1033,54 @@ router.put('/category/:id/toggle-visibility', setupLimiter, authenticateToken, a
   }
 });
 
+// PUT /api/gradebook/category/:id/color-scheme
+// Saves a color scheme (gradient or per-grade colors) for the given category
+router.put('/category/:id/color-scheme', setupLimiter, authenticateToken, async (req, res) => {
+  const categoryId = Number(req.params.id);
+  const { color_scheme } = req.body;
+
+  if (Number.isNaN(categoryId)) {
+    return res.status(400).json({ error: 'Ungültige Kategorie-ID' });
+  }
+
+  try {
+    const accessRes = await req.pool.query(`
+      SELECT c.id, c.subject_id, s.teacher_id, s.second_teacher_id
+      FROM assessment_categories c
+      JOIN subjects s ON s.id = c.subject_id
+      WHERE c.id = $1
+      LIMIT 1
+    `, [categoryId]);
+
+    if (accessRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Kategorie nicht gefunden' });
+    }
+
+    const row = accessRes.rows[0];
+    const canEdit = req.user.role === 'admin'
+      || Number(row.teacher_id) === Number(req.user.id)
+      || Number(row.second_teacher_id) === Number(req.user.id);
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Keine Berechtigung zum Bearbeiten dieses Bereichs' });
+    }
+
+    // color_scheme = null to remove, or an object like:
+    // { type: 'gradient', best: '#hex', worst: '#hex' }
+    // { type: 'per_grade', grades: { '1': '#hex', '2': '#hex', ... } }
+    const safeScheme = color_scheme === null ? null : JSON.stringify(color_scheme);
+
+    await req.pool.query(`
+      UPDATE assessment_categories SET color_scheme = $1 WHERE id = $2
+    `, [safeScheme, categoryId]);
+
+    if (req.io) req.io.emit('subject_updated', { subject_id: Number(row.subject_id) });
+    res.json({ success: true, color_scheme });
+  } catch (err) {
+    console.error('Color scheme update error:', err);
+    res.status(500).json({ error: 'Farbschema konnte nicht gespeichert werden' });
+  }
+});
+
 // POST /api/gradebook/grade (singular mapping support)
 router.post('/grade', authenticateToken, async (req, res) => {
   const { category_id, pupil_id, assessment_name, grade_value, is_visible } = req.body;
