@@ -55,7 +55,9 @@ function update_script() {
     fi
     msg_info "Updating ${APP}..."
     cd /opt/antigravity
-    ./scripts/update_system.sh
+    git pull --ff-only origin main
+    docker compose pull
+    docker compose up -d --remove-orphans
     msg_ok "Update Complete"
     exit
 }

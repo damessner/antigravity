@@ -4,6 +4,14 @@ import React, { useState } from "react";
 import { X, Calendar, FileText, Check, Trash2 } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 
+const REPORT_PERIODS = [
+  { value: "", label: "— Kein Berichtszeitraum —" },
+  { value: "elternsprechtag1", label: "1. Elternsprechtag" },
+  { value: "semesternachricht", label: "Semesternachricht" },
+  { value: "elternsprechtag2", label: "2. Elternsprechtag" },
+  { value: "jahreszeugnis", label: "Jahreszeugnis" },
+];
+
 interface EditAssessmentModalProps {
   assessmentId?: number;
   categoryId: number;
@@ -11,8 +19,9 @@ interface EditAssessmentModalProps {
   initialName?: string;
   initialInfoText?: string;
   initialDeadline?: string | null;
+  initialReportPeriod?: string | null;
   onClose: () => void;
-  onSaved: (updatedMeta: { id?: number; name: string; info_text: string; deadline: string | null }) => void;
+  onSaved: (updatedMeta: { id?: number; name: string; info_text: string; deadline: string | null; report_period: string | null }) => void;
 }
 
 export default function EditAssessmentModal({
@@ -22,11 +31,13 @@ export default function EditAssessmentModal({
   initialName,
   initialInfoText,
   initialDeadline,
+  initialReportPeriod,
   onClose,
   onSaved
 }: EditAssessmentModalProps) {
   const [name, setName] = useState(initialName || oldName || "");
   const [infoText, setInfoText] = useState(initialInfoText || "");
+  const [reportPeriod, setReportPeriod] = useState<string>(initialReportPeriod || "");
   const [deadline, setDeadline] = useState<string>(() => {
     if (!initialDeadline) return "";
     try {
@@ -66,6 +77,7 @@ export default function EditAssessmentModal({
         old_name: oldName,
         name: name.trim(),
         info_text: infoText.trim() || null,
+        report_period: reportPeriod || null,
         deadline: deadline
           ? (() => {
               const [year, month, day] = deadline.split("-").map(Number);
@@ -93,7 +105,8 @@ export default function EditAssessmentModal({
         id: savedData.id,
         name: savedData.name,
         info_text: savedData.info_text || "",
-        deadline: savedData.deadline || null
+        deadline: savedData.deadline || null,
+        report_period: savedData.report_period || null
       });
       onClose();
     } catch (err: unknown) {
@@ -150,6 +163,25 @@ export default function EditAssessmentModal({
               required
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-amber-500 transition-colors"
             />
+          </div>
+
+          {/* Report Period Selector */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold text-slate-300">
+              Berichtszeitraum
+            </label>
+            <select
+              value={reportPeriod}
+              onChange={(e) => setReportPeriod(e.target.value)}
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-hidden focus:border-amber-500 transition-colors"
+            >
+              {REPORT_PERIODS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500">
+              Berichtszeitraum-Zuordnung ermöglicht die Filterung in der Notenmatrix.
+            </p>
           </div>
 
           {/* Description Textarea */}

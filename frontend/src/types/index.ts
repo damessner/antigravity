@@ -73,6 +73,7 @@ export interface ColumnMetadata {
   info_text?: string | null;
   deadline?: string | null;
   is_visible?: boolean;
+  report_period?: string | null;
 }
 
 export interface Category {

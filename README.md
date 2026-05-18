@@ -18,11 +18,27 @@ Willkommen bei **Antigravity**, der hochmodernen, reaktionsschnellen Plattform f
 - **🙋 Live-Hilfe-System**: Sehen Sie sofort, welcher Schüler Hilfe benötigt. Farblich kodierte Fächer und blinkende Status-Icons sorgen dafür, dass kein Hilferuf übersehen wird.
 - **🏆 Gamification-Control**: Vergeben Sie Badges und Level-Ups in 10 verschiedenen Kategorien, um die Motivation Ihrer Schüler zu steigern.
 
+### 📊 Evaluationsbereich (NEU v3.1)
+- **20 Pädagogische Insights**: Das Insights-Cockpit im Notenbuch liefert 20 direkt verwertbare pädagogische Kennzahlen pro Fach und Klasse — von Klassen-Ø über Notenverteilung bis hin zur Erfassungsquote und Standardabweichung.
+- **Strukturierte Notenmatrix**: Die Notenmatrix ist in 4 Berichtszeiträume aufgeteilt:
+  - 📋 **1. Elternsprechtag** — Erste Rückmeldung an Eltern
+  - 📄 **Semesternachricht** — Halbjahreszeugnisdaten
+  - 📋 **2. Elternsprechtag** — Zweite Rückmeldung
+  - 🏆 **Jahreszeugnis** — Abschlussbewertung
+- Bewertungen können direkt im Bearbeitungs-Dialog einem Berichtszeitraum zugeordnet werden.
+
 ### 🎓 Für Schülerinnen & Schüler
 - **📅 Innovativer Lernplaner**: Planen Sie Ihre Lernslots eigenständig und behalten Sie Ihre Ziele im Blick.
 - **🚀 Karriere-Dashboard**: Verfolgen Sie Ihren Fortschritt in Echtzeit. Sehen Sie Ihre Badges, Level und "Success Stories" in einem motivierenden Dashboard.
 - **💎 Belohnungssystem**: Sammeln Sie Badges für Mitarbeit, Pünktlichkeit und soziale Kompetenz. Steigen Sie im Level auf und werden Sie zum "Meister".
 - **📲 Mobile First**: Volle Funktionalität auf dem iPad – dein digitaler Begleiter für jeden Schultag.
+
+### 📈 Karriere-Dashboard Insights (NEU v3.1)
+Das Karriere-Dashboard verfügt nun über ein **Pädagogisches Insights-Cockpit** mit 20 schulweiten Kennzahlen auf einen Blick:
+- Schulweiter Notenschnitt, beste/schlechteste Klasse
+- Top-Schüler, Rising Stars, Engagement-Leaders
+- Klassen im Exzellenzbereich vs. kritischem Bereich
+- Schüler mit Förderantrag, Achievements-Übersicht, Systemstatus
 
 ---
 
@@ -60,6 +76,24 @@ irm https://raw.githubusercontent.com/damessner/antigravity/main/scripts/setup_n
 Starten Sie die nummerierten Batch-Dateien in der richtigen Reihenfolge:
 1. **`01_initiate_system.bat`**: Systemcheck & Vorbereitung.
 2. **`02_launch_system.bat`**: Startet die gesamte Plattform.
+
+---
+
+## 🖥️ Proxmox / LXC Deployment
+
+### Erstinstallation (vom Proxmox-Host)
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/proxmox_install.sh)"
+```
+
+### System-Update (direkt im LXC-Container)
+Wenn Sie sich bereits im LXC-Container befinden, können Sie das System mit diesem einzelnen Befehl aktualisieren:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/update_system.sh | bash
+```
+
+Dieser Befehl pulled die neuesten Änderungen von GitHub, führt ggf. Schema-Migrationen durch und startet alle Container neu.
 
 ---
 

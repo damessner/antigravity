@@ -127,6 +127,8 @@ async function bootstrapDatabase() {
           CONSTRAINT uq_assessment_category UNIQUE (category_id, name)
         );
 
+        ALTER TABLE assessments ADD COLUMN IF NOT EXISTS report_period VARCHAR(30) DEFAULT NULL;
+
         CREATE TABLE IF NOT EXISTS student_learning_plan (
           id SERIAL PRIMARY KEY,
           pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
