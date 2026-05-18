@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const logger = require('../utils/logger');
 const { generateSecurePassword } = require('../utils/passwordGenerator');
 

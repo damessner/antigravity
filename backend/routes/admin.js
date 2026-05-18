@@ -228,7 +228,7 @@ router.get('/classes/:id/roster', authenticateToken, isAdmin, async (req, res) =
 
 // --- Factsheet Engine ---
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 // GET /api/admin/factsheets/teachers/status — Check if mass reset was already performed
 router.get('/factsheets/teachers/status', setupLimiter, authenticateToken, isAdmin, async (req, res) => {

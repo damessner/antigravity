@@ -68,7 +68,7 @@ function generateTempPassword() {
   return generateSecurePassword('Wu');
 }
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 // ─── Main Sync Function ───────────────────────────────────────────────────────
 
