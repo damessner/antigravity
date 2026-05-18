@@ -5,6 +5,24 @@ import { useRouter } from "next/navigation";
 import { KeyRound, User, Loader2, Sparkles, AlertTriangle, Info } from "lucide-react";
 import { getApiUrl } from "@/utils/apiDiscovery";
 
+const parseResponsePayload = async (res: Response) => {
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const text = await res.text();
+    return text ? { error: text } : null;
+  } catch {
+    return null;
+  }
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [username, setUsername] = useState("");
@@ -26,9 +44,12 @@ export default function LoginPage() {
         body: JSON.stringify({ username: username.trim(), password }),
       });
 
-      const data = await res.json();
+      const data = await parseResponsePayload(res);
       if (!res.ok) {
-        throw new Error(data.error || "Anmeldedaten ungültig");
+        throw new Error(data?.error || `Anmeldung fehlgeschlagen (${res.status})`);
+      }
+      if (!data?.token || !data?.user) {
+        throw new Error("Ungültige Serverantwort bei Anmeldung");
       }
 
       localStorage.setItem("token", data.token);
@@ -57,9 +78,12 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
       });
 
-      const data = await res.json();
+      const data = await parseResponsePayload(res);
       if (!res.ok) {
-        throw new Error(data.error || "Bypass fehlgeschlagen");
+        throw new Error(data?.error || `Bypass fehlgeschlagen (${res.status})`);
+      }
+      if (!data?.token || !data?.user) {
+        throw new Error("Ungültige Serverantwort beim Direktzugriff");
       }
 
       localStorage.setItem("token", data.token);

@@ -30,6 +30,21 @@ describe('getApiUrl', () => {
     expect(url).toBe('https://api.example.com');
   });
 
+  it('should ignore localhost NEXT_PUBLIC_API_URL for remote browser hosts', () => {
+    vi.stubGlobal('location', {
+      hostname: 'school.example.com',
+      protocol: 'https:',
+      port: '443'
+    });
+    vi.stubGlobal('process', {
+      env: {
+        NEXT_PUBLIC_API_URL: 'http://localhost:4000'
+      }
+    });
+    const url = getApiUrl();
+    expect(url).toBe('');
+  });
+
   it('should return empty string on server IP (for relative fetches)', () => {
     vi.stubGlobal('location', {
       hostname: '192.168.1.50',
