@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isBypassing, setIsBypassing] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +43,33 @@ export default function LoginPage() {
       setError(err.message || "Verbindung zum Server fehlgeschlagen");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleBypassLogin = async () => {
+    setError("");
+    setIsBypassing(true);
+
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/api/bypass-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Bypass fehlgeschlagen");
+      }
+
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      router.replace("/");
+    } catch (err: any) {
+      setError(err.message || "Bypass-Verbindung zum Server fehlgeschlagen");
+    } finally {
+      setIsBypassing(false);
     }
   };
 
@@ -96,7 +124,7 @@ export default function LoginPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
                 placeholder="Benutzername eingeben"
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                required
+                required={!isBypassing}
               />
             </div>
           </div>
@@ -115,14 +143,14 @@ export default function LoginPage() {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 className="w-full bg-slate-950/60 border border-slate-800 rounded-xl py-2.5 pl-10 pr-4 text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
-                required
+                required={!isBypassing}
               />
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isBypassing}
             className="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm py-3 rounded-xl transition-all shadow-md shadow-indigo-600/20 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? (
@@ -134,12 +162,37 @@ export default function LoginPage() {
               <span>Dashboard öffnen</span>
             )}
           </button>
+
+          <div className="relative flex py-2 items-center">
+            <div className="flex-grow border-t border-slate-800/20"></div>
+            <span className="flex-shrink mx-4 text-[10px] text-slate-500 font-mono uppercase tracking-widest">Oder</span>
+            <div className="flex-grow border-t border-slate-800/20"></div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleBypassLogin}
+            disabled={isLoading || isBypassing}
+            className="w-full bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-medium text-sm py-3 rounded-xl transition-all shadow-md shadow-emerald-500/20 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2 border border-emerald-500/20"
+          >
+            {isBypassing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Direktzugriff wird geladen...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-emerald-200 animate-pulse" />
+                <span>Passwortloser Direktzugriff (LXC Admin)</span>
+              </>
+            )}
+          </button>
         </form>
 
         <div className="mt-6 pt-4 border-t border-slate-800/80 flex items-center justify-center gap-1.5 text-slate-600">
           <Info className="w-3 h-3" />
           <p className="text-[10px]">
-            Zugangsdaten vom Administrator erhalten? Beim ersten Login Passwort ändern.
+            Direktzugriff ermöglicht die Nutzung ohne Eingabe von Zugangsdaten.
           </p>
         </div>
       </div>

