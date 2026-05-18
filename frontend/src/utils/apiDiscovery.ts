@@ -6,7 +6,35 @@
 
 export const getApiUrl = (): string => {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (configured) return configured.replace(/\/+$/, "");
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      if (typeof window !== "undefined") {
+        const browserHost = window.location.hostname.toLowerCase();
+        const configuredHost = parsed.hostname.toLowerCase();
+        const browserIsLocal =
+          browserHost === "localhost" ||
+          browserHost === "127.0.0.1" ||
+          browserHost === "::1";
+        const configuredIsLocalOnly =
+          configuredHost === "localhost" ||
+          configuredHost === "127.0.0.1" ||
+          configuredHost === "::1" ||
+          (!configuredHost.includes(".") && configuredHost !== "localhost");
+
+        // If browser is remote, ignore local/container-only API endpoints and
+        // fall back to same-origin proxy rewrites.
+        if (!browserIsLocal && configuredIsLocalOnly) {
+          return "";
+        }
+      }
+
+      return configured.replace(/\/+$/, "");
+    } catch {
+      // Invalid configured URL: fall back to same-origin proxy rewrites.
+      return "";
+    }
+  }
 
   // Always prefer the frontend's same-origin proxy so browsers never need direct
   // access to backend port 4000 during normal login or API usage.
