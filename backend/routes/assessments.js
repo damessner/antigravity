@@ -5,7 +5,7 @@ const { authenticateToken } = require('../server');
 // PUT /api/assessments/:id
 // Updates assessment column metadata (name, info_text, deadline) and propagates renaming to grade cells
 router.put('/:id', authenticateToken, async (req, res) => {
-  const { category_id, old_name, name, info_text, deadline } = req.body;
+  const { category_id, old_name, name, info_text, deadline, report_period } = req.body;
   const paramId = req.params.id;
 
   if (!category_id || !name) {
@@ -35,20 +35,20 @@ router.put('/:id', authenticateToken, async (req, res) => {
       const rowId = checkRes.rows[0].id;
       const updateRes = await client.query(`
         UPDATE assessments 
-        SET name = $1, info_text = $2, deadline = $3
-        WHERE id = $4
+        SET name = $1, info_text = $2, deadline = $3, report_period = $4
+        WHERE id = $5
         RETURNING *
-      `, [cleanName, info_text || null, targetDeadline, rowId]);
+      `, [cleanName, info_text || null, targetDeadline, report_period || null, rowId]);
       assessmentRow = updateRes.rows[0];
     } else {
       // Insert new assessment metadata row
       const insertRes = await client.query(`
-        INSERT INTO assessments (category_id, name, info_text, deadline, is_visible)
-        VALUES ($1, $2, $3, $4, true)
+        INSERT INTO assessments (category_id, name, info_text, deadline, report_period, is_visible)
+        VALUES ($1, $2, $3, $4, $5, true)
         ON CONFLICT (category_id, name) DO UPDATE 
-        SET info_text = EXCLUDED.info_text, deadline = EXCLUDED.deadline
+        SET info_text = EXCLUDED.info_text, deadline = EXCLUDED.deadline, report_period = EXCLUDED.report_period
         RETURNING *
-      `, [Number(category_id), cleanName, info_text || null, targetDeadline]);
+      `, [Number(category_id), cleanName, info_text || null, targetDeadline, report_period || null]);
       assessmentRow = insertRes.rows[0];
     }
 

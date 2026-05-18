@@ -78,6 +78,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isWeightingOpen, setIsWeightingOpen] = useState(false);
   const [gradebookView, setGradebookView] = useState<"insights" | "matrix" | "guilds" | "participation">("insights");
+  const [matrixPeriod, setMatrixPeriod] = useState<"all" | "elternsprechtag1" | "semesternachricht" | "elternsprechtag2" | "jahreszeugnis">("all");
 
   // Data Queries
   const { subjects, isLoadingSubjects, refetchSubjects } = useGradebookData(selectedClassId);
@@ -281,15 +282,56 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
   const insightsStats = useMemo(() => {
     const validRows = rowInsights.filter((r) => r.average !== null) as { pupilId: number; pupilName: string; average: number; trend: number }[];
     const classAvg = validRows.length > 0 ? validRows.reduce((sum, r) => sum + r.average, 0) / validRows.length : 0;
-    const topMover = [...validRows].sort((a, b) => b.trend - a.trend)[0];
-    const mostConsistent = [...validRows].sort((a, b) => Math.abs(a.trend) - Math.abs(b.trend))[0];
+
+    // Austrian grade equivalent (1 = best, 5 = worst)
+    const austrianAvg = classAvg > 0 ? (1 + (1 - classAvg) * 4) : 0;
+
+    // Sort for top/bottom performers
+    const sorted = [...validRows].sort((a, b) => b.average - a.average);
+    const topPerformer = sorted[0] || null;
+    const needsSupport = sorted[sorted.length - 1] || null;
+
+    const topMover = [...validRows].sort((a, b) => b.trend - a.trend)[0] || null;
+    const mostConsistent = [...validRows].sort((a, b) => Math.abs(a.trend) - Math.abs(b.trend))[0] || null;
+
+    // Grade band counts
+    const excellentCount = validRows.filter((r) => r.average >= 0.8).length;
+    const failingCount = validRows.filter((r) => r.average < 0.4).length;
+    const aboveAverage = validRows.filter((r) => r.average > classAvg).length;
+    const belowAverage = validRows.filter((r) => r.average < classAvg).length;
+
+    // Category averages
     const categoryAverages = categories.map((cat) => {
       const vals = grades
         .filter((g) => Number(g.category_id) === Number(cat.id))
         .map((g) => toPercent(g.grade_value?.toString() ?? null, cat.scale_type))
         .filter((v): v is number => v !== null);
-      return { id: cat.id, name: cat.name, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0 };
+      return { id: cat.id, name: cat.name, avg: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0, isSdl: cat.is_self_directed };
     });
+
+    const filledCategoryAverages = categoryAverages.filter((c) => c.avg > 0);
+    const bestCategory = filledCategoryAverages.length ? [...filledCategoryAverages].sort((a, b) => b.avg - a.avg)[0] : null;
+    const weakestCategory = filledCategoryAverages.length ? [...filledCategoryAverages].sort((a, b) => a.avg - b.avg)[0] : null;
+
+    // SDL vs non-SDL
+    const sdlCats = categoryAverages.filter((c) => c.isSdl && c.avg > 0);
+    const nonSdlCats = categoryAverages.filter((c) => !c.isSdl && c.avg > 0);
+    const sdlAvg = sdlCats.length ? sdlCats.reduce((s, c) => s + c.avg, 0) / sdlCats.length : null;
+    const nonSdlAvg = nonSdlCats.length ? nonSdlCats.reduce((s, c) => s + c.avg, 0) / nonSdlCats.length : null;
+
+    // Completion rate
+    const totalCells = classPupils.length * allColumns.length;
+    const filledCells = allColumns.reduce((acc, col) => {
+      return acc + grades.filter((g) =>
+        Number(g.category_id) === Number(col.category.id) &&
+        g.assessment_name === col.assessmentName &&
+        String(g.grade_value ?? "").trim() !== ""
+      ).length;
+    }, 0);
+    const completionRate = totalCells > 0 ? filledCells / totalCells : 0;
+    const missingGrades = Math.max(0, totalCells - filledCells);
+
+    // Grade distribution for 1-5 scale
     const numeric15 = grades
       .filter((g) => categories.find((c) => Number(c.id) === Number(g.category_id))?.scale_type === "numeric_1_5")
       .map((g) => Number(g.grade_value))
@@ -299,12 +341,41 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       grade,
       count: numeric15.filter((v) => v === grade).length
     }));
-    const trendSeries = Array.from({ length: 20 }).map((_, idx) => {
-      const y = 60 + Math.sin(idx / 3) * 16 + Math.min(18, idx * 1.2);
-      return Math.max(5, Math.min(98, y));
-    });
-    return { classAvg, topMover, mostConsistent, categoryAverages, trendSeries, gradeDistribution };
-  }, [rowInsights, categories, grades]);
+
+    const total15 = numeric15.length;
+    const grade1_2_percent = total15 > 0 ? ((numeric15.filter((v) => v <= 2).length / total15) * 100) : 0;
+    const grade4_5_percent = total15 > 0 ? ((numeric15.filter((v) => v >= 4).length / total15) * 100) : 0;
+
+    // Trend series (last 20 real data points approximation from row insights)
+    const trendSeries = (() => {
+      const avgValues = validRows.map((r) => r.average * 100);
+      if (avgValues.length === 0) return Array.from({ length: 20 }, () => 50);
+      const points: number[] = [];
+      for (let i = 0; i < 20; i++) {
+        const idx = Math.floor((i / 19) * (avgValues.length - 1));
+        points.push(avgValues[Math.min(idx, avgValues.length - 1)]);
+      }
+      return points;
+    })();
+
+    // Standard deviation
+    const stdDev = validRows.length > 1
+      ? Math.sqrt(validRows.reduce((acc, r) => acc + Math.pow(r.average - classAvg, 2), 0) / validRows.length)
+      : 0;
+
+    // Pupils with improving trend
+    const improvingCount = validRows.filter((r) => r.trend > 0.05).length;
+    const decliningCount = validRows.filter((r) => r.trend < -0.05).length;
+
+    return {
+      classAvg, austrianAvg, topPerformer, needsSupport, topMover, mostConsistent,
+      excellentCount, failingCount, aboveAverage, belowAverage,
+      bestCategory, weakestCategory, sdlAvg, nonSdlAvg,
+      completionRate, missingGrades, gradeDistribution, categoryAverages,
+      grade1_2_percent, grade4_5_percent, trendSeries, stdDev,
+      improvingCount, decliningCount, totalPupils: validRows.length
+    };
+  }, [rowInsights, categories, grades, classPupils, allColumns]);
 
   const guildCounts = useMemo(() => {
     let apprentice = 0;
@@ -826,84 +897,228 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
 
       {gradebookView === "insights" && (
         <div className="flex-1 overflow-y-auto space-y-4">
-          <div className="grid md:grid-cols-4 gap-3">
+          {/* Row 1: Key KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="rounded-2xl border border-indigo-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
-              <div className="text-xs text-indigo-300 font-bold">📈 Klassen-Ø</div>
+              <div className="text-xs text-indigo-300 font-bold">📈 Klassen-Ø (Prozent)</div>
               <div className="text-2xl text-white font-black">{(insightsStats.classAvg * 100).toFixed(0)}%</div>
-            </div>
-            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
-              <div className="text-xs text-emerald-300 font-bold">🎯 Top-Aufsteiger der Woche</div>
-              <div className="text-sm text-white font-bold truncate">{insightsStats.topMover?.pupilName || "—"}</div>
-            </div>
-            <div className="rounded-2xl border border-amber-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
-              <div className="text-xs text-amber-300 font-bold">🔥 Konstanteste Leistung</div>
-              <div className="text-sm text-white font-bold truncate">{insightsStats.mostConsistent?.pupilName || "—"}</div>
+              <div className="text-[10px] text-slate-500">Durchschnitt aller Schüler</div>
             </div>
             <div className="rounded-2xl border border-violet-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
-              <div className="text-xs text-violet-300 font-bold">🏆 Bewertungsbereiche</div>
-              <div className="text-2xl text-white font-black">{categories.length}</div>
+              <div className="text-xs text-violet-300 font-bold">🏅 Österr. Note (Ø)</div>
+              <div className="text-2xl text-white font-black">{insightsStats.austrianAvg.toFixed(2)}</div>
+              <div className="text-[10px] text-slate-500">1 = Sehr Gut, 5 = Nicht Genügend</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-emerald-300 font-bold">🏆 Top-Schüler</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.topPerformer?.pupilName || "—"}</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.topPerformer ? `${(insightsStats.topPerformer.average * 100).toFixed(0)}%` : "Keine Daten"}</div>
+            </div>
+            <div className="rounded-2xl border border-rose-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-rose-300 font-bold">⚠️ Aufholbedarf</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.needsSupport?.pupilName || "—"}</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.needsSupport ? `${(insightsStats.needsSupport.average * 100).toFixed(0)}%` : "Keine Daten"}</div>
             </div>
           </div>
-          <div className="grid lg:grid-cols-2 gap-4">
+
+          {/* Row 2: Trend & Movement */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-amber-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-amber-300 font-bold">🚀 Top-Aufsteiger</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.topMover?.pupilName || "—"}</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.topMover ? `+${(insightsStats.topMover.trend * 100).toFixed(0)}% Trend` : "Keine Daten"}</div>
+            </div>
+            <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-cyan-300 font-bold">🔥 Konstanteste Leistung</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.mostConsistent?.pupilName || "—"}</div>
+              <div className="text-[10px] text-slate-500">Niedrigste Schwankung</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-emerald-300 font-bold">📈 Verbessernde Schüler</div>
+              <div className="text-2xl text-white font-black">{insightsStats.improvingCount}</div>
+              <div className="text-[10px] text-slate-500">Positiver Trend (&gt;5%)</div>
+            </div>
+            <div className="rounded-2xl border border-rose-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-rose-300 font-bold">📉 Rückläufige Schüler</div>
+              <div className="text-2xl text-white font-black">{insightsStats.decliningCount}</div>
+              <div className="text-[10px] text-slate-500">Negativer Trend (&gt;5%)</div>
+            </div>
+          </div>
+
+          {/* Row 3: Class Distribution */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-emerald-300 font-bold">⭐ Sehr Gut (≥80%)</div>
+              <div className="text-2xl text-white font-black">{insightsStats.excellentCount}</div>
+              <div className="text-[10px] text-slate-500">von {insightsStats.totalPupils} Schülern</div>
+            </div>
+            <div className="rounded-2xl border border-rose-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-rose-300 font-bold">❌ Nicht Genügend (&lt;40%)</div>
+              <div className="text-2xl text-white font-black">{insightsStats.failingCount}</div>
+              <div className="text-[10px] text-slate-500">von {insightsStats.totalPupils} Schülern</div>
+            </div>
+            <div className="rounded-2xl border border-blue-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-blue-300 font-bold">📊 Über Klassenschnitt</div>
+              <div className="text-2xl text-white font-black">{insightsStats.aboveAverage}</div>
+              <div className="text-[10px] text-slate-500">Schüler ({insightsStats.totalPupils > 0 ? ((insightsStats.aboveAverage / insightsStats.totalPupils) * 100).toFixed(0) : 0}%)</div>
+            </div>
+            <div className="rounded-2xl border border-orange-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-orange-300 font-bold">📊 Unter Klassenschnitt</div>
+              <div className="text-2xl text-white font-black">{insightsStats.belowAverage}</div>
+              <div className="text-[10px] text-slate-500">Schüler ({insightsStats.totalPupils > 0 ? ((insightsStats.belowAverage / insightsStats.totalPupils) * 100).toFixed(0) : 0}%)</div>
+            </div>
+          </div>
+
+          {/* Row 4: Category & Completion */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-indigo-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-indigo-300 font-bold">🥇 Stärkste Kategorie</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.bestCategory?.name || "—"}</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.bestCategory ? `${(insightsStats.bestCategory.avg * 100).toFixed(0)}% Ø` : "Keine Daten"}</div>
+            </div>
+            <div className="rounded-2xl border border-rose-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-rose-300 font-bold">🎯 Schwächste Kategorie</div>
+              <div className="text-sm text-white font-bold truncate">{insightsStats.weakestCategory?.name || "—"}</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.weakestCategory ? `${(insightsStats.weakestCategory.avg * 100).toFixed(0)}% Ø` : "Keine Daten"}</div>
+            </div>
+            <div className="rounded-2xl border border-violet-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-violet-300 font-bold">✅ Erfassungsquote</div>
+              <div className="text-2xl text-white font-black">{(insightsStats.completionRate * 100).toFixed(0)}%</div>
+              <div className="text-[10px] text-slate-500">{insightsStats.missingGrades} fehlende Noten</div>
+            </div>
+            <div className="rounded-2xl border border-slate-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-slate-300 font-bold">📐 Standardabweichung</div>
+              <div className="text-2xl text-white font-black">{(insightsStats.stdDev * 100).toFixed(1)}%</div>
+              <div className="text-[10px] text-slate-500">Leistungsstreuung der Klasse</div>
+            </div>
+          </div>
+
+          {/* Row 5: SDL & Notenverteilung (1-5) */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-cyan-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-cyan-300 font-bold">🧭 SDL-Bereiche Ø</div>
+              <div className="text-2xl text-white font-black">{insightsStats.sdlAvg !== null ? `${(insightsStats.sdlAvg * 100).toFixed(0)}%` : "—"}</div>
+              <div className="text-[10px] text-slate-500">Selbstgesteuertes Lernen</div>
+            </div>
+            <div className="rounded-2xl border border-amber-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-amber-300 font-bold">📚 Nicht-SDL Bereiche Ø</div>
+              <div className="text-2xl text-white font-black">{insightsStats.nonSdlAvg !== null ? `${(insightsStats.nonSdlAvg * 100).toFixed(0)}%` : "—"}</div>
+              <div className="text-[10px] text-slate-500">Lehrerzentrierte Bewertung</div>
+            </div>
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-emerald-300 font-bold">🟢 Anteil Sehr Gut (1+2)</div>
+              <div className="text-2xl text-white font-black">{insightsStats.grade1_2_percent.toFixed(0)}%</div>
+              <div className="text-[10px] text-slate-500">Noten 1 und 2 (1-5 Skala)</div>
+            </div>
+            <div className="rounded-2xl border border-rose-500/30 bg-slate-900/60 backdrop-blur px-4 py-3">
+              <div className="text-xs text-rose-300 font-bold">🔴 Anteil Mangelhaft (4+5)</div>
+              <div className="text-2xl text-white font-black">{insightsStats.grade4_5_percent.toFixed(0)}%</div>
+              <div className="text-[10px] text-slate-500">Noten 4 und 5 (1-5 Skala)</div>
+            </div>
+          </div>
+
+          {/* Charts Row: Trend + Category bars + Grade curve */}
+          <div className="grid lg:grid-cols-3 gap-4">
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-              <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Ergebnisse & Trends (20 Wochen)</div>
-              <svg viewBox="0 0 420 150" className="w-full h-40">
-                <polyline fill="none" stroke="#60a5fa" strokeWidth="3" points={insightsStats.trendSeries.map((v, i) => `${(i / 19) * 410},${140 - (v / 100) * 120}`).join(" ")} />
+              <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Leistungsprofil der Klasse</div>
+              <svg viewBox="0 0 420 150" className="w-full h-36">
+                <polyline fill="none" stroke="#60a5fa" strokeWidth="2.5" points={insightsStats.trendSeries.map((v, i) => `${(i / 19) * 410},${140 - (v / 100) * 120}`).join(" ")} />
+                <line x1="0" y1={140 - (insightsStats.classAvg * 120)} x2="410" y2={140 - (insightsStats.classAvg * 120)} stroke="#6366f1" strokeWidth="1" strokeDasharray="4 4" />
               </svg>
+              <div className="text-[10px] text-slate-500 text-center">Schülerranking – gestrichelt = Klassenø</div>
             </div>
             <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-              <div className="text-xs uppercase tracking-widest text-slate-400 mb-3">Kategorienvergleich</div>
+              <div className="text-xs uppercase tracking-widest text-slate-400 mb-3">Kategorien-Vergleich</div>
               <div className="space-y-2">
                 {insightsStats.categoryAverages.map((c) => (
                   <div key={c.id}>
-                    <div className="flex justify-between text-[11px] text-slate-300"><span>{c.name}</span><span>{Math.round(c.avg * 100)}%</span></div>
-                    <div className="h-2 rounded bg-slate-800"><div className="h-2 rounded bg-indigo-500" style={{ width: `${Math.round(c.avg * 100)}%` }} /></div>
+                    <div className="flex justify-between text-[11px] text-slate-300">
+                      <span className="truncate max-w-[120px]">{c.name}{c.isSdl ? " 🧭" : ""}</span>
+                      <span>{Math.round(c.avg * 100)}%</span>
+                    </div>
+                    <div className="h-1.5 rounded bg-slate-800">
+                      <div className={`h-1.5 rounded ${c.isSdl ? "bg-cyan-500" : "bg-indigo-500"}`} style={{ width: `${Math.round(c.avg * 100)}%` }} />
+                    </div>
                   </div>
                 ))}
+                {insightsStats.categoryAverages.length === 0 && <p className="text-[11px] text-slate-600 text-center py-2">Keine Kategorien vorhanden</p>}
               </div>
-              <div className="mt-4 pt-3 border-t border-slate-800">
-                <div className="text-[10px] uppercase tracking-widest text-slate-500 mb-2">Notenverteilungskurve</div>
-                <svg viewBox="0 0 220 70" className="w-full h-20">
-                  <polyline
-                    fill="none"
-                    stroke="#a78bfa"
-                    strokeWidth="2"
-                    points={insightsStats.gradeDistribution
-                      .map((d, i) => `${20 + i * 45},${60 - Math.min(55, d.count * 6)}`)
-                      .join(" ")}
-                  />
-                </svg>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+              <div className="text-xs uppercase tracking-widest text-slate-400 mb-2">Notenverteilung (Skala 1–5)</div>
+              <div className="flex items-end gap-2 h-24 justify-around pt-2">
+                {insightsStats.gradeDistribution.map((d) => {
+                  const maxCount = Math.max(1, ...insightsStats.gradeDistribution.map((x) => x.count));
+                  const colors = ["bg-emerald-500", "bg-lime-500", "bg-amber-500", "bg-orange-500", "bg-rose-500"];
+                  return (
+                    <div key={d.grade} className="flex flex-col items-center gap-1 flex-1">
+                      <span className="text-[9px] text-slate-400">{d.count}</span>
+                      <div className={`w-full rounded-t ${colors[d.grade - 1]}`} style={{ height: `${Math.max(4, (d.count / maxCount) * 72)}px` }} />
+                      <span className="text-[10px] text-slate-500 font-bold">{d.grade}</span>
+                    </div>
+                  );
+                })}
               </div>
+              {insightsStats.gradeDistribution.every((d) => d.count === 0) && (
+                <p className="text-[11px] text-slate-600 text-center py-2">Keine 1–5 Noten erfasst</p>
+              )}
             </div>
           </div>
         </div>
       )}
 
       {gradebookView === "matrix" && (
-        <GradebookTable
-          pupils={classPupils}
-          categories={balancedCategories}
-          grades={grades}
-          columns={allColumns}
-          pupilTags={matrixPupilTags}
-          rankPreview={rankPreview}
-          rankConfig={rankConfig}
-          currentUser={currentUser}
-          isOwner={isOwner}
-          onGradeChange={handleGradeChange}
-          onCellContextMenu={handleCellContextMenu}
-          onAddAssessment={handleOpenAddAssessment}
-          onRenameColumn={handleRenameColumn}
-          onEditMetadata={handleOpenEditMetadata}
-          onDeleteCategory={handleDeleteCategory}
-          onScaleSwitch={handleScaleSwitch}
-          onToggleColumnVisibility={handleToggleColumnVisibility}
-          onToggleCategoryVisibility={handleToggleCategoryVisibility}
-          onEditCategory={handleOpenEditCategory}
-          onToggleCellVisibility={handleToggleCellVisibility}
-          onRankChange={handleRankChange}
-          showOwnerInsights={false}
-        />
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Period sub-tabs */}
+          <div className="flex flex-wrap gap-1.5 mb-3 p-1 bg-slate-900/40 rounded-xl border border-slate-800/60">
+            {([
+              { key: "all", label: "📋 Alle Bewertungen" },
+              { key: "elternsprechtag1", label: "👨‍👩‍👧 1. Elternsprechtag" },
+              { key: "semesternachricht", label: "📄 Semesternachricht" },
+              { key: "elternsprechtag2", label: "👨‍👩‍👧 2. Elternsprechtag" },
+              { key: "jahreszeugnis", label: "🏆 Jahreszeugnis" },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setMatrixPeriod(key)}
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
+                  matrixPeriod === key
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <GradebookTable
+            pupils={classPupils}
+            categories={balancedCategories}
+            grades={grades}
+            columns={matrixPeriod === "all"
+              ? allColumns
+              : allColumns.filter((col) => (col.metadata?.report_period ?? "") === matrixPeriod)
+            }
+            pupilTags={matrixPupilTags}
+            rankPreview={rankPreview}
+            rankConfig={rankConfig}
+            currentUser={currentUser}
+            isOwner={isOwner}
+            onGradeChange={handleGradeChange}
+            onCellContextMenu={handleCellContextMenu}
+            onAddAssessment={handleOpenAddAssessment}
+            onRenameColumn={handleRenameColumn}
+            onEditMetadata={handleOpenEditMetadata}
+            onDeleteCategory={handleDeleteCategory}
+            onScaleSwitch={handleScaleSwitch}
+            onToggleColumnVisibility={handleToggleColumnVisibility}
+            onToggleCategoryVisibility={handleToggleCategoryVisibility}
+            onEditCategory={handleOpenEditCategory}
+            onToggleCellVisibility={handleToggleCellVisibility}
+            onRankChange={handleRankChange}
+            showOwnerInsights={false}
+          />
+        </div>
       )}
 
       {gradebookView === "guilds" && (
@@ -1156,6 +1371,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
           initialName={showEditMetadataModal.metadata?.name || showEditMetadataModal.oldName}
           initialInfoText={showEditMetadataModal.metadata?.info_text || ""}
           initialDeadline={showEditMetadataModal.metadata?.deadline || null}
+          initialReportPeriod={showEditMetadataModal.metadata?.report_period || null}
           onClose={() => setShowEditMetadataModal(null)}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
