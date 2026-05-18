@@ -375,11 +375,22 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+const normalizeUsernameForRateLimit = (value) => {
+  if (typeof value !== 'string') return 'unknown';
+  const normalized = value.normalize('NFKC').trim().toLowerCase();
+  return normalized || 'unknown';
+};
+
 // Rate limiters
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
+  max: 60,
   message: { error: 'Zu viele Anmeldeversuche. Bitte warten Sie 15 Minuten.' },
+  skipSuccessfulRequests: true,
+  keyGenerator: (req) => {
+    const username = normalizeUsernameForRateLimit(req.body?.username);
+    return `${req.ip || 'unknown'}:${username}`;
+  },
   standardHeaders: true,
   legacyHeaders: false
 });

@@ -4,17 +4,34 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { authenticateToken, loginLimiter, stateLimiter } = require('../server');
 
+const normalizeUsername = (username) => {
+  if (typeof username !== 'string') return '';
+  return username.normalize('NFKC').trim().toLowerCase();
+};
+
 // POST /api/login
 router.post('/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
-  if (!username || !password) {
+  const normalizedUsername = normalizeUsername(username);
+  if (!normalizedUsername || typeof password !== 'string' || password.length === 0) {
     return res.status(400).json({ error: 'Username and password required' });
   }
 
   try {
-    const userRes = await req.pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const userRes = await req.pool.query(`
+      SELECT *
+      FROM users
+      WHERE lower(btrim(username)) = $1
+      LIMIT 2
+    `, [normalizedUsername]);
+
     if (userRes.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    if (userRes.rows.length > 1) {
+      return res.status(409).json({
+        error: 'Mehrdeutiger Benutzername erkannt. Bitte Administration kontaktieren.'
+      });
     }
 
     const user = userRes.rows[0];

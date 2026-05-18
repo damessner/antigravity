@@ -200,12 +200,18 @@ async function runImport(pool) {
           [full_name, userRes.rows[0].username, userId]
         );
       } else {
-        let checkUser = await client.query('SELECT id FROM users WHERE username = $1', [baseUsername]);
+        let checkUser = await client.query(
+          'SELECT id FROM users WHERE lower(btrim(username)) = lower(btrim($1)) LIMIT 1',
+          [baseUsername]
+        );
         let finalUsername = baseUsername;
         let suffix = 1;
         while (checkUser.rows.length > 0) {
           finalUsername = `${baseUsername}${suffix++}`;
-          checkUser = await client.query('SELECT id FROM users WHERE username = $1', [finalUsername]);
+          checkUser = await client.query(
+            'SELECT id FROM users WHERE lower(btrim(username)) = lower(btrim($1)) LIMIT 1',
+            [finalUsername]
+          );
         }
 
         const tempPassword = generateSecurePassword('Wu');

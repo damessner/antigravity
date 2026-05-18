@@ -171,7 +171,10 @@ async function runSync(pool, settings) {
         // Create new teacher account
         let safeUsername = username_;
         // Ensure uniqueness: append webuntis ID suffix if username is taken
-        const taken = await pool.query('SELECT id FROM users WHERE username = $1', [safeUsername]);
+        const taken = await pool.query(
+          'SELECT id FROM users WHERE lower(btrim(username)) = lower(btrim($1)) LIMIT 1',
+          [safeUsername]
+        );
         if (taken.rows.length > 0) {
           safeUsername = `${username_}_${wt.id}`;
         }
@@ -241,7 +244,10 @@ async function runSync(pool, settings) {
       } else {
         // Create new pupil user account
         let safeUsername = username_;
-        const taken = await pool.query('SELECT id FROM users WHERE username = $1', [safeUsername]);
+        const taken = await pool.query(
+          'SELECT id FROM users WHERE lower(btrim(username)) = lower(btrim($1)) LIMIT 1',
+          [safeUsername]
+        );
         if (taken.rows.length > 0) {
           safeUsername = `${username_}_${ws.id}`;
         }
