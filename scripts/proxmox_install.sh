@@ -74,4 +74,9 @@ lxc-attach -n $CTID -- bash -c "$(curl -fsSL https://raw.githubusercontent.com/d
 msg_ok "Completed Successfully!"
 echo -e "${APP} is now running!"
 echo -e "Access it at: ${WHITE}http://$(pct exec $CTID -- hostname -I | awk '{print $1}'):3000${NC}"
+echo -e ""
+echo -e "Default Web Admin Credentials:"
+echo -e "  - Username: ${WHITE}da.messner${NC}"
+echo -e "  - Password: ${WHITE}weissenbach${NC}"
+echo -e ""
 
