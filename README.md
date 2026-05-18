@@ -86,6 +86,16 @@ Starten Sie die nummerierten Batch-Dateien in der richtigen Reihenfolge:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/damessner/antigravity/main/scripts/proxmox_install.sh)"
 ```
 
+Nach einer frischen Proxmox-/LXC-Installation reicht für den Browser-Zugriff der **Frontend-Port 3000**. Die Weboberfläche leitet Login- und API-Aufrufe nun standardmäßig intern an den Backend-Container weiter, damit kein direkter Browser-Zugriff auf Port 4000 mehr nötig ist und der Fehler **"NetworkError when attempting to fetch resource."** beim ersten Login nicht mehr auftritt.
+
+**Wichtig bei bestehenden Installationen:** Nach einem Update die Container **neu bauen**, damit der Frontend-Proxy mit der aktuellen Backend-Zieladresse erzeugt wird:
+
+```bash
+cd /opt/antigravity
+docker compose build --no-cache frontend
+docker compose up -d frontend
+```
+
 ### System-Update (direkt im LXC-Container)
 Wenn Sie sich bereits im LXC-Container befinden, können Sie das System mit diesem einzelnen Befehl aktualisieren:
 

@@ -7,24 +7,9 @@
 export const getApiUrl = (): string => {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (configured) return configured.replace(/\/+$/, "");
-  
-  // Fallback for development/local environments where the proxy might not be reachable
-  // or for devices (iPads) connecting via LAN where the hardcoded "backend" hostname fails.
-  if (typeof window !== "undefined") {
-    // If we are on localhost, assume the backend is also on localhost:4000
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return "http://localhost:4000";
-    }
 
-    // Force 'http' for port 4000 on local IPs to avoid Mixed Content / TLS Handshake errors
-    // when the Unraid UI is accessed via HTTPS.
-    const isLocalIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname) || window.location.hostname.endsWith('.local');
-    const protocol = isLocalIp ? "http:" : window.location.protocol;
-    
-    return `${protocol}//${window.location.hostname}:4000`;
-  }
-
-  // Empty base as a last resort to use same-origin proxy
+  // Always prefer the frontend's same-origin proxy so browsers never need direct
+  // access to backend port 4000 during normal login or API usage.
   return "";
 };
 
