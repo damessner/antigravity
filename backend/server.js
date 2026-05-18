@@ -201,6 +201,29 @@ async function bootstrapDatabase() {
           CONSTRAINT uq_subject_rank_level UNIQUE (subject_id, rank_level)
         );
 
+        -- Grade color schemes per assessment category (v2.6)
+        ALTER TABLE assessment_categories ADD COLUMN IF NOT EXISTS color_scheme JSONB DEFAULT NULL;
+
+        -- Per-pupil "Wichtige Info" section for teacher notes (v2.6)
+        CREATE TABLE IF NOT EXISTS pupil_important_info (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER UNIQUE REFERENCES pupils(id) ON DELETE CASCADE,
+          content TEXT NOT NULL DEFAULT '',
+          updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS pupil_important_info_history (
+          id SERIAL PRIMARY KEY,
+          pupil_id INTEGER REFERENCES pupils(id) ON DELETE CASCADE,
+          content TEXT NOT NULL DEFAULT '',
+          changed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+          changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pupil_important_info_pupil ON pupil_important_info(pupil_id);
+        CREATE INDEX IF NOT EXISTS idx_pupil_important_info_history_pupil ON pupil_important_info_history(pupil_id);
+
         -- WebUntis integration columns (added in v2.5)
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS webuntis_id INTEGER DEFAULT NULL;
         ALTER TABLE users    ADD COLUMN IF NOT EXISTS is_active   BOOLEAN DEFAULT true;

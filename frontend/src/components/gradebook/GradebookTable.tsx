@@ -629,6 +629,8 @@ function GradebookTableBase({
                       disabled={!isOwner}
                       placeholderGuide={getPlaceholderForScale(col.category.scale_type)}
                       isCatLastCol={col.isCatLastCol}
+                      scaleType={col.category.scale_type}
+                      colorScheme={col.category.color_scheme}
                       onChange={onGradeChange}
                       onContextMenu={onCellContextMenu}
                       onToggleVisibility={onToggleCellVisibility}

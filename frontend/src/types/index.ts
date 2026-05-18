@@ -1,5 +1,6 @@
-import { ScaleType } from "../components/gradeUtils";
+import { ScaleType, ColorScheme } from "../components/gradeUtils";
 
+export type { ColorScheme };
 export type UserRole = "admin" | "teacher" | "pupil" | "lernwerkstatt";
 
 
@@ -87,6 +88,7 @@ export interface Category {
   is_hidden_from_pupils?: boolean;
   isLocked?: boolean;
   column_metadata?: ColumnMetadata[];
+  color_scheme?: ColorScheme | null;
 }
 
 

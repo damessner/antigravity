@@ -6,6 +6,66 @@ export type ScaleType =
   | "percentage"
   | "letters_A_F";
 
+export interface ColorSchemeGradient {
+  type: 'gradient';
+  best: string;
+  worst: string;
+}
+
+export interface ColorSchemePerGrade {
+  type: 'per_grade';
+  grades: Record<string, string>;
+}
+
+export type ColorScheme = ColorSchemeGradient | ColorSchemePerGrade;
+
+/**
+ * Interpolates between two hex colors based on a 0.0–1.0 factor.
+ * factor=1.0 returns colorA, factor=0.0 returns colorB.
+ */
+function interpolateHex(colorA: string, colorB: string, factor: number): string {
+  const parse = (c: string) => {
+    const hex = c.replace('#', '');
+    return [
+      parseInt(hex.substring(0, 2), 16),
+      parseInt(hex.substring(2, 4), 16),
+      parseInt(hex.substring(4, 6), 16),
+    ];
+  };
+  const [r1, g1, b1] = parse(colorA);
+  const [r2, g2, b2] = parse(colorB);
+  const f = Math.max(0, Math.min(1, factor));
+  const r = Math.round(r1 * f + r2 * (1 - f));
+  const g = Math.round(g1 * f + g2 * (1 - f));
+  const b = Math.round(b1 * f + b2 * (1 - f));
+  return `rgb(${r},${g},${b})`;
+}
+
+/**
+ * Returns a CSS color string for a grade cell based on the configured color scheme.
+ * Returns null if no color should be applied.
+ */
+export function getGradeColor(
+  valueStr: string | null | undefined,
+  scale: ScaleType,
+  colorScheme: ColorScheme | null | undefined
+): string | null {
+  if (!colorScheme || !valueStr || valueStr.trim() === '') return null;
+
+  if (colorScheme.type === 'gradient') {
+    const pct = toPercent(valueStr, scale);
+    if (pct === null) return null;
+    return interpolateHex(colorScheme.best, colorScheme.worst, pct);
+  }
+
+  if (colorScheme.type === 'per_grade') {
+    const key = valueStr.trim();
+    return colorScheme.grades[key] ?? null;
+  }
+
+  return null;
+}
+
 /**
  * Universal Grade Normalization: Converts localized grade strings into standardized floats (0.0 to 1.0)
  */

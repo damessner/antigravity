@@ -46,6 +46,7 @@ interface EditCategoryState {
   weight_percentage: number;
   scale_type: string;
   is_self_directed: boolean;
+  color_scheme: { type: 'gradient'; best: string; worst: string } | { type: 'per_grade'; grades: Record<string, string> } | null;
 }
 
 interface RankRules {
@@ -481,7 +482,8 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
       name: category.name,
       weight_percentage: Number(category.weight_percentage) || 0,
       scale_type: category.scale_type || "numeric_1_5",
-      is_self_directed: !!category.is_self_directed
+      is_self_directed: !!category.is_self_directed,
+      color_scheme: category.color_scheme ?? null
     });
   }, [isOwner]);
 
@@ -643,6 +645,11 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
           scale_type: showEditCategoryModal.scale_type,
           is_self_directed: showEditCategoryModal.is_self_directed
         })
+      });
+      // Save color scheme separately (can be null to remove)
+      await fetchAuth(`/api/gradebook/category/${showEditCategoryModal.id}/color-scheme`, {
+        method: "PUT",
+        body: JSON.stringify({ color_scheme: showEditCategoryModal.color_scheme })
       });
       queryClient.invalidateQueries({ queryKey: ["matrix", selectedSubject?.id] });
       setShowEditCategoryModal(null);
@@ -1293,7 +1300,7 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
 
       {showEditCategoryModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <form onSubmit={handleSaveCategoryEdit} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+          <form onSubmit={handleSaveCategoryEdit} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <h2 className="text-lg font-bold mb-4 text-white">Bereich bearbeiten</h2>
             <div className="space-y-4">
               <input
@@ -1337,6 +1344,124 @@ export default function Gradebook({ classes, pupils, socket }: GradebookProps) {
                 />
                 Selbstgesteuertes Lernen
               </label>
+
+              {/* Color Scheme Section */}
+              <div className="border-t border-slate-800 pt-4">
+                <label className="text-[10px] text-slate-500 font-bold uppercase block mb-2">🎨 Farbschema für Noten</label>
+                <div className="flex gap-2 mb-3">
+                  {[
+                    { label: "Kein Farbschema", value: "none" },
+                    { label: "Farbverlauf (Beste → Schlechteste)", value: "gradient" },
+                    { label: "Farbe pro Note", value: "per_grade" },
+                  ].map(({ label, value }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => {
+                        if (value === "none") {
+                          setShowEditCategoryModal({ ...showEditCategoryModal, color_scheme: null });
+                        } else if (value === "gradient") {
+                          setShowEditCategoryModal({
+                            ...showEditCategoryModal,
+                            color_scheme: { type: "gradient", best: "#22c55e", worst: "#ef4444" }
+                          });
+                        } else {
+                          const defaultGrades: Record<string, string> = {};
+                          const scale = showEditCategoryModal.scale_type;
+                          if (scale === "numeric_1_5") {
+                            Object.assign(defaultGrades, { "1": "#22c55e", "2": "#84cc16", "3": "#f59e0b", "4": "#f97316", "5": "#ef4444" });
+                          } else if (scale === "symbolic") {
+                            Object.assign(defaultGrades, { "+": "#22c55e", "~": "#f59e0b", "-": "#ef4444" });
+                          } else if (scale === "letters_A_F") {
+                            Object.assign(defaultGrades, { "A": "#22c55e", "B": "#84cc16", "C": "#f59e0b", "D": "#f97316", "E": "#ef4444", "F": "#dc2626" });
+                          } else {
+                            Object.assign(defaultGrades, { "1": "#22c55e", "2": "#f59e0b", "3": "#ef4444" });
+                          }
+                          setShowEditCategoryModal({
+                            ...showEditCategoryModal,
+                            color_scheme: { type: "per_grade", grades: defaultGrades }
+                          });
+                        }
+                      }}
+                      className={`flex-1 text-[10px] px-2 py-1.5 rounded-lg border font-semibold transition-all ${
+                        (value === "none" && !showEditCategoryModal.color_scheme) ||
+                        (value === "gradient" && showEditCategoryModal.color_scheme?.type === "gradient") ||
+                        (value === "per_grade" && showEditCategoryModal.color_scheme?.type === "per_grade")
+                          ? "bg-indigo-600 border-indigo-500 text-white"
+                          : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
+                      }`}
+                    >
+                      {value === "none" ? "Aus" : value === "gradient" ? "Verlauf" : "Pro Note"}
+                    </button>
+                  ))}
+                </div>
+
+                {showEditCategoryModal.color_scheme?.type === "gradient" && (
+                  <div className="space-y-3 bg-slate-950/40 rounded-xl p-3 border border-slate-800">
+                    <div className="flex items-center gap-3">
+                      <label className="text-[11px] text-emerald-400 font-semibold w-20">Beste Note</label>
+                      <input
+                        type="color"
+                        value={showEditCategoryModal.color_scheme.best}
+                        onChange={(e) => setShowEditCategoryModal({
+                          ...showEditCategoryModal,
+                          color_scheme: { ...showEditCategoryModal.color_scheme!, type: "gradient", best: e.target.value } as typeof showEditCategoryModal.color_scheme & { type: "gradient" }
+                        })}
+                        className="w-10 h-8 rounded cursor-pointer border-0 bg-transparent"
+                      />
+                      <span className="text-[11px] text-slate-400">{showEditCategoryModal.color_scheme.best}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="text-[11px] text-rose-400 font-semibold w-20">Schlechteste</label>
+                      <input
+                        type="color"
+                        value={showEditCategoryModal.color_scheme.worst}
+                        onChange={(e) => setShowEditCategoryModal({
+                          ...showEditCategoryModal,
+                          color_scheme: { ...showEditCategoryModal.color_scheme!, type: "gradient", worst: e.target.value } as typeof showEditCategoryModal.color_scheme & { type: "gradient" }
+                        })}
+                        className="w-10 h-8 rounded cursor-pointer border-0 bg-transparent"
+                      />
+                      <span className="text-[11px] text-slate-400">{showEditCategoryModal.color_scheme.worst}</span>
+                    </div>
+                    {/* Preview gradient */}
+                    <div
+                      className="h-4 rounded"
+                      style={{ background: `linear-gradient(to right, ${showEditCategoryModal.color_scheme.best}, ${showEditCategoryModal.color_scheme.worst})` }}
+                    />
+                    <div className="flex justify-between text-[9px] text-slate-500">
+                      <span>Beste Note</span><span>Schlechteste Note</span>
+                    </div>
+                  </div>
+                )}
+
+                {showEditCategoryModal.color_scheme?.type === "per_grade" && (
+                  <div className="space-y-2 bg-slate-950/40 rounded-xl p-3 border border-slate-800">
+                    {Object.entries(showEditCategoryModal.color_scheme.grades).map(([gradeVal, color]) => (
+                      <div key={gradeVal} className="flex items-center gap-3">
+                        <span className="text-[11px] text-slate-300 font-mono w-8 text-center">{gradeVal}</span>
+                        <input
+                          type="color"
+                          value={color}
+                          onChange={(e) => {
+                            if (!showEditCategoryModal.color_scheme || showEditCategoryModal.color_scheme.type !== "per_grade") return;
+                            setShowEditCategoryModal({
+                              ...showEditCategoryModal,
+                              color_scheme: {
+                                type: "per_grade",
+                                grades: { ...showEditCategoryModal.color_scheme.grades, [gradeVal]: e.target.value }
+                              }
+                            });
+                          }}
+                          className="w-10 h-7 rounded cursor-pointer border-0 bg-transparent"
+                        />
+                        <div className="w-4 h-4 rounded" style={{ backgroundColor: color }} />
+                        <span className="text-[10px] text-slate-500">{color}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button type="button" onClick={() => setShowEditCategoryModal(null)} className="flex-1 px-4 py-2 bg-slate-800 rounded-xl text-xs font-bold text-slate-300">Abbrechen</button>
