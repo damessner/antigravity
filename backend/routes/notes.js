@@ -156,17 +156,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Escapes characters that are special in HTML to prevent XSS
-const escapeHtml = (str) => {
-  if (str === null || str === undefined) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-};
-
 // GET /api/notes/export/:pupil_id
 router.get('/export/:pupil_id', authenticateToken, async (req, res) => {
   // Pupils may not export notes (export is a teacher/admin operation)
